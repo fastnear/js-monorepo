@@ -240,25 +240,23 @@ export const selected = () => {
 export const requestSignIn = async ({ contractId }: { contractId: string }) => {
   const privateKey = privateKeyFromRandom();
   update({ accessKeyContractId: contractId, accountId: null, privateKey });
-  const pubKey = publicKeyFromPrivate(privateKey);
 
   const result = await _adapter.signIn({
     networkId: getConfig().networkId,
     contractId,
-    publicKey: pubKey,
   });
 
   if (result.error) {
     throw new Error(`Wallet error: ${result.error}`);
   }
-  if (result.url) {
-    if (typeof window !== "undefined") {
-      setTimeout(() => {
-        window.location.href = result.url;
-      }, 100);
-    }
-  } else if (result.accountId) {
-    update({ accountId: result.accountId });
+  // If signIn succeeded, result contains accountId and accounts
+  if (result.accountId) {
+    // Update local state ONLY with the accountId. Let intear-wallet manage keys.
+    update({ accountId: result.accountId, privateKey: null, publicKey: null, accessKeyContractId: contractId });
+  } else {
+    // This case might indicate an issue if signIn resolves without accountId or error
+     console.warn("@fastnear: signIn resolved without accountId or error.");
+     update({ accountId: null, privateKey: null, publicKey: null, accessKeyContractId: null }); // Ensure signed out state
   }
 };
 
@@ -340,6 +338,67 @@ export const signOut = () => {
   setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
 };
 
+/**
+ * Interface for signature result from wallet
+ */
+export interface SignatureResult {
+  accountId: string;
+  publicKey: string;
+  signature: string;
+}
+
+/**
+ * Sign a message using the connected wallet
+ * 
+ * @param message - The message to sign
+ * @param recipient - The recipient account ID
+ * @param nonce - Optional nonce for the message (defaults to random bytes)
+ * @param callbackUrl - Optional callback URL
+ * @param state - Optional state to include with the message
+ * @returns Promise resolving to the signature result
+ */
+export const signMessage = async ({
+  message,
+  recipient,
+  nonce,
+  callbackUrl,
+  state,
+}: {
+  message: string;
+  recipient: string;
+  nonce?: Uint8Array;
+  callbackUrl?: string;
+  state?: string;
+}): Promise<SignatureResult> => {
+  const signerId = _state.accountId;
+  if (!signerId) throw new Error("Must sign in");
+  
+  // Generate a random nonce if not provided
+  // could use near-sign-verify
+  const messageNonce = nonce || crypto.getRandomValues(new Uint8Array(32));
+  
+  try {
+    
+    const result = await _adapter.signMessage({
+      message,
+      recipient,
+      // @ts-ignore - We know the adapter expects Buffer but we're using Uint8Array
+      nonce: messageNonce,
+      callbackUrl,
+      state,
+    });
+    
+    return {
+      accountId: result.accountId,
+      publicKey: result.publicKey,
+      signature: result.signature
+    };
+  } catch (err) {
+    console.error('fastnear: error signing message using adapter:', err);
+    throw err;
+  }
+};
+
 export const sendTx = async ({
                                receiverId,
                                actions,
@@ -382,16 +441,10 @@ export const sendTx = async ({
     try {
       const result: WalletTxResult = await _adapter.sendTransactions({
         transactions: [jsonTx],
-        callbackUrl: url.toString(),
       });
 
-      if (result.url) {
-        if (typeof window !== "undefined") {
-          setTimeout(() => {
-            window.location.href = result.url!;
-          }, 100);
-        }
-      } else if (result.outcomes?.length) {
+      // Resolves with outcomes or rejection
+      if (result.outcomes?.length) {
         result.outcomes.forEach((r) =>
           updateTxHistory({
             txId,

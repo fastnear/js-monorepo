@@ -1,52 +1,36 @@
-/**
- * @typedef {Object} WalletState
- * @property {string} [accountId] - NEAR account ID if signed in
- * @property {string} [publicKey] - Public key if available
- * @property {string} [privateKey] - Private key if available
- * @property {string} [lastWalletId] - ID of last used wallet
- * @property {string} [networkId] - ID of last used network
- */
+import {
+  SignatureResult,
+  WalletTxResult
+} from "@fastnear/api";
+import {
+  canSignWithLAK,
+  privateKeyFromRandom,
+  publicKeyFromPrivate,
+  signHash
+} from "@fastnear/utils";
+import { sha256 } from "@noble/hashes/sha2";
 
-/**
- * @typedef {Object} SignInConfig
- * @property {string} networkId - NEAR network ID ('mainnet' or 'testnet')
- * @property {string} contractId - Contract ID to request access for
- * @property {string} [walletId] - Preferred wallet to use. E.g. 'near', 'here', 'meteor'
- * @property {string} [callbackUrl] - URL to redirect back to after wallet interaction
- */
+const DEFAULT_WALLET_DOMAIN = "https://wallet.intear.tech";
+const DEFAULT_LOGOUT_BRIDGE_SERVICE = "https://logout-bridge-service.intear.tech";
+const STORAGE_KEY = "_intear_wallet_connected_account";
+const POPUP_FEATURES = "width=400,height=700";
+interface LocalAccount {
+  accountId: string;
+  publicKey?: string;
+}
 
-/**
- * @typedef {Object} SignInResult
- * @property {string} [url] - URL to redirect to if needed
- * @property {string} [accountId] - Account ID if immediately available
- * @property {string} [error] - Error message if sign in failed
- */
+interface LocalTransaction {
+  signerId?: string;
+  receiverId: string;
+  actions: any[]; // Use 'any' for simplicity
+}
+
 export interface SignInResult {
   url?: string;
   accountId?: string;
   error?: string;
 }
 
-/**
- * @typedef {Object} Transaction
- * @property {string} [signerId] - Transaction signer account ID
- * @property {string} receiverId - Transaction receiver account ID
- * @property {Object[]} actions - Transaction actions to perform
- */
-
-/**
- * @typedef {Object} TransactionConfig
- * @property {Transaction} transactions - Transaction actions to perform
- * @property {string} [callbackUrl] - URL to redirect back to after wallet interaction
- */
-
-/**
- * @typedef {Object} TransactionResult
- * @property {string} [url] - URL to redirect to if needed
- * @property {string} [hash] - Transaction hash if immediately available
- * @property {string} [error] - Error message if transaction failed
- * Represents the result of attempting to send or execute a transaction.
- */
 export interface TransactionResult {
   /** URL to redirect to if needed. */
   url?: string;
@@ -59,210 +43,369 @@ export interface TransactionResult {
 }
 
 export interface WalletAdapterConstructor {
-  widgetUrl?: string;
+  walletUrl?: string;
   targetOrigin?: string;
   onStateUpdate?: (state: any) => void;
   lastState?: any;
   callbackUrl?: string;
 }
 
-/**
- * @typedef {Object} WalletAdapterConfig
- * @property {string} [widgetUrl] - URL of the wallet widget (defaults to official hosted version)
- * @property {string} [targetOrigin] - Target origin for postMessage (defaults to '*')
- * @property {string} [lastState] - The last state that was given by WalletAdapter before the redirect or reload.
- * @property {(state: WalletState) => void} [onStateUpdate] - Called when wallet state changes
- * @property {string} [callbackUrl] - Default callback URL for wallet interactions (defaults to current page URL)
- */
+interface SavedData {
+  accounts: LocalAccount[];
+  key: string;
+  contractId: string;
+  methodNames: string[];
+  logoutKey: string;
+  networkId: string;
+}
 
-/**
- * Interface for interacting with NEAR wallets
- */
+class IntearAdapterError extends Error {
+  constructor(message: string, public cause?: unknown) {
+    super(message);
+    this.name = "IntearAdapterError";
+    if (cause) {
+      this.stack += `\nCaused by: ${cause instanceof Error ? cause.stack : String(cause)
+        }`;
+    }
+  }
+}
+
+async function generateAuthSignature(
+  privateKey: string,
+  data: string,
+  nonce: number
+): Promise<string> {
+  const messageBytes = new TextEncoder().encode(nonce.toString() + "|" + data);
+  const hashBytes = sha256(messageBytes);
+
+  const signature = signHash(hashBytes, privateKey, { returnBase58: true });
+  return signature.toString();
+}
+
+function assertLoggedIn(): SavedData {
+  if (typeof window === 'undefined') {
+    throw new IntearAdapterError("Cannot access localStorage in this environment.");
+  }
+  const savedDataStr = window.localStorage.getItem(STORAGE_KEY);
+  if (!savedDataStr) {
+    throw new IntearAdapterError("Not signed in (no data found)");
+  }
+  try {
+    const savedData = JSON.parse(savedDataStr) as SavedData;
+    if (!savedData || !savedData.accounts || savedData.accounts.length === 0 || !savedData.key) {
+      throw new Error("Invalid saved data structure");
+    }
+    return savedData;
+  } catch (e) {
+    console.error("Error parsing saved login data, clearing storage.", e);
+    window.localStorage.removeItem(STORAGE_KEY);
+    throw new IntearAdapterError("Failed to parse login data, please sign in again.", e);
+  }
+}
+
 export class WalletAdapter {
-  /** @type {HTMLIFrameElement} */
-  #iframe: HTMLIFrameElement | null = null;
-
-  /** @type {string} */
-  #targetOrigin;
-
-  /** @type {string} */
-  #widgetUrl;
-
-  /** @type {Map<string, Function>} */
-  #pending = new Map();
-
-  /** @type {WalletState} */
-  #state;
-
-  /** @type {Function} */
-  #onStateUpdate;
-
-  /** @type {string} */
-  #callbackUrl;
-
-  /** @type {string} */
-  static defaultWidgetUrl = "https://wallet-adapter.fastnear.com";
-
-  /**
-   * @param {WalletAdapterConfig} [config]
-   */
+  #walletUrl: string;
+  #logoutBridgeService: string;
+  #onStateUpdate?: (state: any) => void;
   constructor({
-    widgetUrl = WalletAdapter.defaultWidgetUrl,
-    targetOrigin = "*",
+    walletUrl = DEFAULT_WALLET_DOMAIN,
+    targetOrigin,
     onStateUpdate,
     lastState,
-    callbackUrl = window.location.href,
-  }: WalletAdapterConstructor = {}) {
-    this.#targetOrigin = targetOrigin;
-    this.#widgetUrl = widgetUrl;
+    callbackUrl,
+    logoutBridgeService = DEFAULT_LOGOUT_BRIDGE_SERVICE,
+  }: WalletAdapterConstructor & {
+    logoutBridgeService?: string;
+  } = {}) {
+    this.#walletUrl = walletUrl;
+    this.#logoutBridgeService = logoutBridgeService;
     this.#onStateUpdate = onStateUpdate;
-    this.#callbackUrl = callbackUrl;
-    this.#state = lastState || {};
-    window.addEventListener("message", this.#handleMessage.bind(this));
+    console.log("Intear Popup WalletAdapter initialized. URL:", this.#walletUrl);
   }
 
-  /**
-   * Creates an iframe for wallet interaction
-   * @param {string} path - Path to load in iframe
-   * @returns {HTMLIFrameElement}
-   */
-  #createIframe(path) {
-    // Remove existing iframe if any
-    if (this.#iframe) {
-      this.#iframe.remove();
-    }
 
-    // Create URL
-    const url = new URL(path, this.#widgetUrl);
+  async signIn({ contractId, methodNames, networkId }: { contractId: string; methodNames?: string[]; networkId: string; }): Promise<{ accountId: string, accounts: LocalAccount[], error?: string }> {
+    console.log("WalletAdapter: signIn", { contractId, methodNames, networkId });
+    const privateKey = privateKeyFromRandom();
 
-    // Create and configure iframe
-    const iframe = document.createElement("iframe");
-    iframe.src = url.toString();
-    iframe.allow = "usb";
-    iframe.style.border = "none";
-    iframe.style.zIndex = "10000";
-    iframe.style.position = "fixed";
-    iframe.style.display = "block";
-    iframe.style.top = "0";
-    iframe.style.left = "0";
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    document.body.appendChild(iframe);
+    return new Promise((resolve, reject) => {
+      const popup = window.open(`${this.#walletUrl}/connect`, "_blank", POPUP_FEATURES);
+      if (!popup) {
+        return reject(new IntearAdapterError("Popup was blocked"));
+      }
 
-    this.#iframe = iframe;
-    return iframe;
-  }
+      let done = false;
+      const listener = async (event: MessageEvent) => {
+        if (event.origin !== new URL(this.#walletUrl).origin) {
+          return;
+        }
+        if (!event.data || !event.data.type) {
+          return;
+        }
 
-  /**
-   * Handles messages from the wallet widget
-   * @param {MessageEvent} event
-   */
-  #handleMessage(event) {
-    // Check origin if specified
-    if (this.#targetOrigin !== "*" && event.origin !== this.#targetOrigin) {
-      return;
-    }
+        console.log("Message from connect popup", event.data);
+        switch (event.data.type) {
+          case "ready": {
+            const origin = location.origin || "file://local-html-file";
+            const message = JSON.stringify({ origin });
+            const nonce = Date.now();
+            const signatureString = await generateAuthSignature(privateKey, message, nonce);
+            const publicKey = publicKeyFromPrivate(privateKey);
+            popup.postMessage(
+              {
+                type: "signIn",
+                data: {
+                  contractId: contractId,
+                  methodNames: methodNames,
+                  publicKey: publicKey,
+                  networkId: networkId,
+                  nonce,
+                  message,
+                  signature: signatureString,
+                },
+              },
+              this.#walletUrl
+            );
+            break;
+          }
+          case "connected": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
 
-    const { id, type, action, payload } = event.data;
-    if (type !== "wallet-adapter") return;
+            const accounts = event.data.accounts as LocalAccount[];
+            if (!accounts || accounts.length === 0) {
+              return reject(new IntearAdapterError("No accounts returned from wallet"));
+            }
+            const functionCallKeyAdded = event.data.functionCallKeyAdded;
+            const logoutKey = event.data.logoutKey;
 
-    // Handle close action
-    if (action === "close") {
-      this.#iframe?.remove();
-      this.#iframe = null;
-      return;
-    }
+            const dataToSave: SavedData = {
+              accounts,
+              key: privateKey,
+              contractId: functionCallKeyAdded ? contractId : "",
+              methodNames: functionCallKeyAdded ? (methodNames ?? []) : [],
+              logoutKey: logoutKey,
+              networkId: networkId,
+            };
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
 
-    // Update state if provided
-    if (payload?.state) {
-      this.#state = { ...this.#state, ...payload.state };
-      this.#onStateUpdate?.(this.#state);
-    }
+            const newState = { accountId: accounts[0].accountId, networkId };
+            this.#onStateUpdate?.(newState);
 
-    // Resolve pending promise if any
-    const resolve = this.#pending.get(id) as ((value: SignInResult) => void);
-    if (resolve) {
-      this.#pending.delete(id);
-      this.#iframe?.remove();
-      this.#iframe = null;
-      resolve(payload as SignInResult);
-    }
-  }
-
-  /**
-   * Sends a message to the wallet widget
-   * @param {string} path - Path to load in iframe
-   * @param {string} method - Method to call
-   * @param {Object} params - Parameters to pass
-   * @returns {Promise<any>}
-   */
-  async #sendMessage(path, method, params): Promise<TransactionResult> {
-    return new Promise((resolve) => {
-      const id = Math.random().toString(36).slice(2);
-      this.#pending.set(id, resolve);
-
-      const iframe = this.#createIframe(path);
-
-      iframe.onload = () => {
-        iframe.contentWindow?.postMessage(
-          {
-            type: "wallet-adapter",
-            method,
-            params: {
-              id,
-              ...params,
-              state: this.#state,
-              callbackUrl: params.callbackUrl || this.#callbackUrl,
-            },
-          },
-          this.#targetOrigin
-        );
+            resolve({ accountId: accounts[0].accountId, accounts });
+            break;
+          }
+          case "error": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
+            reject(new IntearAdapterError(event.data.message || "Unknown error from wallet popup"));
+            break;
+          }
+        }
       };
+
+      window.addEventListener("message", listener);
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          window.removeEventListener("message", listener);
+          clearInterval(checkPopupClosed);
+          if (!done) {
+            reject(new IntearAdapterError("Sign-in canceled - popup closed by user"));
+          }
+        }
+      }, 100);
     });
   }
 
-  /**
-   * Get current wallet state
-   * @returns {WalletState}
-   */
-  getState() {
-    return { ...this.#state };
+  async signOut(): Promise<void> {
+    console.log("WalletAdapter: signOut");
+    window.localStorage.removeItem(STORAGE_KEY);
+    this.#onStateUpdate?.({ accountId: null, networkId: null });
   }
 
-  /**
-   * Set current wallet state
-   * @param state
-   */
-  setState(state) {
-    this.#state = state;
+  getState(): { accountId: string | null; networkId: string | null; publicKey?: string | null } {
+    try {
+      const savedData = assertLoggedIn();
+      return {
+        accountId: savedData.accounts[0].accountId,
+        networkId: savedData.networkId,
+        publicKey: publicKeyFromPrivate(savedData.key),
+      };
+    } catch (e) {
+      return { accountId: null, networkId: null, publicKey: null };
+    }
   }
 
-  /**
-   * Sign in with a NEAR wallet
-   * @param {SignInConfig} config
-   * @returns {Promise<any>}
-   *
-   * Should be returning SignInResult
-   */
-  async signIn(config): Promise<any> {
-    return this.#sendMessage("/login.html", "signIn", config);
+  setState(state: any): void {
+    console.warn("WalletAdapter: setState called, but state is primarily managed in localStorage for this adapter.");
+    this.#onStateUpdate?.(state);
   }
 
-  /**
-   * Send a transaction using connected wallet
-   * @param {TransactionConfig} config
-   * @returns {Promise<TransactionResult>}
-   */
-  async sendTransactions(config): Promise<TransactionResult> {
-    return this.#sendMessage("/send.html", "sendTransactions", config);
+  async sendTransactions({ transactions }: { transactions: LocalTransaction[] }): Promise<WalletTxResult> {
+    console.log("WalletAdapter: sendTransactions", { transactions });
+    const savedData = assertLoggedIn(); // Throws if not logged in
+    const privateKey = savedData.key;
+    const accountId = savedData.accounts[0].accountId;
+    const networkId = savedData.networkId; // Use saved networkId
+
+    const canSignLocally = transactions.every(
+      (tx) => tx.receiverId === savedData.contractId &&
+        tx.signerId === accountId &&
+        canSignWithLAK(tx.actions)
+    );
+
+    return new Promise(async (resolve, reject) => {
+      const popup = window.open(`${this.#walletUrl}/send-transactions`, "_blank", POPUP_FEATURES);
+      if (!popup) {
+        return reject(new IntearAdapterError("Popup was blocked"));
+      }
+
+      let done = false;
+      const listener = async (event: MessageEvent) => {
+        if (event.origin !== new URL(this.#walletUrl).origin) return;
+        if (!event.data || !event.data.type) return;
+
+        console.log("Message from send-transactions popup", event.data);
+        switch (event.data.type) {
+          case "ready": {
+            const transactionsString = JSON.stringify(transactions);
+            const nonce = Date.now();
+            const signatureString = await generateAuthSignature(privateKey, transactionsString, nonce);
+            const publicKey = publicKeyFromPrivate(privateKey);
+            popup.postMessage(
+              {
+                type: "signAndSendTransactions",
+                data: {
+                  transactions: transactionsString,
+                  accountId: accountId,
+                  publicKey: publicKey,
+                  nonce: nonce,
+                  signature: signatureString,
+                },
+              },
+              this.#walletUrl
+            );
+            break;
+          }
+          case "sent": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
+            resolve({ outcomes: event.data.outcomes });
+            break;
+          }
+          case "error": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
+            reject(new IntearAdapterError(event.data.message || "Unknown error from send-transactions popup"));
+            break;
+          }
+        }
+      };
+
+      window.addEventListener("message", listener);
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          window.removeEventListener("message", listener);
+          clearInterval(checkPopupClosed);
+          if (!done) {
+            reject(new IntearAdapterError("Transaction canceled - popup closed by user"));
+          }
+        }
+      }, 100);
+    });
   }
 
-  /**
-   * Clean up adapter resources
-   */
+  async signMessage({ message, nonce, recipient, callbackUrl, state }: { message: string, nonce: Buffer, recipient: string, callbackUrl?: string, state?: string }): Promise<SignatureResult> {
+    console.log("WalletAdapter: signMessage", { message, nonce, recipient });
+    const savedData = assertLoggedIn();
+    const privateKey = savedData.key;
+    const accountId = savedData.accounts[0].accountId;
+
+    return new Promise(async (resolve, reject) => {
+      const popup = window.open(`${this.#walletUrl}/sign-message`, "_blank", POPUP_FEATURES);
+      if (!popup) {
+        return reject(new IntearAdapterError("Popup was blocked"));
+      }
+
+      let done = false;
+      const listener = async (event: MessageEvent) => {
+        if (event.origin !== new URL(this.#walletUrl).origin) return;
+        if (!event.data || !event.data.type) return;
+
+        console.log("Message from sign-message popup", event.data);
+        switch (event.data.type) {
+          case "ready": {
+            const signMessageString = JSON.stringify({
+              message,
+              recipient,
+              nonce: Array.from(nonce),
+              callbackUrl,
+              state,
+            });
+            const authNonce = Date.now();
+            const signatureString = await generateAuthSignature(privateKey, signMessageString, authNonce);
+            const publicKey = publicKeyFromPrivate(privateKey);
+            popup.postMessage(
+              {
+                type: "signMessage",
+                data: {
+                  message: signMessageString,
+                  accountId: accountId,
+                  publicKey: publicKey,
+                  nonce: authNonce,
+                  signature: signatureString,
+                },
+              },
+              this.#walletUrl
+            );
+            break;
+          }
+          case "signed": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
+            const signatureData = event.data.signature;
+            try {
+              resolve({
+                accountId: signatureData.accountId,
+                publicKey: signatureData.publicKey,
+                signature: signatureData.signature,
+              });
+            } catch (e) {
+              reject(new IntearAdapterError("Failed to process signature from wallet", e));
+            }
+            break;
+          }
+          case "error": {
+            done = true;
+            popup.close();
+            window.removeEventListener("message", listener);
+            reject(new IntearAdapterError(event.data.message || "Unknown error from sign-message popup"));
+            break;
+          }
+        }
+      };
+
+      window.addEventListener("message", listener);
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          window.removeEventListener("message", listener);
+          clearInterval(checkPopupClosed);
+          if (!done) {
+            reject(new IntearAdapterError("Message signing canceled - popup closed by user"));
+          }
+        }
+      }, 100);
+    });
+  }
+
   destroy() {
-    window.removeEventListener("message", this.#handleMessage);
-    this.#iframe?.remove();
-    this.#iframe = null;
+    console.log("Intear Popup WalletAdapter destroyed.");
   }
 }
+
+export default WalletAdapter;

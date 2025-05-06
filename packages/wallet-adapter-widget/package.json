@@ -43,7 +43,8 @@
     "@here-wallet/core": "*",
     "base58-js": "*",
     "base64-js": "*",
-    "borsh": "*"
+    "borsh": "*",
+    "intear-wallet": "^69.0.0"
   },
   "peerDependencies": {
     "bn.js": "=5.2.1",

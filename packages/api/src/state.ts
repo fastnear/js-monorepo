@@ -5,7 +5,8 @@ import {
 } from "@fastnear/utils";
 import {WalletAdapter} from "@fastnear/wallet-adapter";
 
-export const WIDGET_URL = "https://js.cdn.fastnear.com";
+// export const WIDGET_URL = "https://js.cdn.fastnear.com";
+export const WIDGET_URL =  "https://wallet.intear.tech"; // just open the popup -- but this could be federated module
 
 export const DEFAULT_NETWORK_ID = "mainnet";
 export const NETWORKS = {
@@ -98,8 +99,7 @@ export const getWalletAdapterState = (): WalletAdapterState => {
 // We can create an adapter instance here
 export let _adapter = new WalletAdapter({
   onStateUpdate: onAdapterStateUpdate,
-  lastState: getWalletAdapterState(),
-  widgetUrl: WIDGET_URL,
+  walletUrl: WIDGET_URL,
 });
 
 // Attempt to set publicKey if we have a privateKey
