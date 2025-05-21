@@ -1,39 +1,41 @@
-import Big from "big.js";
 import {
-  lsSet,
-  lsGet,
-  tryParseJson,
-  fromBase64,
-  toBase64,
+  bytesToBase64,
   canSignWithLAK,
-  toBase58,
+  fromBase64,
+  lsGet,
+  lsSet,
   parseJsonFromBytes,
-  signHash,
-  publicKeyFromPrivate,
+  PlainTransaction,
   privateKeyFromRandom,
+  serializeSignedTransaction,
   serializeTransaction,
-  serializeSignedTransaction, bytesToBase64, PlainTransaction,
+  signHash,
+  toBase58,
+  toBase64,
+  tryParseJson
 } from "@fastnear/utils";
+import Big from "big.js";
 
 import {
   _adapter,
   _state,
   DEFAULT_NETWORK_ID,
-  NETWORKS,
   getTxHistory,
+  NETWORKS,
   update,
   updateTxHistory,
 } from "./state.js";
 
 import {
   getConfig,
-  setConfig,
   resetTxHistory,
+  setConfig,
 } from "./state.js";
 
-import { sha256 } from "@noble/hashes/sha2";
 import * as reExportAllUtils from "@fastnear/utils";
+import { sha256 } from "@noble/hashes/sha2";
 import * as stateExports from "./state.js";
+import { type EventsType } from "./state.js";
 
 Big.DP = 27;
 export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
@@ -106,7 +108,7 @@ export function afterTxSent(txId: string) {
     sender_account_id: txHistory[txId]?.tx?.signerId,
     wait_until: "EXECUTED_OPTIMISTIC",
   })
-    .then( result => {
+    .then(result => {
       const successValue = result?.result?.status?.SuccessValue;
       updateTxHistory({
         txId,
@@ -240,35 +242,33 @@ export const selected = () => {
 export const requestSignIn = async ({ contractId }: { contractId: string }) => {
   const privateKey = privateKeyFromRandom();
   update({ accessKeyContractId: contractId, accountId: null, privateKey });
-  const pubKey = publicKeyFromPrivate(privateKey);
 
   const result = await _adapter.signIn({
     networkId: getConfig().networkId,
     contractId,
-    publicKey: pubKey,
   });
 
   if (result.error) {
     throw new Error(`Wallet error: ${result.error}`);
   }
-  if (result.url) {
-    if (typeof window !== "undefined") {
-      setTimeout(() => {
-        window.location.href = result.url;
-      }, 100);
-    }
-  } else if (result.accountId) {
-    update({ accountId: result.accountId });
+  // If signIn succeeded, result contains accountId and accounts
+  if (result.accountId) {
+    // Update local state ONLY with the accountId. Let intear-wallet manage keys.
+    update({ accountId: result.accountId, privateKey: null, publicKey: null, accessKeyContractId: contractId });
+  } else {
+    // This case might indicate an issue if signIn resolves without accountId or error
+    console.warn("@fastnear: signIn resolved without accountId or error.");
+    update({ accountId: null, privateKey: null, publicKey: null, accessKeyContractId: null }); // Ensure signed out state
   }
 };
 
 export const view = async ({
-                             contractId,
-                             methodName,
-                             args,
-                             argsBase64,
-                             blockId,
-                           }: {
+  contractId,
+  methodName,
+  args,
+  argsBase64,
+  blockId,
+}: {
   contractId: string;
   methodName: string;
   args?: any;
@@ -293,9 +293,9 @@ export const view = async ({
 };
 
 export const queryAccount = async ({
-                                accountId,
-                                blockId,
-                              }: {
+  accountId,
+  blockId,
+}: {
   accountId: string;
   blockId?: string;
 }) => {
@@ -310,10 +310,10 @@ export const queryBlock = async ({ blockId }: { blockId?: string }): Promise<Blo
 };
 
 export const queryAccessKey = async ({
-                                  accountId,
-                                  publicKey,
-                                  blockId,
-                                }: {
+  accountId,
+  publicKey,
+  blockId,
+}: {
   accountId: string;
   publicKey: string;
   blockId?: string;
@@ -340,11 +340,72 @@ export const signOut = () => {
   setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
 };
 
+/**
+ * Interface for signature result from wallet
+ */
+export interface SignatureResult {
+  accountId: string;
+  publicKey: string;
+  signature: string;
+}
+
+/**
+ * Sign a message using the connected wallet
+ * 
+ * @param message - The message to sign
+ * @param recipient - The recipient account ID
+ * @param nonce - Optional nonce for the message (defaults to random bytes)
+ * @param callbackUrl - Optional callback URL
+ * @param state - Optional state to include with the message
+ * @returns Promise resolving to the signature result
+ */
+export const signMessage = async ({
+  message,
+  recipient,
+  nonce,
+  callbackUrl,
+  state,
+}: {
+  message: string;
+  recipient: string;
+  nonce?: Uint8Array;
+  callbackUrl?: string;
+  state?: string;
+}): Promise<SignatureResult> => {
+  const signerId = _state.accountId;
+  if (!signerId) throw new Error("Must sign in");
+
+  // Generate a random nonce if not provided
+  // could use near-sign-verify
+  const messageNonce = nonce || crypto.getRandomValues(new Uint8Array(32));
+
+  try {
+
+    const result = await _adapter.signMessage({
+      message,
+      recipient,
+      // @ts-ignore - We know the adapter expects Buffer but we're using Uint8Array
+      nonce: messageNonce,
+      callbackUrl,
+      state,
+    });
+
+    return {
+      accountId: result.accountId,
+      publicKey: result.publicKey,
+      signature: result.signature
+    };
+  } catch (err) {
+    console.error('fastnear: error signing message using adapter:', err);
+    throw err;
+  }
+};
+
 export const sendTx = async ({
-                               receiverId,
-                               actions,
-                               waitUntil,
-                             }: {
+  receiverId,
+  actions,
+  waitUntil,
+}: {
   receiverId: string;
   actions: any[];
   waitUntil?: string;
@@ -382,16 +443,10 @@ export const sendTx = async ({
     try {
       const result: WalletTxResult = await _adapter.sendTransactions({
         transactions: [jsonTx],
-        callbackUrl: url.toString(),
       });
 
-      if (result.url) {
-        if (typeof window !== "undefined") {
-          setTimeout(() => {
-            window.location.href = result.url!;
-          }, 100);
-        }
-      } else if (result.outcomes?.length) {
+      // Resolves with outcomes or rejection
+      if (result.outcomes?.length) {
         result.outcomes.forEach((r) =>
           updateTxHistory({
             txId,
@@ -512,7 +567,7 @@ for (const key in stateExports) {
 
 // devx
 
-export const event = state['events'];
+export const event: EventsType = state['events'];
 delete state['events'];
 
 // Wallet redirect handling
@@ -598,12 +653,12 @@ try {
 // action helpers
 export const actions = {
   functionCall: ({
-                   methodName,
-                   gas,
-                   deposit,
-                   args,
-                   argsBase64,
-                 }: {
+    methodName,
+    gas,
+    deposit,
+    args,
+    argsBase64,
+  }: {
     methodName: string;
     gas?: string;
     deposit?: string;
@@ -623,24 +678,24 @@ export const actions = {
     deposit: yoctoAmount,
   }),
 
-  stakeNEAR: ({amount, publicKey}: { amount: string; publicKey: string }) => ({
+  stakeNEAR: ({ amount, publicKey }: { amount: string; publicKey: string }) => ({
     type: "Stake",
     stake: amount,
     publicKey,
   }),
 
-  addFullAccessKey: ({publicKey}: { publicKey: string }) => ({
+  addFullAccessKey: ({ publicKey }: { publicKey: string }) => ({
     type: "AddKey",
     publicKey: publicKey,
-    accessKey: {permission: "FullAccess"},
+    accessKey: { permission: "FullAccess" },
   }),
 
   addLimitedAccessKey: ({
-                          publicKey,
-                          allowance,
-                          accountId,
-                          methodNames,
-                        }: {
+    publicKey,
+    allowance,
+    accountId,
+    methodNames,
+  }: {
     publicKey: string;
     allowance: string;
     accountId: string;
@@ -656,12 +711,12 @@ export const actions = {
     },
   }),
 
-  deleteKey: ({publicKey}: { publicKey: string }) => ({
+  deleteKey: ({ publicKey }: { publicKey: string }) => ({
     type: "DeleteKey",
     publicKey,
   }),
 
-  deleteAccount: ({beneficiaryId}: { beneficiaryId: string }) => ({
+  deleteAccount: ({ beneficiaryId }: { beneficiaryId: string }) => ({
     type: "DeleteAccount",
     beneficiaryId,
   }),
@@ -670,7 +725,7 @@ export const actions = {
     type: "CreateAccount",
   }),
 
-  deployContract: ({codeBase64}: { codeBase64: string }) => ({
+  deployContract: ({ codeBase64 }: { codeBase64: string }) => ({
     type: "DeployContract",
     codeBase64,
   }),

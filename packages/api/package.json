@@ -1,6 +1,6 @@
 {
-  "name": "@fastnear/api",
-  "version": "0.9.7",
+  "name": "fastintear",
+  "version": "0.1.2",
   "description": "Interact with NEAR Protocol blockchain including transaction signing, utilities, and more.",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -13,7 +13,7 @@
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },
-  "author": "FastNEAR",
+  "author": "FastNEAR+Intear",
   "homepage": "https://js.fastnear.com",
   "repository": {
     "type": "git",
@@ -36,8 +36,7 @@
     }
   },
   "dependencies": {
-    "@fastnear/utils": "workspace:*",
-    "@fastnear/wallet-adapter": "workspace:*",
+    "@fastnear/utils": "^0.9.7",
     "@noble/curves": "*",
     "@noble/hashes": "*",
     "base58-js": "*",

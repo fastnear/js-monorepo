@@ -47,9 +47,9 @@
 </div>
 
 <script>
-  const contractId = 'greeter.testnet';
+  const contractId = 'crosspost.near';
   // Initialize NEAR
-  near.config({ networkId: 'testnet' });
+  near.config({ networkId: 'mainnet' });
 
   let currentAccount = near.accountId();
 
@@ -132,7 +132,11 @@
 
   // Sign in function
   function signIn() {
-    near.requestSignIn({ contractId });
+      near.requestSignIn({ contractId })
+        .catch(e => {
+          console.error('Sign-in error:', e.message);
+          updateStatus(`Sign-in failed: ${e.message}`);
+        });
   }
 
   // Sign out function
