@@ -1,4 +1,21 @@
-# near api
+# fastintear
+
+> [!WARNING]
+> This package is an experimental fork of [@fastnear/js-monorepo](https://github.com/fastnear/js-monorepo) that has some minor package improvements (will make their way upstream) and exclusively uses [INTEAR Wallet](https://github.com/INTEARnear/wallet).
+
+```typescript
+import * as near from "fastintear";
+
+near.config({ networkId: "mainnet" });
+
+near.requestSignIn();
+
+near.signMessage(...);
+
+near.sendTx(...);
+
+near.signOut();
+```
 
 ## general
 

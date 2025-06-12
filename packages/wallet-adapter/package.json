@@ -40,5 +40,8 @@
     "rimraf": "*",
     "tsup": "*",
     "typescript": "*"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0"
   }
 }

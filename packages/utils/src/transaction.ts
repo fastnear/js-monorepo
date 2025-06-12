@@ -2,6 +2,7 @@ import { serialize as borshSerialize, deserialize as borshDeserialize, Schema } 
 import { keyFromString } from "./crypto.js";
 import {base64ToBytes, fromBase58, fromBase64, toBase64} from "./misc.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
+import type { Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeleteKeyAction, DeployContractAction, FunctionCallAction, StakeAction, TransferAction, SignedDelegateAction } from "@fastnear/api";
 
 export interface PlainTransaction {
   signerId: string;
@@ -9,7 +10,7 @@ export interface PlainTransaction {
   nonce: string | bigint | number;
   receiverId: string;
   blockHash: string;
-  actions: Array<any>;
+  actions: Array<Action>;
 }
 
 export interface PlainSignedTransaction {
@@ -53,7 +54,7 @@ export function serializeTransaction(jsonTransaction: PlainTransaction) {
   return borshSerialize(SCHEMA.Transaction, transaction);
 }
 
-export function serializeSignedTransaction(jsonTransaction: PlainTransaction, signature) {
+export function serializeSignedTransaction(jsonTransaction: PlainTransaction, signature: string) {
   console.log("fastnear: Serializing Signed Transaction", jsonTransaction);
   console.log('fastnear: signature', signature)
   console.log('fastnear: signature length', fromBase58(signature).length)
@@ -76,7 +77,7 @@ export function serializeSignedTransaction(jsonTransaction: PlainTransaction, si
   return borshSignedTx;
 }
 
-export function mapAction(action: any): object {
+export function mapAction(action: Action): object {
   switch (action.type) {
     case "CreateAccount": {
       return {
@@ -84,99 +85,112 @@ export function mapAction(action: any): object {
       };
     }
     case "DeployContract": {
+      const deployContractAction = action as DeployContractAction;
       return {
         deployContract: {
-          code: base64ToBytes(action.codeBase64),
+          code: deployContractAction.params.code,
         },
       };
     }
     case "FunctionCall": {
+      const functionCallAction = action as FunctionCallAction;
       return {
         functionCall: {
-          methodName: action.methodName,
-          args: (action.argsBase64 !== null && action.argsBase64 !== undefined) ?
-            base64ToBytes(action.argsBase64) :
-            (new TextEncoder().encode(JSON.stringify(action.args))),
-          gas: BigInt(action.gas ?? "300000000000000"),
-          deposit: BigInt(action.deposit ?? "0"),
+          methodName: functionCallAction.params.methodName,
+          args: new TextEncoder().encode(JSON.stringify(functionCallAction.params.args)),
+          gas: BigInt(functionCallAction.params.gas ?? "300000000000000"),
+          deposit: BigInt(functionCallAction.params.deposit ?? "0"),
         },
       };
     }
     case "Transfer": {
+      const transferAction = action as TransferAction;
       return {
         transfer: {
-          deposit: BigInt(action.deposit),
+          deposit: BigInt(transferAction.params.deposit),
         },
       };
     }
     case "Stake": {
+      const stakeAction = action as StakeAction;
       return {
         stake: {
-          stake: BigInt(action.stake),
+          stake: BigInt(stakeAction.params.stake),
           publicKey: {
             ed25519Key: {
-              data: keyFromString(action.publicKey),
+              data: keyFromString(stakeAction.params.publicKey),
             },
           },
         },
       };
     }
     case "AddKey": {
+      const addKeyAction = action as AddKeyAction;
+      const permission = addKeyAction.params.accessKey.permission;
+      let mappedPermission;
+      if (permission === "FullAccess") {
+        mappedPermission = { fullAccess: {} };
+      } else {
+        mappedPermission = {
+          functionCall: {
+            allowance: permission.allowance
+              ? BigInt(permission.allowance)
+              : null,
+            receiverId: permission.receiverId,
+            methodNames: permission.methodNames || [],
+          },
+        };
+      }
       return {
         addKey: {
           publicKey: {
             ed25519Key: {
-              data: keyFromString(action.publicKey),
+              data: keyFromString(addKeyAction.params.publicKey),
             },
           },
           accessKey: {
-            nonce: BigInt(action.accessKey.nonce),
-            permission:
-              action.accessKey.permission === "FullAccess"
-                ? { fullAccess: {} }
-                : {
-                  functionCall: {
-                    allowance: action.accessKey.allowance
-                      ? BigInt(action.accessKey.allowance)
-                      : null,
-                    receiverId: action.accessKey.receiverId,
-                    methodNames: action.accessKey.methodNames,
-                  },
-                },
+            nonce: BigInt(addKeyAction.params.accessKey.nonce || 0),
+            permission: mappedPermission,
           },
         },
       };
     }
     case "DeleteKey": {
+      const deleteKeyAction = action as DeleteKeyAction;
       return {
         deleteKey: {
           publicKey: {
             ed25519Key: {
-              data: keyFromString(action.publicKey),
+              data: keyFromString(deleteKeyAction.params.publicKey),
             },
           },
         },
       };
     }
     case "DeleteAccount": {
+      const deleteAccountAction = action as DeleteAccountAction;
       return {
         deleteAccount: {
-          beneficiaryId: action.beneficiaryId,
+          beneficiaryId: deleteAccountAction.params.beneficiaryId,
         },
       };
     }
     case "SignedDelegate": {
+      const signedDelegateAction = action as SignedDelegateAction;
       return {
         signedDelegate: {
-          delegateAction: mapAction(action.delegateAction),
+          delegateAction: mapAction(signedDelegateAction.params.delegateAction), // Recursive call
           signature: {
-            ed25519Signature: fromBase58(action.signature),
+            ed25519Signature: {
+              data: fromBase58(signedDelegateAction.params.signature)
+            }
           },
         },
       };
     }
     default: {
-      throw new Error("Not implemented action: " + action.type);
+      const _exhaustiveCheck: never = action;
+      throw new Error(`Unhandled action type: ${(_exhaustiveCheck as Action).type}`);
     }
   }
 }

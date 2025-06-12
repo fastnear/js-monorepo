@@ -1,11 +1,12 @@
 import {
-  lsSet,
   lsGet,
+  lsSet,
   publicKeyFromPrivate,
 } from "@fastnear/utils";
-import {WalletAdapter} from "@fastnear/wallet-adapter";
+import { WalletAdapter } from "./intear";
 
-export const WIDGET_URL = "https://js.cdn.fastnear.com";
+// export const WIDGET_URL = "https://js.cdn.fastnear.com";
+export const WIDGET_URL = "https://wallet.intear.tech"; // just open the popup -- but this could be federated module
 
 export const DEFAULT_NETWORK_ID = "mainnet";
 export const NETWORKS = {
@@ -42,7 +43,13 @@ export interface AppState {
 export interface TxStatus {
   txId: string;
   updateTimestamp?: number;
-
+  status?: 'Pending' | 'Included' | 'Executed' | 'Error' | 'ErrorAfterIncluded' | 'RejectedByUser' | 'PendingGotTxHash' | string;
+  tx?: any;
+  txHash?: string;
+  result?: any;
+  error?: string | object;
+  successValue?: any;
+  finalState?: boolean;
   [key: string]: any;
 }
 
@@ -51,6 +58,19 @@ export type TxHistory = Record<string, TxStatus>;
 export interface EventListeners {
   account: Set<(accountId: string) => void>;
   tx: Set<(tx: TxStatus) => void>;
+}
+
+export interface EventsType {
+  _eventListeners: {
+    account: Set<(accountId: string) => void>;
+    tx: Set<(tx: TxStatus) => void>;
+  };
+  notifyAccountListeners: (accountId: string) => void;
+  notifyTxListeners: (tx: TxStatus) => void;
+  onAccount: (callback: (accountId: string) => void) => (accountId: string) => void;
+  onTx: (callback: (tx: TxStatus) => void) => (tx: TxStatus) => void;
+  offAccount: (callback: (accountId: string) => void) => void;
+  offTx: (callback: (tx: TxStatus) => void) => void;
 }
 
 export interface UnbroadcastedEvents {
@@ -98,8 +118,7 @@ export const getWalletAdapterState = (): WalletAdapterState => {
 // We can create an adapter instance here
 export let _adapter = new WalletAdapter({
   onStateUpdate: onAdapterStateUpdate,
-  lastState: getWalletAdapterState(),
-  widgetUrl: WIDGET_URL,
+  walletUrl: WIDGET_URL,
 });
 
 // Attempt to set publicKey if we have a privateKey
@@ -123,7 +142,7 @@ export const _unbroadcastedEvents: UnbroadcastedEvents = {
 };
 
 // events / listeners
-export const events = {
+export const events: EventsType = {
   _eventListeners: {
     account: new Set(),
     tx: new Set(),
@@ -164,15 +183,25 @@ export const events = {
       _unbroadcastedEvents.account = [];
       accountEvent.forEach(events.notifyAccountListeners);
     }
+    return callback;
   },
 
-  onTx: (callback: (tx: TxStatus) => void): void => {
+  onTx: (callback: (tx: TxStatus) => void): (tx: TxStatus) => void => {
     events._eventListeners.tx.add(callback);
     if (_unbroadcastedEvents.tx.length > 0) {
       const txEvent = _unbroadcastedEvents.tx;
       _unbroadcastedEvents.tx = [];
       txEvent.forEach(events.notifyTxListeners);
     }
+    return callback;
+  },
+
+  offAccount: (callback: (accountId: string) => void): void => {
+    events._eventListeners.account.delete(callback);
+  },
+
+  offTx: (callback: (tx: TxStatus) => void): void => {
+    events._eventListeners.tx.delete(callback);
   }
 }
 
@@ -181,7 +210,7 @@ export const events = {
 //    but haven't given it enough thought ~ mike
 export const update = (newState: Partial<AppState>) => {
   const oldState = _state;
-  _state = {..._state, ...newState};
+  _state = { ..._state, ...newState };
 
   lsSet("state", {
     accountId: _state.accountId,

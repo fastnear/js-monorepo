@@ -23,7 +23,7 @@
     "clean": "yarn rimraf node_modules"
   },
   "dependencies": {
-    "@fastnear/api": "workspace:*"
+    "fastintear": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "*"

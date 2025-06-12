@@ -201,23 +201,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fastnear/api@workspace:*, @fastnear/api@workspace:packages/api":
-  version: 0.0.0-use.local
-  resolution: "@fastnear/api@workspace:packages/api"
-  dependencies:
-    "@fastnear/utils": "workspace:*"
-    "@fastnear/wallet-adapter": "workspace:*"
-    "@noble/curves": "npm:*"
-    "@noble/hashes": "npm:*"
-    base58-js: "npm:*"
-    big.js: "npm:*"
-    borsh: "npm:*"
-    rimraf: "npm:*"
-    tsup: "npm:*"
-    typescript: "npm:*"
-  languageName: unknown
-  linkType: soft
-
 "@fastnear/borsh-schema@workspace:*, @fastnear/borsh-schema@workspace:packages/borsh-schema":
   version: 0.0.0-use.local
   resolution: "@fastnear/borsh-schema@workspace:packages/borsh-schema"
@@ -246,14 +229,14 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@fastnear/repl@workspace:packages/repl"
   dependencies:
-    "@fastnear/api": "workspace:*"
+    fastintear: "workspace:*"
     rimraf: "npm:*"
   bin:
     repl: bin/repl.cjs
   languageName: unknown
   linkType: soft
 
-"@fastnear/utils@workspace:*, @fastnear/utils@workspace:packages/utils":
+"@fastnear/utils@npm:^0.9.7, @fastnear/utils@workspace:*, @fastnear/utils@workspace:packages/utils":
   version: 0.0.0-use.local
   resolution: "@fastnear/utils@workspace:packages/utils"
   dependencies:
@@ -284,6 +267,7 @@ __metadata:
     borsh: "npm:*"
     http-browserify: "npm:*"
     https-browserify: "npm:*"
+    intear-wallet: "npm:^69.0.0"
     near-api-js: "npm:^2.0.0"
     process: "npm:*"
     rimraf: "npm:*"
@@ -296,10 +280,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/wallet-adapter@workspace:*, @fastnear/wallet-adapter@workspace:packages/wallet-adapter":
+"@fastnear/wallet-adapter@workspace:packages/wallet-adapter":
   version: 0.0.0-use.local
   resolution: "@fastnear/wallet-adapter@workspace:packages/wallet-adapter"
   dependencies:
+    "@noble/hashes": "npm:^1.8.0"
     rimraf: "npm:*"
     tsup: "npm:*"
     typescript: "npm:*"
@@ -555,7 +540,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@near-js/accounts@npm:^1.2.1":
+"@near-js/accounts@npm:1.4.1, @near-js/accounts@npm:^1.2.1":
   version: 1.4.1
   resolution: "@near-js/accounts@npm:1.4.1"
   dependencies:
@@ -611,6 +596,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@near-js/keystores-browser@npm:0.2.2":
+  version: 0.2.2
+  resolution: "@near-js/keystores-browser@npm:0.2.2"
+  dependencies:
+    "@near-js/crypto": "npm:1.4.2"
+    "@near-js/keystores": "npm:0.2.2"
+  checksum: 10c0/6e4f1537ef8d2383d023d1e4455e37ef33c3bd114d7393e134f5565c0ec01740ce2e1ee69b4bd2cfcb77f26c3ff61d092ee70dc4887818c9ae1b9fe58acff4cd
+  languageName: node
+  linkType: hard
+
 "@near-js/keystores-node@npm:0.0.5":
   version: 0.0.5
   resolution: "@near-js/keystores-node@npm:0.0.5"
@@ -618,6 +613,16 @@ __metadata:
     "@near-js/crypto": "npm:0.0.5"
     "@near-js/keystores": "npm:0.0.5"
   checksum: 10c0/9832f3aee25c1954097d84a8089b7ac4ec69af16902b0b2bbd894975a79d822469414f5997f0427d8f3713b07e74184bd46011bbe1aab647590be32f5b5fd064
+  languageName: node
+  linkType: hard
+
+"@near-js/keystores-node@npm:0.1.2":
+  version: 0.1.2
+  resolution: "@near-js/keystores-node@npm:0.1.2"
+  dependencies:
+    "@near-js/crypto": "npm:1.4.2"
+    "@near-js/keystores": "npm:0.2.2"
+  checksum: 10c0/db5b8c39c5109e33cd99229fb58771be3034e7efe05fc78d21e7bd1cdf4f3e86f8a344b509df87e9c46924f2472ce651c3ebc4ada34edd661a7559664f8264aa
   languageName: node
   linkType: hard
 
@@ -803,6 +808,48 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@near-js/wallet-account@npm:1.3.3":
+  version: 1.3.3
+  resolution: "@near-js/wallet-account@npm:1.3.3"
+  dependencies:
+    "@near-js/accounts": "npm:1.4.1"
+    "@near-js/crypto": "npm:1.4.2"
+    "@near-js/keystores": "npm:0.2.2"
+    "@near-js/providers": "npm:1.0.3"
+    "@near-js/signers": "npm:0.2.2"
+    "@near-js/transactions": "npm:1.3.3"
+    "@near-js/types": "npm:0.3.1"
+    "@near-js/utils": "npm:1.1.0"
+    borsh: "npm:1.0.0"
+  checksum: 10c0/eb9166e7ec1955292f9bc6cf73e8d3d9d2ffc3f1f1d2d1f7c5d3b4fd7866f7530951e945d02cb9e9926191913e1ca11769b14c51a1b8ac9863a9ea1ca7838b7e
+  languageName: node
+  linkType: hard
+
+"@near-wallet-selector/core@npm:8.10.2, @near-wallet-selector/core@npm:^8.10.2":
+  version: 8.10.2
+  resolution: "@near-wallet-selector/core@npm:8.10.2"
+  dependencies:
+    borsh: "npm:1.0.0"
+    events: "npm:3.3.0"
+    js-sha256: "npm:0.9.0"
+    rxjs: "npm:7.8.1"
+  peerDependencies:
+    near-api-js: ^4.0.0 || ^5.0.0
+  checksum: 10c0/2ac9c3b303255e7700891769d02aeb8b0c4e7cbe44bfeece5f700b181f1fe58ea6b7d1f9cd57066a39cf7c91229f247e4dae11436fde11d81c1654f0eb1a1ce0
+  languageName: node
+  linkType: hard
+
+"@near-wallet-selector/wallet-utils@npm:^8.10.2":
+  version: 8.10.2
+  resolution: "@near-wallet-selector/wallet-utils@npm:8.10.2"
+  dependencies:
+    "@near-wallet-selector/core": "npm:8.10.2"
+  peerDependencies:
+    near-api-js: ^4.0.0 || ^5.0.0
+  checksum: 10c0/dd2d13cee0b022a9ee82695ea2690c388ce982603509075983449c557c0a1aa0c9b052df52c7b5fdbe9490b82b816df2141f785bf9d5d66ff349595376d81374
+  languageName: node
+  linkType: hard
+
 "@noble/curves@npm:*, @noble/curves@npm:1.8.1, @noble/curves@npm:^1.7.0":
   version: 1.8.1
   resolution: "@noble/curves@npm:1.8.1"
@@ -823,6 +870,13 @@ __metadata:
   version: 1.3.3
   resolution: "@noble/hashes@npm:1.3.3"
   checksum: 10c0/23c020b33da4172c988e44100e33cd9f8f6250b68b43c467d3551f82070ebd9716e0d9d2347427aa3774c85934a35fa9ee6f026fca2117e3fa12db7bedae7668
+  languageName: node
+  linkType: hard
+
+"@noble/hashes@npm:^1.8.0":
+  version: 1.8.0
+  resolution: "@noble/hashes@npm:1.8.0"
+  checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
   languageName: node
   linkType: hard
 
@@ -1548,6 +1602,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"events@npm:3.3.0":
+  version: 3.3.0
+  resolution: "events@npm:3.3.0"
+  checksum: 10c0/d6b6f2adbccbcda74ddbab52ed07db727ef52e31a61ed26db9feb7dc62af7fc8e060defa65e5f8af9449b86b52cc1a1f6a79f2eafcf4e62add2b7a1fa4a432f6
+  languageName: node
+  linkType: hard
+
 "exponential-backoff@npm:^3.1.1, exponential-backoff@npm:^3.1.2":
   version: 3.1.2
   resolution: "exponential-backoff@npm:3.1.2"
@@ -1568,6 +1629,22 @@ __metadata:
   checksum: 10c0/74a513c2af0584448aee71ce56005185f81239eab7a2343110e5bad50c39ad4fb19c5a6f99783ead1cac7ccaf3461a6034fda89fffa2b30b6d99b9f21c2f9d29
   languageName: node
   linkType: hard
+
+"fastintear@workspace:*, fastintear@workspace:packages/api":
+  version: 0.0.0-use.local
+  resolution: "fastintear@workspace:packages/api"
+  dependencies:
+    "@fastnear/utils": "npm:^0.9.7"
+    "@noble/curves": "npm:*"
+    "@noble/hashes": "npm:*"
+    base58-js: "npm:*"
+    big.js: "npm:*"
+    borsh: "npm:*"
+    rimraf: "npm:*"
+    tsup: "npm:*"
+    typescript: "npm:*"
+  languageName: unknown
+  linkType: soft
 
 "fastnear-js-monorepo@workspace:.":
   version: 0.0.0-use.local
@@ -1832,6 +1909,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"intear-wallet@npm:^69.0.0":
+  version: 69.0.0
+  resolution: "intear-wallet@npm:69.0.0"
+  dependencies:
+    "@near-wallet-selector/core": "npm:^8.10.2"
+    "@near-wallet-selector/wallet-utils": "npm:^8.10.2"
+    near-api-js: "npm:^5.1.1"
+  checksum: 10c0/bcdb59180f4b3699105f3f972f50bfb519c723dded6b579a916414aa2a1a8ddcde76903ad8c7959631df988e88eaab6cecc50a29fc046e34bd3713991b180bf3
+  languageName: node
+  linkType: hard
+
 "ip-address@npm:^9.0.5":
   version: 9.0.5
   resolution: "ip-address@npm:9.0.5"
@@ -1936,17 +2024,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"js-sha256@npm:0.9.0, js-sha256@npm:^0.9.0":
+  version: 0.9.0
+  resolution: "js-sha256@npm:0.9.0"
+  checksum: 10c0/f20b9245f6ebe666f42ca05536f777301132fb1aa7fbc22f10578fa302717a6cca507344894efdeaf40a011256eb2f7d517b94ac7105bd5cf087fa61551ad634
+  languageName: node
+  linkType: hard
+
 "js-sha256@npm:^0.11.0":
   version: 0.11.0
   resolution: "js-sha256@npm:0.11.0"
   checksum: 10c0/90980fe01ca01fbd166751fb16c4caa09c1ab997e8bf77c0764cc05c772c6044946f4c1b3bad266ce78357280d2131d3dc0cf2dd7646e78272996bd4d590aa4f
-  languageName: node
-  linkType: hard
-
-"js-sha256@npm:^0.9.0":
-  version: 0.9.0
-  resolution: "js-sha256@npm:0.9.0"
-  checksum: 10c0/f20b9245f6ebe666f42ca05536f777301132fb1aa7fbc22f10578fa302717a6cca507344894efdeaf40a011256eb2f7d517b94ac7105bd5cf087fa61551ad634
   languageName: node
   linkType: hard
 
@@ -2279,6 +2367,31 @@ __metadata:
     node-fetch: "npm:^2.6.1"
     tweetnacl: "npm:^1.0.1"
   checksum: 10c0/0457460df3f82b727da82aa4212be188a6fc4ca8f4df102709673503b4680d0ece7988c807f16b1114bdbb0fc99d287cb74848fd51dc7366f0760f43a68f8364
+  languageName: node
+  linkType: hard
+
+"near-api-js@npm:^5.1.1":
+  version: 5.1.1
+  resolution: "near-api-js@npm:5.1.1"
+  dependencies:
+    "@near-js/accounts": "npm:1.4.1"
+    "@near-js/crypto": "npm:1.4.2"
+    "@near-js/keystores": "npm:0.2.2"
+    "@near-js/keystores-browser": "npm:0.2.2"
+    "@near-js/keystores-node": "npm:0.1.2"
+    "@near-js/providers": "npm:1.0.3"
+    "@near-js/signers": "npm:0.2.2"
+    "@near-js/transactions": "npm:1.3.3"
+    "@near-js/types": "npm:0.3.1"
+    "@near-js/utils": "npm:1.1.0"
+    "@near-js/wallet-account": "npm:1.3.3"
+    "@noble/curves": "npm:1.8.1"
+    borsh: "npm:1.0.0"
+    depd: "npm:2.0.0"
+    http-errors: "npm:1.7.2"
+    near-abi: "npm:0.2.0"
+    node-fetch: "npm:2.6.7"
+  checksum: 10c0/1d81ca84b40e08b642df20fd7c47a8262ee594445f26d49a1cf3f7f2d39525081e9e1dbbf6d7c68dbc15797d7871bf0036aba4ff9e5f112dd3eaeda42c00fee6
   languageName: node
   linkType: hard
 
@@ -2676,6 +2789,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rxjs@npm:7.8.1":
+  version: 7.8.1
+  resolution: "rxjs@npm:7.8.1"
+  dependencies:
+    tslib: "npm:^2.1.0"
+  checksum: 10c0/3c49c1ecd66170b175c9cacf5cef67f8914dcbc7cd0162855538d365c83fea631167cacb644b3ce533b2ea0e9a4d0b12175186985f89d75abe73dbd8f7f06f68
+  languageName: node
+  linkType: hard
+
 "safe-buffer@npm:^5.0.1, safe-buffer@npm:^5.1.0, safe-buffer@npm:~5.2.0":
   version: 5.2.1
   resolution: "safe-buffer@npm:5.2.1"
@@ -3020,6 +3142,13 @@ __metadata:
   version: 0.1.13
   resolution: "ts-interface-checker@npm:0.1.13"
   checksum: 10c0/232509f1b84192d07b81d1e9b9677088e590ac1303436da1e92b296e9be8e31ea042e3e1fd3d29b1742ad2c959e95afe30f63117b8f1bc3a3850070a5142fea7
+  languageName: node
+  linkType: hard
+
+"tslib@npm:^2.1.0":
+  version: 2.8.1
+  resolution: "tslib@npm:2.8.1"
+  checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
   languageName: node
   linkType: hard
 

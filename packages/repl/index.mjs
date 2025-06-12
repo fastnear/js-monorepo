@@ -1,5 +1,5 @@
 import "./setup-mock-window.mjs"
-import * as api from "@fastnear/api"
+import * as api from "fastintear"
 import { start } from "repl";
 
 import util from "util";
