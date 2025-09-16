@@ -1,149 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEAR Greeter Example (testnet)</title>
-  <script src="../../../packages/api/dist/umd/browser.global.js"></script>
-  <style>
-    .container {
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-    }
-    button {
-      margin: 5px;
-      padding: 8px 16px;
-    }
-    #status {
-      margin: 20px 0;
-      padding: 10px;
-      background-color: #f0f0f0;
-    }
-    pre {
-      margin: 20px 0;
-      padding: 10px;
-      background-color: #f0f0f0;
-    }
-  </style>
-</head>
-<body>
-<div class="container">
-  <h1>NEAR Greeter Example</h1>
-  <div id="status">Not connected</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>NEAR Greeter Example (testnet)</title>
+    <script
+      src="../../../packages/api/dist/umd/browser.global.js"
+      integrity="sha384-DQ3YmiY+R/OxoyQq6d+IDW48/mkHChkPKQJBp3ZxLjtyBO92Aq+4f3HNIFxij5K9"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      .container {
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        font-family: Arial, sans-serif;
+      }
+      button {
+        margin: 5px;
+        padding: 8px 16px;
+      }
+      #status {
+        margin: 20px 0;
+        padding: 10px;
+        background-color: #f0f0f0;
+      }
+      pre {
+        margin: 20px 0;
+        padding: 10px;
+        background-color: #f0f0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>NEAR Greeter Example</h1>
+      <div id="status">Not connected</div>
 
-  <div id="auth-section">
-    <button onclick="signIn()">Sign In</button>
-    <button onclick="signOut()">Sign Out</button>
-  </div>
+      <div id="auth-section">
+        <button onclick="signIn()">Sign In</button>
+        <button onclick="signOut()">Sign Out</button>
+      </div>
 
-  <div id="contract-section">
-    <h2>Current Greeting:</h2>
-    <pre id="current-greeting">-</pre>
-    <input type="text" id="new-greeting" placeholder="Enter new greeting">
-    <button onclick="setGreeting()">Set Greeting</button>
-  </div>
-</div>
+      <div id="contract-section">
+        <h2>Current Greeting:</h2>
+        <pre id="current-greeting">-</pre>
+        <input
+          type="text"
+          id="new-greeting"
+          placeholder="Enter new greeting"
+        />
+        <button onclick="setGreeting()">Set Greeting</button>
+      </div>
+    </div>
 
-<script>
-  const contractId = 'greeter.testnet';
-  // Initialize NEAR
-  near.config({ networkId: 'testnet' });
+    <script>
+      const contractId = 'greeter.testnet';
+      // Initialize NEAR
+      near.config({ networkId: 'testnet' });
 
-  let currentAccount = near.accountId();
+      let currentAccount = near.accountId();
 
-  // Setup account handling
-  near.event.onAccount((accountId) => {
-    console.log("Account ID Update", accountId);
-    currentAccount = accountId;
-    updateUI();
-  });
-
-  // Setup transaction handling
-  near.event.onTx((txStatus) => {
-    console.log("Transaction Status Update", txStatus);
-    fetchGreeting(); // Refresh greeting after successful transaction
-    updateStatus(`Transaction ${txStatus.status}: ${txStatus.txHash || ''}`);
-  });
-
-  // UI update function
-  function updateUI() {
-    const status = document.getElementById('status');
-    fetchGreeting();
-    if (currentAccount) {
-      status.textContent = `Connected as: ${currentAccount}`;
-    } else {
-      status.textContent = 'Not connected';
-      document.getElementById('current-greeting').textContent = '-';
-    }
-  }
-
-  // Update status message
-  function updateStatus(message) {
-    document.getElementById('status').textContent = message;
-  }
-
-  // Fetch current greeting
-  async function fetchGreeting() {
-    try {
-      const result = await near.view({
-        contractId: contractId,
-        methodName: 'get_greeting'
+      // Setup account handling
+      near.event.onAccount((accountId) => {
+        console.log("Account ID Update", accountId);
+        currentAccount = accountId;
+        updateUI();
       });
-      document.getElementById('current-greeting').textContent = result;
-    } catch (error) {
-      console.error('Error fetching greeting:', error);
-      updateStatus('Error fetching greeting');
-    }
-  }
 
-  // Set new greeting
-  async function setGreeting() {
-    if (!currentAccount) {
-      updateStatus('Please sign in first');
-      return;
-    }
-
-    const newGreeting = document.getElementById('new-greeting').value;
-    if (!newGreeting) {
-      updateStatus('Please enter a greeting');
-      return;
-    }
-
-    try {
-      await near.sendTx({
-        receiverId: contractId,
-        actions: [
-          near.actions.functionCall({
-            methodName: "set_greeting",
-            args: { greeting: newGreeting + ' from @' + currentAccount },
-            gas: "30000000000000", // 30 TGas
-            deposit: "0"
-          })
-        ]
+      // Setup transaction handling
+      near.event.onTx((txStatus) => {
+        console.log("Transaction Status Update", txStatus);
+        fetchGreeting(); // Refresh greeting after successful transaction
+        updateStatus(`Transaction ${txStatus.status}: ${txStatus.txHash || ''}`);
       });
-      updateStatus('Setting greeting...');
-    } catch (error) {
-      console.error('Error setting greeting:', error);
-      updateStatus('Error setting greeting');
-    }
-  }
 
-  // Sign in function
-  function signIn() {
-    near.requestSignIn({ contractId });
-  }
+      // UI update function
+      function updateUI() {
+        const status = document.getElementById('status');
+        fetchGreeting();
+        if (currentAccount) {
+          status.textContent = `Connected as: ${currentAccount}`;
+        } else {
+          status.textContent = 'Not connected';
+          document.getElementById('current-greeting').textContent = '-';
+        }
+      }
 
-  // Sign out function
-  function signOut() {
-    near.signOut();
-    currentAccount = null;
-    updateUI();
-  }
+      // Update status message
+      function updateStatus(message) {
+        document.getElementById('status').textContent = message;
+      }
 
-  // Initial UI update
-  updateUI();
-</script>
-</body>
+      // Fetch current greeting
+      async function fetchGreeting() {
+        try {
+          const result = await near.view({
+            contractId: contractId,
+            methodName: 'get_greeting'
+          });
+          document.getElementById('current-greeting').textContent = result;
+        } catch (error) {
+          console.error('Error fetching greeting:', error);
+          updateStatus('Error fetching greeting');
+        }
+      }
+
+      // Set new greeting
+      async function setGreeting() {
+        if (!currentAccount) {
+          updateStatus('Please sign in first');
+          return;
+        }
+
+        const newGreeting = document.getElementById('new-greeting').value;
+        if (!newGreeting) {
+          updateStatus('Please enter a greeting');
+          return;
+        }
+
+        try {
+          await near.sendTx({
+            receiverId: contractId,
+            actions: [
+              near.actions.functionCall({
+                methodName: "set_greeting",
+                args: { greeting: newGreeting + ' from @' + currentAccount },
+                gas: "30000000000000", // 30 TGas
+                deposit: "0"
+              })
+            ]
+          });
+          updateStatus('Setting greeting...');
+        } catch (error) {
+          console.error('Error setting greeting:', error);
+          updateStatus('Error setting greeting');
+        }
+      }
+
+      // Sign in function
+      function signIn() {
+        near.requestSignIn({ contractId });
+      }
+
+      // Sign out function
+      function signOut() {
+        near.signOut();
+        currentAccount = null;
+        updateUI();
+      }
+
+      // Initial UI update
+      updateUI();
+    </script>
+  </body>
 </html>

@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <title>Hello Mainnet</title>
-  <script src="../../../packages/api/dist/umd/browser.global.js"></script>
-</head>
-<body>
-<h1>Hello <span id="what"></span></h1>
-<script>
-  near.config({ networkId: 'mainnet' });
-  near.view({
-    contractId: 'wrap.near',
-    methodName: 'ft_metadata',
-  }).then((result) => {
-    document.getElementById('what').innerText = result.symbol;
-  });
-</script>
-</body>
+  <head>
+    <title>Hello Mainnet</title>
+    <script
+      src="../../../packages/api/dist/umd/browser.global.js"
+      integrity="sha384-DQ3YmiY+R/OxoyQq6d+IDW48/mkHChkPKQJBp3ZxLjtyBO92Aq+4f3HNIFxij5K9"
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <h1>Hello <span id="what"></span></h1>
+    <script>
+      near.config({ networkId: 'mainnet' });
+      near.view({
+        contractId: 'wrap.near',
+        methodName: 'ft_metadata',
+      }).then((result) => {
+        document.getElementById('what').innerText = result.symbol;
+      });
+    </script>
+  </body>
 </html>

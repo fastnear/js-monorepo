@@ -1,82 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-  <title>@fastnear/api BerryClub with FastNear</title>
-  <link href="assets/favicon.png" rel="icon" type="image/png"/>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      content="width=device-width,initial-scale=1.0"
+      name="viewport"
+    />
+    <title>@fastnear/api BerryClub with FastNear</title>
+    <link
+      href="assets/favicon.png"
+      rel="icon"
+      type="image/png"
+    />
 
-  <link href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css" rel="stylesheet"/>
-  <link href="style.css" rel="stylesheet"/>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code:wght@400;500&display=swap"
-    rel="stylesheet"
-  />
+    <link
+      href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="style.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-  <link
-    href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
-    rel="stylesheet"
-  />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+      rel="stylesheet"
+    />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"
+      integrity="sha384-06z5D//U/xpvxZHuUz92xBvq3DqBBFi7Up53HRrbV7Jlv7Yvh/MZ7oenfUe9iCEt"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"
+      integrity="sha384-D44bgYYKvaiDh4cOGlj1dbSDpSctn2FSUj118HZGmZEShZcO2v//Q5vvhNy206pp"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"
+      integrity="sha384-J08i8An/QeARD9ExYpvphB8BsyOj3Gh2TSh1aLINKO3L0cMSH2dN3E22zFoXEi0Q"
+      crossorigin="anonymous"
+    ></script>
 
-  <!-- near script here. you may also use a plain script tag -->
-  <!--  you cannot split up files easily with static html sites, so await import is great-->
-  <script type="module">
-    /** @type { import("../../../packages/api/dist/esm/index.d.ts") } */
-    /* global near */
-    await import("../../../packages/api/dist/umd/browser.global.js");
+    <!-- near script here. you may also use a plain script tag -->
+    <!--  you cannot split up files easily with static html sites, so await import is great-->
+    <script type="module">
+      /** @type { import("../../../packages/api/dist/esm/index.d.ts") } */
+      /* global near */
+      await import("../../../packages/api/dist/umd/browser.global.js");
 
-    import { wireUpAppEarly, wireUpAppLate } from "./index.js";
+      import { wireUpAppEarly, wireUpAppLate } from "./index.js";
 
-    // set up the near configuration and anything else you told your app to do in this function
-    wireUpAppEarly();
+      // set up the near configuration and anything else you told your app to do in this function
+      wireUpAppEarly();
 
-    // showing that we can include js here and have it run after the DOM is loaded
-    const runLateScripts = () => {
-      wireUpAppLate();
+      // showing that we can include js here and have it run after the DOM is loaded
+      const runLateScripts = () => {
+        wireUpAppLate();
 
-      const clipboard = new ClipboardJS(".copy-button");
-      clipboard.on('success', (e) => {
-        e.clearSelection();
-        const target = e.trigger;
-        target.style.opacity = '0.7';
-        setTimeout(() => target.style.opacity = '1', 200);
-      });
-    }
+        const clipboard = new ClipboardJS(".copy-button");
+        clipboard.on('success', (e) => {
+          e.clearSelection();
+          const target = e.trigger;
+          target.style.opacity = '0.7';
+          setTimeout(() => target.style.opacity = '1', 200);
+        });
+      }
 
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
+          runLateScripts();
+        });
+      } else {
         runLateScripts();
-      });
-    } else {
-      runLateScripts();
-    }
-  </script>
-</head>
+      }
+    </script>
+  </head>
 
-<body class="w-100 min-vh-100">
-
-<div class="nav-container pt1">
-  <div class="nav-content mw8 center relative">
-    <div class="tc ma2">
-      <a
-        class="link white dim mh3 o-80"
-        href="https://github.com/fastnear/js-monorepo"
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <svg
-          aria-hidden="true"
-          class="mr1"
-          fill="currentColor"
-          height="25"
-          viewBox="0 0 16 16"
-          width="25"
-        >
-          <path
-            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53
+  <body class="w-100 min-vh-100">
+    <div class="nav-container pt1">
+      <div class="nav-content mw8 center relative">
+        <div class="tc ma2">
+          <a
+            class="link white dim mh3 o-80"
+            href="https://github.com/fastnear/js-monorepo"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <svg
+              aria-hidden="true"
+              class="mr1"
+              fill="currentColor"
+              height="25"
+              viewBox="0 0 16 16"
+              width="25"
+            >
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53
                5.47 7.59.4.07.55-.17.55-.38
                0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
                1.08.58 1.23.82.72 1.21
@@ -91,204 +115,317 @@
                1.48 0 1.07-.01
                1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016
                8c0-4.42-3.58-8-8-8z"
-          />
-        </svg>
-        fastnear/js-monorepo
-      </a>
-      <a
-        class="link white dim mh3 o-80"
-        href="https://www.npmjs.com/package/@fastnear/api"
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <svg
-          class="mr1"
-          height="25"
-          viewBox="0 0 18 7"
-        >
-          <path
-            d="M0,0h18v6H9v1H5V6H0V0z M1,5h2V2h1v3h1V1H1V5z
+              />
+            </svg>
+            fastnear/js-monorepo
+          </a>
+          <a
+            class="link white dim mh3 o-80"
+            href="https://www.npmjs.com/package/@fastnear/api"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <svg
+              class="mr1"
+              height="25"
+              viewBox="0 0 18 7"
+            >
+              <path
+                d="M0,0h18v6H9v1H5V6H0V0z M1,5h2V2h1v3h1V1H1V5z
                M6,1v5h2V5h2V1H6z M8,2h1v2H8V2z
                M11,1v4h2V2h1v3h1V2h1v3h1V1H11z"
-            fill="#CB3837"
-          ></path>
-        </svg>
-        @fastnear/api
-      </a>
-    </div>
-    <div id="auth" class="user-info pointer">
-      <!-- JS injects sign in or account info -->
-    </div>
-  </div>
-</div>
-
-<div class="bg-near-white tc pv4 ph3 ph5-ns relative">
-  <!-- Desktop Version -->
-  <div class="mw8 relative">
-    <div class="dn db-l absolute top-0 ml4-l pl4-l transform-m">
-      <div class="bg-dark-green white f6 fw5 tracked ttu pv2 ph3 rotate-stamp">
-        alpha release
-      </div>
-    </div>
-  </div>
-
-  <!-- Mobile Version -->
-  <div class="db dn-l">
-    <div class="bg-dark-green white f6 fw5 tracked ttu pv1 ph2 mb3 dib">
-      alpha release
-    </div>
-  </div>
-
-  <h1 class="f-headline-l f1 mt1 lh-solid near-cursor mb4">NEAR</h1>
-
-  <p class="f3 mb2 lh-copy o-80">
-    api to interact with the NEAR blockchain
-  </p>
-</div>
-
-<div class="hero-section">
-  <div class="tc">
-    <h2 class="f3 fw6 ttu tracked mb4 mt0-l accent">Run Code in Dev Console</h2>
-  </div>
-
-  <div class="hero-grid">
-    <div class="hero-content ph2">
-      <div class="bg-near-black ba b--mid-gray br3 pa3 mw6 center">
-        <h3 class="f4 white o-80 mt1">JavaScript Compilation Targets</h3>
-        <p class="f6 dark-gray mb3">
-          Optimize your app for your environment.
-        </p>
-        <ul id="compilations" class="list pl0 mw6 center">
-          <li class="mb3 overflow-hidden">
-            <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
-              <span class="f5 fw6 dark-gray">ESM</span>
-              <span class="f6 silver">ECMAScript Module</span>
-            </div>
-          </li>
-          <li class="mb3 overflow-hidden">
-            <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
-              <span class="f5 fw6 dark-gray">CJS</span>
-              <span class="f6 silver">CommonJS</span>
-            </div>
-          </li>
-          <li class="mb3 overflow-hidden">
-            <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
-              <span class="f5 fw6 dark-gray">IIFE / UMD</span>
-              <span class="f6 silver">Universal Module Definition</span>
-            </div>
-          </li>
-        </ul>
+                fill="#CB3837"
+              ></path>
+            </svg>
+            @fastnear/api
+          </a>
+        </div>
+        <div
+          id="auth"
+          class="user-info pointer"
+        >
+          <!-- JS injects sign in or account info -->
+        </div>
       </div>
     </div>
 
-    <div class="hero-image">
-      <p class="f5 o-90">
-        Without Node.js-specific features (such as <code>Buffer.from</code>) the
-        library can run in the browser’s developer console.
-      </p>
-      <div class="img-container mt3">
-        <img alt="dev console usage" src="assets/dev-console-usage.png"/>
-      </div>
-      <div class="flex justify-center items-center pa4">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 80" width="260" height="80">
-          <rect x="0" y="0" width="60" height="50" rx="10" ry="10" fill="#e0e0e0" stroke="#aaa" stroke-width="2"/>
-          <rect x="100" y="0" width="60" height="50" rx="10" ry="10" fill="#e0e0e0" stroke="#aaa" stroke-width="2"/>
-          <rect x="200" y="0" width="60" height="50" rx="10" ry="10" fill="#e0e0e0" stroke="#aaa" stroke-width="2"/>
-          <circle cx="80" cy="24" r="10" fill="white" stroke="#aaa" stroke-width="2"/>
-          <circle cx="180" cy="24" r="10" fill="white" stroke="#aaa" stroke-width="2"/>
-          <text x="80" y="30" font-size="18" text-anchor="middle" font-family="monospace" font-weight="bold" fill="#444">+</text>
-          <text x="180" y="30" font-size="18" text-anchor="middle" font-family="monospace" font-weight="bold" fill="#444">+</text>
-          <text x="30" y="37" font-size="36" text-anchor="middle" font-family="monospace">⌘</text>
-          <text x="130" y="37" font-size="36" text-anchor="middle" font-family="monospace">⌥</text>
-          <text x="230" y="37" font-size="36" text-anchor="middle" font-family="monospace">i</text>
-        </svg>
+    <div class="bg-near-white tc pv4 ph3 ph5-ns relative">
+      <!-- Desktop Version -->
+      <div class="mw8 relative">
+        <div class="dn db-l absolute top-0 ml4-l pl4-l transform-m">
+          <div class="bg-dark-green white f6 fw5 tracked ttu pv2 ph3 rotate-stamp">alpha release</div>
+        </div>
       </div>
 
+      <!-- Mobile Version -->
+      <div class="db dn-l">
+        <div class="bg-dark-green white f6 fw5 tracked ttu pv1 ph2 mb3 dib">alpha release</div>
+      </div>
+
+      <h1 class="f-headline-l f1 mt1 lh-solid near-cursor mb4">NEAR</h1>
+
+      <p class="f3 mb2 lh-copy o-80">api to interact with the NEAR blockchain</p>
     </div>
-  </div>
-</div>
 
-<section id="demo" class="relative min-vh-50 pv4">
-  <h1 class="f1-ns fw8 mb4 mt2 navy pl5-l pl4-m pl1-ns">Berry Club demo</h1>
-  <div class="mw9 center ph4-ns demo-inner">
+    <div class="hero-section">
+      <div class="tc">
+        <h2 class="f3 fw6 ttu tracked mb4 mt0-l accent">Run Code in Dev Console</h2>
+      </div>
 
-    <div class="bg-black-70 hover-bg-black-80 pa4 br2 shadow-3 flex flex-column flex-row-l items-center bg-transition">
-
-      <div class="w-100 w-80-m w-40-l flex flex-column items-center mb4">
-        <div class="transform-wrapper mb4">
-          <div class="br3 pa1 bg-white-30 shadow-4 transform-content z-3 relative">
-            <img
-              src="assets/berry-club-screenshot.png"
-              class="w-100 br2"
-              alt="Berry Club Interface">
+      <div class="hero-grid">
+        <div class="hero-content ph2">
+          <div class="bg-near-black ba b--mid-gray br3 pa3 mw6 center">
+            <h3 class="f4 white o-80 mt1">JavaScript Compilation Targets</h3>
+            <p class="f6 dark-gray mb3">Optimize your app for your environment.</p>
+            <ul
+              id="compilations"
+              class="list pl0 mw6 center"
+            >
+              <li class="mb3 overflow-hidden">
+                <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
+                  <span class="f5 fw6 dark-gray">ESM</span>
+                  <span class="f6 silver">ECMAScript Module</span>
+                </div>
+              </li>
+              <li class="mb3 overflow-hidden">
+                <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
+                  <span class="f5 fw6 dark-gray">CJS</span>
+                  <span class="f6 silver">CommonJS</span>
+                </div>
+              </li>
+              <li class="mb3 overflow-hidden">
+                <div class="pa3 bg-white ba b--black-10 br2 flex items-center justify-between">
+                  <span class="f5 fw6 dark-gray">IIFE / UMD</span>
+                  <span class="f6 silver">Universal Module Definition</span>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
-        <a href="https://berryclub.io" target="_blank">
-          <button class="f4 fw2 link ttu white bg-blue pointer pv3 ph4 br2 hover-bg-dark-blue hover-white grow">
-            Visit site
-          </button>
-        </a>
-      </div>
 
-      <div class="w-100 w-80-m w-60-l pl4-l tc flex flex-column items-center">
-        <div class="bg-white-90 ph2 mb3">
-          <h2 class="fun-tech f4 white-90 mb3">
-            Wait, what's <a href="https://github.com/evgenykuzyakov/berryclub" target="_blank">Berry Club?</a>
-          </h2>
+        <div class="hero-image">
+          <p class="f5 o-90">
+            Without Node.js-specific features (such as <code>Buffer.from</code>) the library can run in the browser’s
+            developer console.
+          </p>
+          <div class="img-container mt3">
+            <img
+              alt="dev console usage"
+              src="assets/dev-console-usage.png"
+            />
+          </div>
+          <div class="flex justify-center items-center pa4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 260 80"
+              width="260"
+              height="80"
+            >
+              <rect
+                x="0"
+                y="0"
+                width="60"
+                height="50"
+                rx="10"
+                ry="10"
+                fill="#e0e0e0"
+                stroke="#aaa"
+                stroke-width="2"
+              />
+              <rect
+                x="100"
+                y="0"
+                width="60"
+                height="50"
+                rx="10"
+                ry="10"
+                fill="#e0e0e0"
+                stroke="#aaa"
+                stroke-width="2"
+              />
+              <rect
+                x="200"
+                y="0"
+                width="60"
+                height="50"
+                rx="10"
+                ry="10"
+                fill="#e0e0e0"
+                stroke="#aaa"
+                stroke-width="2"
+              />
+              <circle
+                cx="80"
+                cy="24"
+                r="10"
+                fill="white"
+                stroke="#aaa"
+                stroke-width="2"
+              />
+              <circle
+                cx="180"
+                cy="24"
+                r="10"
+                fill="white"
+                stroke="#aaa"
+                stroke-width="2"
+              />
+              <text
+                x="80"
+                y="30"
+                font-size="18"
+                text-anchor="middle"
+                font-family="monospace"
+                font-weight="bold"
+                fill="#444"
+              >
+                +
+              </text>
+              <text
+                x="180"
+                y="30"
+                font-size="18"
+                text-anchor="middle"
+                font-family="monospace"
+                font-weight="bold"
+                fill="#444"
+              >
+                +
+              </text>
+              <text
+                x="30"
+                y="37"
+                font-size="36"
+                text-anchor="middle"
+                font-family="monospace"
+              >
+                ⌘
+              </text>
+              <text
+                x="130"
+                y="37"
+                font-size="36"
+                text-anchor="middle"
+                font-family="monospace"
+              >
+                ⌥
+              </text>
+              <text
+                x="230"
+                y="37"
+                font-size="36"
+                text-anchor="middle"
+                font-family="monospace"
+              >
+                i
+              </text>
+            </svg>
+          </div>
         </div>
-        <div class="ttl tl blockquote-card-subtle pa3 mb4 mt3">
-          <blockquote class="ma0 pl2 pt0 mv3">
-            <p class="f4 lh-copy i mt0 washed-yellow">
-              "Berry Club is one of the oldest and certainly most engaging smart contracts on the NEAR blockchain…
-            </p>
-            <p class="f4 lh-copy white-70 i mt0 washed-yellow">It's a crazy mix between a chat room and graffiti wall."</p>
-          </blockquote>
-        </div>
-        <a href="https://near.org/blog/berry-club-part-ii" target="_blank">
-          <button class="f4 fw2 link ttu white bg-blue pointer pv3 ph4 br2 hover-bg-dark-blue hover-white grow">
-            NEAR Blog
-          </button>
-        </a>
       </div>
-
     </div>
-  </div>
-</section>
 
-<div class="center ph3 pv4">
-  <h1 class="f1-ns fw8 mb4 mt2 white pl5-l pl4-m pl1-ns">try it:</h1>
-  <div class="tc mb2">
-    <div class="dib" id="near-el-board"></div>
-  </div>
-  <div class="tc mb1">
-    <p class="ma4 f4 ph4 mb1">
-      This view call fetches lines populating the pixel board. No keys are required
-      for view calls.
-    </p>
-    <h4 class="tracked-tight code monospace f4 neon-text">
-      (paste code in dev console)
-    </h4>
+    <section
+      id="demo"
+      class="relative min-vh-50 pv4"
+    >
+      <h1 class="f1-ns fw8 mb4 mt2 navy pl5-l pl4-m pl1-ns">Berry Club demo</h1>
+      <div class="mw9 center ph4-ns demo-inner">
+        <div
+          class="bg-black-70 hover-bg-black-80 pa4 br2 shadow-3 flex flex-column flex-row-l items-center bg-transition"
+        >
+          <div class="w-100 w-80-m w-40-l flex flex-column items-center mb4">
+            <div class="transform-wrapper mb4">
+              <div class="br3 pa1 bg-white-30 shadow-4 transform-content z-3 relative">
+                <img
+                  src="assets/berry-club-screenshot.png"
+                  class="w-100 br2"
+                  alt="Berry Club Interface"
+                />
+              </div>
+            </div>
+            <a
+              href="https://berryclub.io"
+              target="_blank"
+            >
+              <button class="f4 fw2 link ttu white bg-blue pointer pv3 ph4 br2 hover-bg-dark-blue hover-white grow">
+                Visit site
+              </button>
+            </a>
+          </div>
 
-  </div>
-  <div class="tc mb1">
-    <svg
-      class="snippet-arrow"
-      id="board-arrow"
-      data-target="board-snippet"
-      viewBox="0 0 100 66"
-    >
-      <path d="M50 0 L80 40 L20 40 Z"></path>
-    </svg>
-  </div>
-  <div class="code-card center db" id="board-snippet">
-    <span class="code-label-left">Load Board&nbsp;<span class="normal pa2 lightest-blue">(View / query, no key needed)</span></span>
-    <button
-      class="copy-button"
-      data-clipboard-target="#board-code"
-    >
-      Copy
-    </button>
-    <pre><code class="language-javascript" id="board-code">
+          <div class="w-100 w-80-m w-60-l pl4-l tc flex flex-column items-center">
+            <div class="bg-white-90 ph2 mb3">
+              <h2 class="fun-tech f4 white-90 mb3">
+                Wait, what's
+                <a
+                  href="https://github.com/evgenykuzyakov/berryclub"
+                  target="_blank"
+                  >Berry Club?</a
+                >
+              </h2>
+            </div>
+            <div class="ttl tl blockquote-card-subtle pa3 mb4 mt3">
+              <blockquote class="ma0 pl2 pt0 mv3">
+                <p class="f4 lh-copy i mt0 washed-yellow">
+                  "Berry Club is one of the oldest and certainly most engaging smart contracts on the NEAR blockchain…
+                </p>
+                <p class="f4 lh-copy white-70 i mt0 washed-yellow">
+                  It's a crazy mix between a chat room and graffiti wall."
+                </p>
+              </blockquote>
+            </div>
+            <a
+              href="https://near.org/blog/berry-club-part-ii"
+              target="_blank"
+            >
+              <button class="f4 fw2 link ttu white bg-blue pointer pv3 ph4 br2 hover-bg-dark-blue hover-white grow">
+                NEAR Blog
+              </button>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="center ph3 pv4">
+      <h1 class="f1-ns fw8 mb4 mt2 white pl5-l pl4-m pl1-ns">try it:</h1>
+      <div class="tc mb2">
+        <div
+          class="dib"
+          id="near-el-board"
+        ></div>
+      </div>
+      <div class="tc mb1">
+        <p class="ma4 f4 ph4 mb1">
+          This view call fetches lines populating the pixel board. No keys are required for view calls.
+        </p>
+        <h4 class="tracked-tight code monospace f4 neon-text">(paste code in dev console)</h4>
+      </div>
+      <div class="tc mb1">
+        <svg
+          class="snippet-arrow"
+          id="board-arrow"
+          data-target="board-snippet"
+          viewBox="0 0 100 66"
+        >
+          <path d="M50 0 L80 40 L20 40 Z"></path>
+        </svg>
+      </div>
+      <div
+        class="code-card center db"
+        id="board-snippet"
+      >
+        <span class="code-label-left"
+          >Load Board&nbsp;<span class="normal pa2 lightest-blue">(View / query, no key needed)</span></span
+        >
+        <button
+          class="copy-button"
+          data-clipboard-target="#board-code"
+        >
+          Copy
+        </button>
+        <pre><code class="language-javascript" id="board-code">
 await near.view({
   contractId: "berryclub.ek.near",
   methodName: "get_lines",
@@ -303,49 +440,55 @@ await near.view({
   },
 });
 </code></pre>
-  </div>
-  <div class="app-card pa4">
-    <div class="mb1">
-      <p class="mb3 f4">Minimal example of signing and broadcasting a smart contract call to the
-        <code>draw</code> method.
-      </p>
-      <p class="mb4 f4">
-        You must be “signed in” to draw, which means using one of your full‐access
-        keys to create a session key.
-      </p>
-      <div class="tc">
-        <h4 class="tracked-tight code monospace f4 neon-text">
-          (open dev console to track progress)
-        </h4>
       </div>
-    </div>
-    <div class="mb2">
-      <div class="tc">
-        <button class="f3 fw6 ttu tracked-mega link pv3 ph4 white bg-dark-green hover-bg-green br2 pointer mb1 action-button"
-                id="draw-pixel">
-          Draw Green Pixel
-        </button>
-      </div>
-      <div class="tc mt1">
-        <svg
-          class="snippet-arrow"
-          id="draw-arrow"
-          data-target="draw-snippet"
-          viewBox="0 0 100 66"
-        >
-          <path d="M50 0 L80 40 L20 40 Z"></path>
-        </svg>
-      </div>
-      <div class="bg-offwhite br2">
-        <div class="code-card center" id="draw-snippet">
-          <span class="code-label-left">Draw Pixel&nbsp;<span class="normal pa2 lightest-blue">(Sign and broadcast with session key)</span></span>
-          <button
-            class="copy-button"
-            data-clipboard-target="#draw-code"
-          >
-            Copy
-          </button>
-          <pre><code class="language-javascript" id="draw-code">
+      <div class="app-card pa4">
+        <div class="mb1">
+          <p class="mb3 f4">
+            Minimal example of signing and broadcasting a smart contract call to the <code>draw</code> method.
+          </p>
+          <p class="mb4 f4">
+            You must be “signed in” to draw, which means using one of your full‐access keys to create a session key.
+          </p>
+          <div class="tc">
+            <h4 class="tracked-tight code monospace f4 neon-text">(open dev console to track progress)</h4>
+          </div>
+        </div>
+        <div class="mb2">
+          <div class="tc">
+            <button
+              class="f3 fw6 ttu tracked-mega link pv3 ph4 white bg-dark-green hover-bg-green br2 pointer mb1 action-button"
+              id="draw-pixel"
+            >
+              Draw Green Pixel
+            </button>
+          </div>
+          <div class="tc mt1">
+            <svg
+              class="snippet-arrow"
+              id="draw-arrow"
+              data-target="draw-snippet"
+              viewBox="0 0 100 66"
+            >
+              <path d="M50 0 L80 40 L20 40 Z"></path>
+            </svg>
+          </div>
+          <div class="bg-offwhite br2">
+            <div
+              class="code-card center"
+              id="draw-snippet"
+            >
+              <span class="code-label-left"
+                >Draw Pixel&nbsp;<span class="normal pa2 lightest-blue"
+                  >(Sign and broadcast with session key)</span
+                ></span
+              >
+              <button
+                class="copy-button"
+                data-clipboard-target="#draw-code"
+              >
+                Copy
+              </button>
+              <pre><code class="language-javascript" id="draw-code">
 await near.sendTx({
   receiverId: "berryclub.ek.near",
   actions: [
@@ -364,98 +507,126 @@ await near.sendTx({
   ],
 });
 </code></pre>
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <div class="mt3 mb2">
-        <p class="mb4 f4 mt4">
-          Fetching this account’s <code>avocado_balance</code> from the BerryClub contract.
-        </p>
-        <div class="flex justify-center pa2">
-          <table class="token-table mw6 mh3">
-            <tbody>
-            <tr class="bg-dark-gray">
-              <td class="pa2 near-white">Total Supply:</td>
-              <td class="pa2 tr" id="total-supply">2417099.3688 🥑</td>
-            </tr>
-            <tr class="bg-dark-gray">
-              <td class="pa2 near-white">Your Balance:</td>
-              <td class="pa2 tr flex items-center justify-end">
-                <span class="mr1" id="your-balance">1583.7318 🥑</span>
-              </td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="tc mt2 mb1">
-          <svg
-            class="snippet-arrow"
-            id="balance-arrow"
-            data-target="balance-snippet"
-            viewBox="0 0 100 66"
-          >
-            <path d="M50 0 L80 40 L20 40 Z"></path>
-          </svg>
-        </div>
-        <div class="code-card center" id="balance-snippet">
-          <span class="code-label-left">Get Berry Club Account&nbsp;<span class="normal pa2 lightest-blue">(View / query, no key needed)</span></span>
-          <button
-            class="copy-button"
-            data-clipboard-target="#balance-code"
-            style="font-size:1rem; padding:0.5rem 1rem;"
-          >
-            Copy
-          </button>
-          <pre><code class="language-javascript" id="balance-code">
+          <div class="mt3 mb2">
+            <p class="mb4 f4 mt4">Fetching this account’s <code>avocado_balance</code> from the BerryClub contract.</p>
+            <div class="flex justify-center pa2">
+              <table class="token-table mw6 mh3">
+                <tbody>
+                  <tr class="bg-dark-gray">
+                    <td class="pa2 near-white">Total Supply:</td>
+                    <td
+                      class="pa2 tr"
+                      id="total-supply"
+                    >
+                      2417099.3688 🥑
+                    </td>
+                  </tr>
+                  <tr class="bg-dark-gray">
+                    <td class="pa2 near-white">Your Balance:</td>
+                    <td class="pa2 tr flex items-center justify-end">
+                      <span
+                        class="mr1"
+                        id="your-balance"
+                        >1583.7318 🥑</span
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tc mt2 mb1">
+              <svg
+                class="snippet-arrow"
+                id="balance-arrow"
+                data-target="balance-snippet"
+                viewBox="0 0 100 66"
+              >
+                <path d="M50 0 L80 40 L20 40 Z"></path>
+              </svg>
+            </div>
+            <div
+              class="code-card center"
+              id="balance-snippet"
+            >
+              <span class="code-label-left"
+                >Get Berry Club Account&nbsp;<span class="normal pa2 lightest-blue"
+                  >(View / query, no key needed)</span
+                ></span
+              >
+              <button
+                class="copy-button"
+                data-clipboard-target="#balance-code"
+                style="font-size:1rem; padding:0.5rem 1rem;"
+              >
+                Copy
+              </button>
+              <pre><code class="language-javascript" id="balance-code">
 await near.view({
   contractId: "berryclub.ek.near",
   methodName: "get_account",
   args: { account_id: near.accountId() },
 });
 </code></pre>
-        </div>
-      </div>
-      <div class="mt2 mb1 f4">
-        <h2>Beyond session keys</h2>
-        <p style="text-align: left">
-          Some actions (like transferring funds) require your <strong>full‐access key</strong>. That means this request will route to your chosen web3 wallet, instead of signing and broadcasting the transaction from the session key.
-        </p>
-        <p>
-          Learn more about access keys: <a href="https://docs.near.org/concepts/protocol/access-keys" target="_blank">
-          NEAR documentation
-        </a>
-        </p>
-        <div class="tc">
-          <h4 class="tracked-tight code monospace f4 neon-text">
-            (privileged interactions get sent to wallet)
-          </h4>
-        </div>
-      </div>
-      <div class="tc mt3">
-        <div class="tc">
-          <button class="f3 fw6 ttu tracked-mega link pv3 ph4 white bg-dark-green hover-bg-green br2 pointer action-button" id="buy-tokens">Buy 25 🥑</button>
-        </div>
-      </div>
-      <div class="tc mt2 mb1">
-        <svg
-          class="snippet-arrow"
-          id="buy-arrow"
-          data-target="buy-snippet"
-          viewBox="0 0 100 66"
-        >
-          <path d="M50 0 L80 40 L20 40 Z"></path>
-        </svg>
-      </div>
-      <div class="code-card center" id="buy-snippet">
-        <span class="code-label-left">Buy Tokens&nbsp;<span class="normal pa2 lightest-blue">(Cannot use session key)</span></span>
-        <button
-          class="copy-button"
-          data-clipboard-target="#buy-code"
-          style="font-size:1rem; padding:0.5rem 1rem;"
-        >
-          Copy
-        </button>
-        <pre><code class="language-javascript" id="buy-code">
+            </div>
+          </div>
+          <div class="mt2 mb1 f4">
+            <h2>Beyond session keys</h2>
+            <p style="text-align: left">
+              Some actions (like transferring funds) require your <strong>full‐access key</strong>. That means this
+              request will route to your chosen web3 wallet, instead of signing and broadcasting the transaction from
+              the session key.
+            </p>
+            <p>
+              Learn more about access keys:
+              <a
+                href="https://docs.near.org/concepts/protocol/access-keys"
+                target="_blank"
+              >
+                NEAR documentation
+              </a>
+            </p>
+            <div class="tc">
+              <h4 class="tracked-tight code monospace f4 neon-text">(privileged interactions get sent to wallet)</h4>
+            </div>
+          </div>
+          <div class="tc mt3">
+            <div class="tc">
+              <button
+                class="f3 fw6 ttu tracked-mega link pv3 ph4 white bg-dark-green hover-bg-green br2 pointer action-button"
+                id="buy-tokens"
+              >
+                Buy 25 🥑
+              </button>
+            </div>
+          </div>
+          <div class="tc mt2 mb1">
+            <svg
+              class="snippet-arrow"
+              id="buy-arrow"
+              data-target="buy-snippet"
+              viewBox="0 0 100 66"
+            >
+              <path d="M50 0 L80 40 L20 40 Z"></path>
+            </svg>
+          </div>
+          <div
+            class="code-card center"
+            id="buy-snippet"
+          >
+            <span class="code-label-left"
+              >Buy Tokens&nbsp;<span class="normal pa2 lightest-blue">(Cannot use session key)</span></span
+            >
+            <button
+              class="copy-button"
+              data-clipboard-target="#buy-code"
+              style="font-size:1rem; padding:0.5rem 1rem;"
+            >
+              Copy
+            </button>
+            <pre><code class="language-javascript" id="buy-code">
 await near.sendTx({
   receiverId: "berryclub.ek.near",
   actions: [
@@ -468,10 +639,9 @@ await near.sendTx({
   ],
 });
 </code></pre>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
-
-</body>
+  </body>
 </html>

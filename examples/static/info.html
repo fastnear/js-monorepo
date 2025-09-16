@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FastNEAR UMD Example</title>
-  <style>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <title>FastNEAR UMD Example</title>
+    <style>
       body {
           margin: 0;
           padding: 16px;
@@ -24,45 +27,52 @@
       .function { color: #0074c1; }
       .null { color: #939393; }
       .primitive { color: #1a1aa6; }
-  </style>
-</head>
-<body>
-  <main>
-    <div id="tree" class="tree"></div>
-  </main>
-  <script src="../../packages/api/dist/umd/index.js"></script>
-  <script>
-    const createTree = (obj, name, isRoot = false) => {
-      if (obj === null) return `<span class="null">null</span>`;
-      if (typeof obj !== 'object') {
-        if (typeof obj === 'function') return `<span class="function">ƒ()</span>`;
-        return `<span class="primitive">${JSON.stringify(obj)}</span>`;
-      }
-
-      const details = document.createElement('details');
-      if (isRoot) details.open = true;
-      const summary = document.createElement('summary');
-      summary.innerHTML = `<span class="key">${name}</span>`;
-      details.appendChild(summary);
-
-      for (const [key, value] of Object.entries(obj)) {
-        const content = createTree(value, key);
-        if (typeof value === 'object' && value !== null) {
-          details.appendChild(content);
-        } else {
-          const div = document.createElement('div');
-          div.style.marginLeft = '20px';
-          div.innerHTML = `<span class="key">${key}</span>: ${content}`;
-          details.appendChild(div);
+    </style>
+  </head>
+  <body>
+    <main>
+      <div
+        id="tree"
+        class="tree"
+      ></div>
+    </main>
+    <script
+      src="../../packages/api/dist/umd/browser.global.js"
+      integrity="sha384-DQ3YmiY+R/OxoyQq6d+IDW48/mkHChkPKQJBp3ZxLjtyBO92Aq+4f3HNIFxij5K9"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      const createTree = (obj, name, isRoot = false) => {
+        if (obj === null) return `<span class="null">null</span>`;
+        if (typeof obj !== 'object') {
+          if (typeof obj === 'function') return `<span class="function">ƒ()</span>`;
+          return `<span class="primitive">${JSON.stringify(obj)}</span>`;
         }
-      }
 
-      return details;
-    };
+        const details = document.createElement('details');
+        if (isRoot) details.open = true;
+        const summary = document.createElement('summary');
+        summary.innerHTML = `<span class="key">${name}</span>`;
+        details.appendChild(summary);
 
-    document.getElementById('tree').appendChild(
-      createTree(FastNear, 'FastNear', true)
-    );
-  </script>
-</body>
+        for (const [key, value] of Object.entries(obj)) {
+          const content = createTree(value, key);
+          if (typeof value === 'object' && value !== null) {
+            details.appendChild(content);
+          } else {
+            const div = document.createElement('div');
+            div.style.marginLeft = '20px';
+            div.innerHTML = `<span class="key">${key}</span>: ${content}`;
+            details.appendChild(div);
+          }
+        }
+
+        return details;
+      };
+
+      document.getElementById('tree').appendChild(
+        createTree(FastNear, 'FastNear', true)
+      );
+    </script>
+  </body>
 </html>
