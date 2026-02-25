@@ -1,0 +1,46 @@
+{
+  "name": "@fastnear/wallet",
+  "version": "0.9.8",
+  "description": "Multi-wallet connector for NEAR dApps — MyNearWallet, HERE, Meteor, and more",
+  "license": "MIT",
+  "type": "module",
+  "types": "./dist/esm/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "browser": "./dist/umd/browser.global.js",
+  "scripts": {
+    "build": "tsup",
+    "clean": "yarn rimraf dist node_modules",
+    "type-check": "tsc --noEmit"
+  },
+  "author": "FastNear",
+  "homepage": "https://js.fastnear.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastnear/js-monorepo.git"
+  },
+  "keywords": [
+    "near-protocol",
+    "near-wallet",
+    "wallet-selector",
+    "mynearwallet",
+    "fastnear"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
+  "dependencies": {
+    "@fastnear/near-connect": "*"
+  },
+  "devDependencies": {
+    "rimraf": "*",
+    "tsup": "*",
+    "typescript": "*"
+  }
+}
