@@ -3,9 +3,6 @@ import {
   lsGet,
   publicKeyFromPrivate,
 } from "@fastnear/utils";
-import {WalletAdapter} from "@fastnear/wallet-adapter";
-
-export const WIDGET_URL = "https://js.cdn.fastnear.com";
 
 export const DEFAULT_NETWORK_ID = "mainnet";
 export const NETWORKS = {
@@ -58,15 +55,6 @@ export interface UnbroadcastedEvents {
   tx: TxStatus[];
 }
 
-export interface WalletAdapterState {
-  publicKey?: string | null;
-  privateKey?: string | null;
-  accountId?: string | null;
-  lastWalletId?: string | null;
-  networkId: string;
-}
-
-
 // Load config from localStorage or default to the network's config
 export let _config: NetworkConfig = lsGet("config") || {
   ...NETWORKS[DEFAULT_NETWORK_ID]
@@ -75,32 +63,25 @@ export let _config: NetworkConfig = lsGet("config") || {
 // Load application state from localStorage
 export let _state: AppState = lsGet("state") || {};
 
-// Triggered by the wallet adapter
-export const onAdapterStateUpdate = (state: WalletAdapterState) => {
-  console.log("Adapter state update:", state);
-  const { accountId, lastWalletId, privateKey } = state;
-  update({
-    accountId: accountId || undefined,
-    lastWalletId: lastWalletId || undefined,
-    ...(privateKey ? { privateKey } : {}),
-  });
+export interface WalletProvider {
+  connect(options?: { contractId?: string; network?: string; excludedWallets?: string[]; features?: Record<string, boolean> }): Promise<{ accountId: string } | null>;
+  restore?(options?: { contractId?: string; network?: string }): Promise<{ accountId: string } | null>;
+  disconnect(): Promise<void>;
+  sendTransaction(params: { receiverId: string; actions: any[]; signerId?: string }): Promise<any>;
+  signMessage?(params: { message: string; recipient: string; nonce: Uint8Array }): Promise<any>;
+  accountId(): string | null;
+  isConnected(): boolean;
 }
 
-export const getWalletAdapterState = (): WalletAdapterState => {
-  return {
-    publicKey: _state.publicKey,
-    accountId: _state.accountId,
-    lastWalletId: _state.lastWalletId,
-    networkId: _config.networkId,
-  };
-}
+let _walletProvider: WalletProvider | null = null;
 
-// We can create an adapter instance here
-export let _adapter = new WalletAdapter({
-  onStateUpdate: onAdapterStateUpdate,
-  lastState: getWalletAdapterState(),
-  widgetUrl: WIDGET_URL,
-});
+export const setWalletProvider = (provider: WalletProvider): void => {
+  _walletProvider = provider;
+};
+
+export const getWalletProvider = (): WalletProvider | null => {
+  return _walletProvider;
+};
 
 // Attempt to set publicKey if we have a privateKey
 try {
@@ -177,8 +158,6 @@ export const events = {
 }
 
 // Mutators
-// @todo: in favor of limiting when out of alpha
-//    but haven't given it enough thought ~ mike
 export const update = (newState: Partial<AppState>) => {
   const oldState = _state;
   _state = {..._state, ...newState};
@@ -202,17 +181,6 @@ export const update = (newState: Partial<AppState>) => {
 
   if (newState.accountId !== oldState.accountId) {
     events.notifyAccountListeners(newState.accountId as string);
-  }
-
-  if (
-    (newState.hasOwnProperty("lastWalletId") &&
-      newState.lastWalletId !== oldState.lastWalletId) ||
-    (newState.hasOwnProperty("accountId") &&
-      newState.accountId !== oldState.accountId) ||
-    (newState.hasOwnProperty("privateKey") &&
-      newState.privateKey !== oldState.privateKey)
-  ) {
-    _adapter.setState(getWalletAdapterState());
   }
 }
 
