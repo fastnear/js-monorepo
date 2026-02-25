@@ -127,6 +127,17 @@ export function parseJsonFromBytes(bytes: Uint8Array) {
   }
 }
 
+/**
+ * NEP-413 standard message payload for wallet signing.
+ */
+export interface NEP413Message {
+  message: string;
+  nonce: Uint8Array;
+  recipient: string;
+  callbackUrl?: string | null;
+  state?: string | null;
+}
+
 export function canSignWithLAK(actions) {
   return (
     actions.length === 1 &&
