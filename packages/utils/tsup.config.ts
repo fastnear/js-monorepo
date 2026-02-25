@@ -31,7 +31,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -51,7 +51,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -70,7 +70,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
     footer: {

@@ -3,8 +3,8 @@ import { defineConfig } from 'tsup'
 // we'll get this package's name and version for the banner
 import pkg from './package.json'
 
-const globalName = 'NearWalletAdapter'
-const friendlyPackageName = 'Wallet Adapter'
+const globalName = 'nearWallet'
+const friendlyPackageName = 'Wallet Connector'
 
 // Aids in certain guards on the global's mutability
 const footerRedefiningGlobal = `
@@ -13,6 +13,11 @@ Object.defineProperty(globalThis, '${globalName}', {
   enumerable: true,
   configurable: false,
 });
+
+// Auto-wire with @fastnear/api if it loaded first
+if (typeof globalThis.near !== 'undefined' && globalThis.near.useWallet) {
+  globalThis.near.useWallet(${globalName});
+}
 `
 
 export default defineConfig([
@@ -31,7 +36,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -51,7 +56,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -70,7 +75,7 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
     footer: {

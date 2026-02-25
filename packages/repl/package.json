@@ -1,11 +1,11 @@
 {
   "name": "@fastnear/repl",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "license": "MIT",
   "description": "Simple REPL to explore NEAR blockchain objects",
   "bin": "bin/repl.cjs",
   "type": "module",
-  "author": "FastNEAR",
+  "author": "FastNear",
   "homepage": "https://js.fastnear.com",
   "repository": {
     "type": "git",

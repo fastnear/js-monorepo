@@ -9,7 +9,7 @@ const globalName = 'near'
 const footerRedefiningGlobal = `
 try {
   Object.defineProperty(globalThis, '${globalName}', {
-    value: ${globalName},    
+    value: ${globalName},
     enumerable: true,
     configurable: false,
   });
@@ -19,6 +19,10 @@ try {
 }
 
 window.$$ = near.utils.convertUnit;
+
+if (typeof globalThis.nearWallet !== 'undefined') {
+  near.useWallet(globalThis.nearWallet);
+}
 `;
 
 export default defineConfig([
@@ -38,7 +42,7 @@ export default defineConfig([
     sourcemap: true,
     minify: false,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR API - CJS (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear API - CJS (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -60,7 +64,7 @@ export default defineConfig([
     sourcemap: true,
     minify: false,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR API - ESM (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear API - ESM (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
@@ -82,7 +86,7 @@ export default defineConfig([
     minify: false,
     platform: 'browser',
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNEAR API - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
+      js: `/* ⋈ 🏃🏻💨 FastNear API - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
     footer: {
