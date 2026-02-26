@@ -10,6 +10,7 @@
   "browser": "./dist/umd/browser.global.js",
   "scripts": {
     "build": "tsup",
+    "publish": "yarn npm publish",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },
