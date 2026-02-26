@@ -166,7 +166,7 @@ export async function restore(options?: ConnectOptions): Promise<ConnectResult |
       connectedWallet = result.wallet;
       currentAccountId = result.accounts[0].accountId;
       const connectResult: ConnectResult = {
-        accountId: currentAccountId,
+        accountId: currentAccountId || '',
         publicKey: result.accounts[0].publicKey,
       };
       for (const cb of connectListeners) {

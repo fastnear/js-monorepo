@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/api",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Interact with NEAR Protocol blockchain including transaction signing, utilities, and more.",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
