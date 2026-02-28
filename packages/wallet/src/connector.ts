@@ -127,6 +127,10 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
     opts.manifest = options.manifest;
   }
 
+  if (options?.walletConnect) {
+    opts.walletConnect = options.walletConnect;
+  }
+
   connector = new NearConnector(opts);
 
   connector.on("wallet:signIn", (event: any) => {
