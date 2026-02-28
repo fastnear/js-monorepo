@@ -263,6 +263,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@fastnear/wallet-adapter@workspace:packages/wallet-adapter":
+  version: 0.0.0-use.local
+  resolution: "@fastnear/wallet-adapter@workspace:packages/wallet-adapter"
+  dependencies:
+    "@fastnear/borsh-schema": "workspace:*"
+    "@fastnear/utils": "workspace:*"
+    "@noble/curves": "npm:*"
+    borsh: "npm:*"
+    rimraf: "npm:*"
+    tsup: "npm:*"
+    typescript: "npm:*"
+  languageName: unknown
+  linkType: soft
+
 "@fastnear/wallet@workspace:packages/wallet":
   version: 0.0.0-use.local
   resolution: "@fastnear/wallet@workspace:packages/wallet"
@@ -339,19 +353,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:*, @noble/curves@npm:^1.7.0":
-  version: 1.8.1
-  resolution: "@noble/curves@npm:1.8.1"
+"@noble/curves@npm:*, @noble/curves@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "@noble/curves@npm:2.0.1"
   dependencies:
-    "@noble/hashes": "npm:1.7.1"
-  checksum: 10c0/84902c7af93338373a95d833f77981113e81c48d4bec78f22f63f1f7fdd893bc1d3d7a3ee78f01b9a8ad3dec812a1232866bf2ccbeb2b1560492e5e7d690ab1f
+    "@noble/hashes": "npm:2.0.1"
+  checksum: 10c0/e0b329eb9229e862d3b7203e0444bd479e9ecf2d5990181908dad416aab69106717ca696fc7b12ad0eb19d710f58c454646b27ce517a4298ab9abc89a9bdb6ee
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:*, @noble/hashes@npm:1.7.1, @noble/hashes@npm:^1.6.1":
-  version: 1.7.1
-  resolution: "@noble/hashes@npm:1.7.1"
-  checksum: 10c0/2f8ec0338ccc92b576a0f5c16ab9c017a3a494062f1fbb569ae641c5e7eab32072f9081acaa96b5048c0898f972916c818ea63cbedda707886a4b5ffcfbf94e3
+"@noble/hashes@npm:*, @noble/hashes@npm:2.0.1, @noble/hashes@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "@noble/hashes@npm:2.0.1"
+  checksum: 10c0/e81769ce21c3b1c80141a3b99bd001f17edea09879aa936692ae39525477386d696101cd573928a304806efb2b9fa751e1dd83241c67d0c84d30091e85c79bdb
   languageName: node
   linkType: hard
 
@@ -921,8 +935,8 @@ __metadata:
     "@esbuild-plugins/node-globals-polyfill": "npm:^0.2.3"
     "@esbuild-plugins/node-modules-polyfill": "npm:^0.2.2"
     "@fastnear/near-connect": "npm:^0.10.2"
-    "@noble/curves": "npm:^1.7.0"
-    "@noble/hashes": "npm:^1.6.1"
+    "@noble/curves": "npm:^2.0.1"
+    "@noble/hashes": "npm:^2.0.1"
     "@types/big.js": "npm:^6.2.2"
     "@types/node": "npm:^22.13.1"
     base58-js: "npm:=2.0.0"
