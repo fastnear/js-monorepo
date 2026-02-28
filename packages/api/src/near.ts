@@ -35,7 +35,7 @@ import {
   resetTxHistory,
 } from "./state.js";
 
-import { sha256 } from "@noble/hashes/sha2";
+import { sha256 } from "@noble/hashes/sha2.js";
 import * as reExportAllUtils from "@fastnear/utils";
 import * as stateExports from "./state.js";
 

@@ -1,7 +1,6 @@
-import { ed25519 } from "@noble/curves/ed25519";
-import { sha256 } from "@noble/hashes/sha2";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { fromBase58, toBase58 } from "./misc.js";
-import { Hex } from "@noble/curves/abstract/utils";
 
 export { sha256 };
 
@@ -31,7 +30,7 @@ export function privateKeyFromRandom() {
   return keyToString(privateKey);
 }
 
-export function signHash(hashBytes: Uint8Array, privateKey: string, opts?: any): Hex {
+export function signHash(hashBytes: Uint8Array, privateKey: string, opts?: any): Uint8Array | string {
   const secret = keyFromString(privateKey).slice(0, 32);
   const signature = ed25519.sign(hashBytes, secret);
 
