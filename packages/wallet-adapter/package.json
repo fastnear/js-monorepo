@@ -1,0 +1,51 @@
+{
+  "name": "@fastnear/wallet-adapter",
+  "version": "0.9.11",
+  "description": "Wallet adapter implementations for Meteor Wallet and Near Mobile",
+  "license": "MIT",
+  "type": "module",
+  "types": "./dist/esm/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "browser": "./dist/umd/browser.global.js",
+  "scripts": {
+    "build": "tsup",
+    "publish": "yarn npm publish",
+    "clean": "yarn rimraf dist node_modules",
+    "type-check": "tsc --noEmit"
+  },
+  "author": "FastNear",
+  "homepage": "https://js.fastnear.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastnear/js-monorepo.git"
+  },
+  "keywords": [
+    "near-protocol",
+    "near-wallet",
+    "wallet-adapter",
+    "meteor-wallet",
+    "near-mobile",
+    "fastnear"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
+  "dependencies": {
+    "@fastnear/borsh-schema": "workspace:*",
+    "@fastnear/utils": "workspace:*",
+    "@noble/curves": "*",
+    "borsh": "*"
+  },
+  "devDependencies": {
+    "rimraf": "*",
+    "tsup": "*",
+    "typescript": "*"
+  }
+}
