@@ -235,10 +235,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fastnear/near-connect@npm:^0.10.5":
-  version: 0.10.5
-  resolution: "@fastnear/near-connect@npm:0.10.5"
-  checksum: 10c0/487ff6fc58026bfdd0df1a88377adb45f98eb8642f7175ee964913bea2ba6bdadc04bd9171a75691c939b56e340e7c51c88b3f843f4d33a328ad722ae08a6ecf
+"@fastnear/near-connect@npm:^0.10.6":
+  version: 0.10.6
+  resolution: "@fastnear/near-connect@npm:0.10.6"
+  checksum: 10c0/54054a3a9dbe4e272db8110f024bbf059f9ccd6ed463a304ea2116f099ed70cfdd31bbb06764e6d373aefad8abb80681741cae8775cbcf085394e1f0a2708f76
   languageName: node
   linkType: hard
 
@@ -941,7 +941,7 @@ __metadata:
   dependencies:
     "@esbuild-plugins/node-globals-polyfill": "npm:^0.2.3"
     "@esbuild-plugins/node-modules-polyfill": "npm:^0.2.2"
-    "@fastnear/near-connect": "npm:^0.10.5"
+    "@fastnear/near-connect": "npm:^0.10.6"
     "@noble/curves": "npm:^2.0.1"
     "@noble/hashes": "npm:^2.0.1"
     "@types/big.js": "npm:^6.2.2"
