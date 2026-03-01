@@ -32,7 +32,7 @@
     "packages/*"
   ],
   "dependencies": {
-    "@fastnear/near-connect": "^0.10.5",
+    "@fastnear/near-connect": "^0.10.6",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
     "base58-js": "=2.0.0",
