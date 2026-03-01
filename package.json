@@ -1,6 +1,6 @@
 {
   "name": "fastnear-js-monorepo",
-  "version": "0.9.12",
+  "version": "0.9.13",
   "description": "Easily interact with the NEAR Protocol blockchain",
   "scripts": {
     "type-check": "yarn workspaces foreach --all -t run type-check",
