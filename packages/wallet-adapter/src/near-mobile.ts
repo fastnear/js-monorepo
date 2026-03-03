@@ -1,7 +1,9 @@
 import { serialize as borshSerialize, type Schema } from "borsh";
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   base64ToBytes,
+  curveFromKey,
   keyFromString,
   privateKeyFromRandom,
   publicKeyFromPrivate,
@@ -118,6 +120,16 @@ const verifyNep413Signature = ({
   const hash = sha256(new Uint8Array(borshPayload));
   const pk = keyFromString(publicKey);
   const sig = base64ToBytes(signature);
+
+  if (curveFromKey(publicKey) === "secp256k1") {
+    // Strip recovery byte (last byte) — compact sig is first 64 bytes
+    const compactSig = sig.slice(0, 64);
+    // Prepend 0x04 uncompressed prefix — NEAR stores 64 bytes, noble expects 65
+    const fullPk = new Uint8Array(65);
+    fullPk[0] = 0x04;
+    fullPk.set(pk, 1);
+    return secp256k1.verify(compactSig, hash, fullPk, { prehash: false });
+  }
 
   return ed25519.verify(sig, hash, pk);
 };

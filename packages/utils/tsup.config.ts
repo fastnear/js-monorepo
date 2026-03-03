@@ -17,7 +17,7 @@ Object.defineProperty(globalThis, '${globalName}', {
 
 export default defineConfig([
   {
-    entry: ['src/**/*.ts'],
+    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
     outDir: 'dist/cjs',
     format: ['cjs'],
     splitting: false,
@@ -36,7 +36,7 @@ export default defineConfig([
     },
   },
   {
-    entry: ['src/**/*.ts'],
+    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
     outDir: 'dist/esm',
     format: ['esm'],
     shims: true,

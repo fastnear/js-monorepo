@@ -9,7 +9,8 @@
     "install-all": "yarn workspaces foreach --all -t install",
     "install-all:lock": "yarn workspaces foreach --all -t install --refresh-lockfile",
     "pack-all": "yarn workspaces foreach --all -t pack",
-    "repl": "yarn workspace @fastnear/repl start"
+    "repl": "yarn workspace @fastnear/repl start",
+    "test": "vitest run"
   },
   "license": "MIT",
   "author": "FastNear",
@@ -52,7 +53,8 @@
     "rimraf": "^6.0.1",
     "stream-browserify": "^3.0.0",
     "tsup": "^8.3.6",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3"
   },
   "resolutions": {
     "borsh": "2.0.0"
