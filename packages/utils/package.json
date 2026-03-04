@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/utils",
-  "version": "0.9.13",
+  "version": "0.10.0",
   "description": "Utility functions for interactions with the NEAR blockchain",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -36,12 +36,11 @@
     }
   },
   "dependencies": {
+    "@fastnear/borsh": "workspace:*",
     "@fastnear/borsh-schema": "workspace:*",
     "@noble/curves": "*",
     "@noble/hashes": "*",
     "base58-js": "*",
-    "big.js": "*",
-    "borsh": "*",
     "js-base64": "*"
   },
   "devDependencies": {

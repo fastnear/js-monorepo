@@ -1,4 +1,4 @@
-import { serialize as borshSerialize, deserialize as borshDeserialize, Schema } from "borsh";
+import { serialize as borshSerialize, deserialize as borshDeserialize, type Schema } from "@fastnear/borsh";
 import { curveFromKey, keyFromString } from "./crypto.js";
 import {base64ToBytes, fromBase58, fromBase64, toBase64} from "./misc.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
@@ -78,7 +78,7 @@ export function serializeSignedTransaction(jsonTransaction: PlainTransaction, si
     signature: mapSignature(signature, jsonTransaction.publicKey),
   };
 
-  const borshSignedTx = borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction, true);
+  const borshSignedTx = borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
   console.log('fastnear: borsh-serialized signed transaction:', borshSignedTx);
 
   return borshSignedTx;

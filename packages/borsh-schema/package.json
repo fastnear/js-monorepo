@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/borsh-schema",
-  "version": "0.9.13",
+  "version": "0.10.0",
   "description": "NEAR Protocol's borsh schema for common applications",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -35,6 +35,9 @@
       "require": "./dist/cjs/index.cjs",
       "import": "./dist/esm/index.js"
     }
+  },
+  "dependencies": {
+    "@fastnear/borsh": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "*",

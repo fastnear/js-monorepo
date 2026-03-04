@@ -1,4 +1,3 @@
-import Big from "big.js";
 import {
   lsSet,
   lsGet,
@@ -39,7 +38,6 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import * as reExportAllUtils from "@fastnear/utils";
 import * as stateExports from "./state.js";
 
-Big.DP = 27;
 export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
 
 export interface AccessKeyWithError {

@@ -7,6 +7,14 @@ import {
   type ConnectorAction,
   type WalletManifest,
 } from "@fastnear/near-connect";
+// Lazy-load WalletConnect only when needed (saves ~550KB in the IIFE bundle).
+// In bundled apps (CJS/ESM), the dynamic import resolves normally.
+// In IIFE/script-tag contexts, @walletconnect/sign-client is excluded from the
+// bundle and must be loaded separately if WalletConnect support is needed.
+async function getSignClient(): Promise<typeof import("@walletconnect/sign-client")["default"]> {
+  const { default: SignClient } = await import("@walletconnect/sign-client");
+  return SignClient;
+}
 
 export type { WalletManifest };
 
@@ -128,7 +136,18 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
   }
 
   if (options?.walletConnect) {
-    opts.walletConnect = options.walletConnect;
+    const wc = options.walletConnect;
+    opts.walletConnect = getSignClient().then(SignClient =>
+      SignClient.init({
+        projectId: wc.projectId,
+        metadata: {
+          name: wc.metadata?.name ?? document.title ?? "NEAR dApp",
+          description: wc.metadata?.description ?? "",
+          url: wc.metadata?.url ?? window.location.origin,
+          icons: wc.metadata?.icons ?? [],
+        },
+      })
+    );
   }
 
   connector = new NearConnector(opts);

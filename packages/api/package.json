@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/api",
-  "version": "0.9.13",
+  "version": "0.10.0",
   "description": "Interact with NEAR Protocol blockchain including transaction signing, utilities, and more.",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -39,9 +39,7 @@
     "@fastnear/utils": "workspace:*",
     "@noble/curves": "*",
     "@noble/hashes": "*",
-    "base58-js": "*",
-    "big.js": "*",
-    "borsh": "*"
+    "base58-js": "*"
   },
   "devDependencies": {
     "rimraf": "*",

@@ -1,4 +1,4 @@
-import { serialize as borshSerialize } from "borsh";
+import { serialize as borshSerialize } from "@fastnear/borsh";
 import { privateKeyFromRandom, publicKeyFromPrivate, bytesToBase64, mapTransaction, SCHEMA } from "@fastnear/utils";
 import type { PlainTransaction } from "@fastnear/utils";
 import { connectorActionsToFastnearActions } from "./actions.js";

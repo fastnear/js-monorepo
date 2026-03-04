@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/wallet-adapter",
-  "version": "0.9.13",
+  "version": "0.10.0",
   "description": "Wallet adapter implementations for Meteor Wallet and Near Mobile",
   "license": "MIT",
   "type": "module",
@@ -38,10 +38,10 @@
     }
   },
   "dependencies": {
+    "@fastnear/borsh": "workspace:*",
     "@fastnear/borsh-schema": "workspace:*",
     "@fastnear/utils": "workspace:*",
-    "@noble/curves": "*",
-    "borsh": "*"
+    "@noble/curves": "*"
   },
   "devDependencies": {
     "rimraf": "*",

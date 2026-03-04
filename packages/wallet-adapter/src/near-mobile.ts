@@ -1,4 +1,4 @@
-import { serialize as borshSerialize, type Schema } from "borsh";
+import { serialize as borshSerialize, type Schema } from "@fastnear/borsh";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
