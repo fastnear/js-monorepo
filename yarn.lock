@@ -427,10 +427,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/near-connect@npm:*, @fastnear/near-connect@npm:^0.11.0":
+"@fastnear/near-connect@npm:*":
   version: 0.11.0
   resolution: "@fastnear/near-connect@npm:0.11.0"
   checksum: 10c0/3d1d452241ae81e80acf0b2c5cde57e3f506a4328440443bd338b301997bb327fb9240199ffb8f9a6e54ba26a6cea3bad0e301e7fd261ae33b16f817af88b897
+  languageName: node
+  linkType: hard
+
+"@fastnear/near-connect@npm:^0.11.2":
+  version: 0.11.2
+  resolution: "@fastnear/near-connect@npm:0.11.2"
+  checksum: 10c0/3df38dc0a8f841f3338f4d906ad075789847462f0ac3b146770e79aaf06d31033e6a3d33e223b11cbfb109f592e7d5910b950f8b903d9aee289fb33633a41793
   languageName: node
   linkType: hard
 
@@ -480,7 +487,6 @@ __metadata:
   resolution: "@fastnear/wallet@workspace:packages/wallet"
   dependencies:
     "@fastnear/near-connect": "npm:*"
-    "@walletconnect/sign-client": "npm:*"
     rimraf: "npm:*"
     tsup: "npm:*"
     typescript: "npm:*"
@@ -1281,7 +1287,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@walletconnect/sign-client@npm:*, @walletconnect/sign-client@npm:^2.23.7":
+"@walletconnect/sign-client@npm:^2.23.7":
   version: 2.23.7
   resolution: "@walletconnect/sign-client@npm:2.23.7"
   dependencies:
@@ -1988,7 +1994,7 @@ __metadata:
   dependencies:
     "@esbuild-plugins/node-globals-polyfill": "npm:^0.2.3"
     "@esbuild-plugins/node-modules-polyfill": "npm:^0.2.2"
-    "@fastnear/near-connect": "npm:^0.11.0"
+    "@fastnear/near-connect": "npm:^0.11.2"
     "@noble/curves": "npm:^2.0.1"
     "@noble/hashes": "npm:^2.0.1"
     "@types/node": "npm:^22.13.1"
