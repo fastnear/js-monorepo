@@ -20,7 +20,7 @@ This is a Yarn Berry (v4) monorepo for `@fastnear/*` NPM packages — a TypeScri
 
 - Bump the version in the root `package.json`, then run `yarn constraints --fix` to propagate to all workspace packages.
 - Run `yarn build` after bumping (artifacts include version in comments).
-- Publish all packages: `yarn workspaces foreach --all -ptv run publish --access public --tolerate-republish --otp <OTP>`
+- Publish all packages: `yarn workspaces foreach --all -tv run release --access public --otp <OTP>`
 - OTP (2FA) is required for the `@fastnear` npm scope.
 
 ## Noble crypto libraries (@noble/curves, @noble/hashes)

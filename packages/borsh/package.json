@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/borsh",
-  "version": "0.10.0",
+  "version": "0.10.4",
   "description": "Lean borsh serializer/deserializer for NEAR Protocol",
   "license": "MIT",
   "type": "module",
@@ -10,7 +10,7 @@
   "browser": "./dist/umd/browser.global.js",
   "scripts": {
     "build": "tsup",
-    "publish": "yarn npm publish",
+    "release": "npm publish",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },

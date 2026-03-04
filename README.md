@@ -79,7 +79,7 @@ After you bump the version run `yarn build` again because the artifacts will be 
 
 OTP is required and can be input into the command:
 
-    yarn workspaces foreach --all -ptv run publish --access public --tolerate-republish --otp 
+    yarn workspaces foreach --all -tv run release --access public --otp <OTP>
 
 ## IN PROGRESS
 

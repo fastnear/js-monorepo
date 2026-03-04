@@ -75,18 +75,6 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     platform: 'browser',
-    // WalletConnect dependencies use require("events") which esbuild can't
-    // statically resolve. Alias it to the browser polyfill.
-    alias: {
-      events: 'events',
-    },
-    esbuildOptions(options) {
-      // Exclude @walletconnect/sign-client from the IIFE bundle.
-      // The connector uses a dynamic import() so WC is only loaded when
-      // walletConnect options are provided. This drops the IIFE from ~900KB
-      // to ~100KB. Bundled apps (CJS/ESM) resolve WC normally at build time.
-      options.external = [...(options.external || []), '@walletconnect/sign-client'];
-    },
     banner: {
       js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
