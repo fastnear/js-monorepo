@@ -1,0 +1,46 @@
+{
+  "name": "@fastnear/borsh",
+  "version": "0.10.0",
+  "description": "Lean borsh serializer/deserializer for NEAR Protocol",
+  "license": "MIT",
+  "type": "module",
+  "types": "./dist/esm/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "browser": "./dist/umd/browser.global.js",
+  "scripts": {
+    "build": "tsup",
+    "publish": "yarn npm publish",
+    "clean": "yarn rimraf dist node_modules",
+    "type-check": "tsc --noEmit"
+  },
+  "author": "FastNear",
+  "homepage": "https://js.fastnear.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastnear/js-monorepo.git"
+  },
+  "keywords": [
+    "binary-serialization",
+    "borsh",
+    "near-protocol",
+    "blockchain",
+    "fastnear",
+    "web3"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "rimraf": "*",
+    "tsup": "*",
+    "typescript": "*"
+  }
+}
