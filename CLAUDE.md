@@ -7,7 +7,7 @@ This is a Yarn Berry (v4) monorepo for `@fastnear/*` NPM packages — a TypeScri
 ## Dependency management
 
 - **Sibling workspace packages** must use `"workspace:*"` references, never pinned versions. Yarn resolves these at publish time.
-- **Shared third-party dependencies** (e.g. `@noble/curves`, `@noble/hashes`, `base58-js`, `borsh`, `big.js`) should use `"*"` in workspace package manifests. The root `package.json` defines the actual version range, so it's managed in one place.
+- **Shared third-party dependencies** (e.g. `@noble/curves`, `@noble/hashes`, `base58-js`) should use `"*"` in workspace package manifests. The root `package.json` defines the actual version range, so it's managed in one place.
 - After changing dependencies, run `yarn install` to update the lockfile, then `yarn build` to verify.
 
 ## Build
@@ -32,13 +32,15 @@ This is a Yarn Berry (v4) monorepo for `@fastnear/*` NPM packages — a TypeScri
 ## Package dependency graph
 
 ```
-borsh-schema  (leaf — no workspace deps)
+borsh  (leaf — zero-dep Borsh codec)
     │
-    ├──▶ utils
+    ├──▶ borsh-schema
     │       │
-    │       └──▶ api ──▶ repl (CLI)
-    │
-    └──▶ wallet-adapter
+    │       ├──▶ utils
+    │       │       │
+    │       │       └──▶ api ──▶ repl (CLI)
+    │       │
+    │       └──▶ wallet-adapter
 
 wallet ──▶ @fastnear/near-connect (external, not in this repo)
 ```
@@ -49,8 +51,9 @@ wallet ──▶ @fastnear/near-connect (external, not in this repo)
 
 | Package | IIFE Global | Role |
 |---|---|---|
+| `borsh` | `NearBorsh` | Lean Borsh serializer/deserializer (zero-dep, replaces `borsh` npm package) |
 | `borsh-schema` | `NearBorshSchema` | Borsh schemas for NEAR transaction types |
-| `utils` | `NearUtils` | Crypto (ed25519, sha256), encoding (base58/64/hex), unit conversion, storage abstraction (`lsGet`/`lsSet`), transaction serialization |
+| `utils` | `NearUtils` | Crypto (ed25519, secp256k1, sha256), encoding (base58/64/hex), unit conversion, storage abstraction (`lsGet`/`lsSet`), transaction serialization |
 | `api` | `near` | User-facing API: RPC queries, transaction signing/sending, state management, event system, action builders |
 | `wallet` | `nearWallet` | Multi-wallet connector wrapping `@fastnear/near-connect` |
 | `wallet-adapter` | `nearWalletAdapters` | Low-level wallet implementations (Meteor, Near Mobile) |

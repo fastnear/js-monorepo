@@ -108,15 +108,9 @@ npm: [https://www.npmjs.com/package/base58-js](https://www.npmjs.com/package/bas
 MIT License:
 https://github.com/pur3miish/base58-js/blob/9ae694c74f4556834ee7e88cd08ac686600eb7cf/LICENSE
 
-### `borsh`
+### `borsh` (format)
 
-npm: [https://www.npmjs.com/package/borsh](https://www.npmjs.com/package/borsh)
-
-MIT License:
-https://github.com/near/borsh-js/blob/63ad2a30f5d682e9bc8ae923446ff584f4b93f69/LICENSE-MIT.txt
-
-Apache License:
-https://github.com/near/borsh-js/blob/63ad2a30f5d682e9bc8ae923446ff584f4b93f69/LICENSE-APACHE
+The [Borsh](https://borsh.io) binary serialization format originated in the NEAR ecosystem. This monorepo includes `@fastnear/borsh`, a clean-room reimplementation that replaces the external `borsh` npm package (`borsh-js`). The implementation is not derived from `borsh-js` code.
 
 ### `@noble/curves`
 
