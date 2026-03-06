@@ -7,7 +7,6 @@ import {
   type ConnectorAction,
   type WalletManifest,
 } from "@fastnear/near-connect";
-
 export type { WalletManifest };
 
 type Network = "mainnet" | "testnet";
@@ -99,13 +98,7 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
 
   const opts: Record<string, any> = {
     network: options?.network ?? currentNetwork,
-    footerBranding: options?.footerBranding !== undefined
-      ? options.footerBranding
-      : {
-          heading: "Powered by FastNear",
-          link: "https://fastnear.com",
-          linkText: "fastnear.com",
-        },
+    footerBranding: options?.footerBranding ?? null,
   };
 
   if (options?.contractId) {
@@ -125,6 +118,19 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
 
   if (options?.manifest) {
     opts.manifest = options.manifest;
+  }
+
+  if (options?.walletConnect) {
+    const wc = options.walletConnect;
+    opts.walletConnect = {
+      projectId: wc.projectId,
+      metadata: {
+        name: wc.metadata?.name ?? document.title ?? "NEAR dApp",
+        description: wc.metadata?.description ?? "",
+        url: wc.metadata?.url ?? window.location.origin,
+        icons: wc.metadata?.icons ?? [],
+      },
+    };
   }
 
   connector = new NearConnector(opts);
@@ -166,7 +172,7 @@ export async function restore(options?: ConnectOptions): Promise<ConnectResult |
       connectedWallet = result.wallet;
       currentAccountId = result.accounts[0].accountId;
       const connectResult: ConnectResult = {
-        accountId: currentAccountId,
+        accountId: currentAccountId || '',
         publicKey: result.accounts[0].publicKey,
       };
       for (const cb of connectListeners) {

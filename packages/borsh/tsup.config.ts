@@ -1,12 +1,10 @@
 import { defineConfig } from 'tsup'
 /* @ts-ignore */
-// we'll get this package's name and version for the banner
 import pkg from './package.json'
 
-const globalName = 'NearUtils'
-const friendlyPackageName = 'Utils'
+const globalName = 'NearBorsh'
+const friendlyPackageName = 'Borsh'
 
-// Aids in certain guards on the global's mutability
 const footerRedefiningGlobal = `
 Object.defineProperty(globalThis, '${globalName}', {
   value: ${globalName},
@@ -74,7 +72,7 @@ export default defineConfig([
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
     footer: {
-      js: footerRedefiningGlobal
-    }
+      js: footerRedefiningGlobal,
+    },
   },
 ])

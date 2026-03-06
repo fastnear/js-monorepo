@@ -1,7 +1,8 @@
 {
-  "name": "@fastnear/utils",
+  "name": "@fastnear/wallet-adapter",
   "version": "0.10.4",
-  "description": "Utility functions for interactions with the NEAR blockchain",
+  "description": "Wallet adapter implementations for Meteor Wallet and Near Mobile",
+  "license": "MIT",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/cjs/index.cjs",
@@ -21,10 +22,11 @@
   },
   "keywords": [
     "near-protocol",
-    "web3-utils",
-    "blockchain",
-    "fastnear",
-    "web3"
+    "near-wallet",
+    "wallet-adapter",
+    "meteor-wallet",
+    "near-mobile",
+    "fastnear"
   ],
   "files": [
     "dist"
@@ -38,10 +40,8 @@
   "dependencies": {
     "@fastnear/borsh": "workspace:*",
     "@fastnear/borsh-schema": "workspace:*",
-    "@noble/curves": "*",
-    "@noble/hashes": "*",
-    "base58-js": "*",
-    "js-base64": "*"
+    "@fastnear/utils": "workspace:*",
+    "@noble/curves": "*"
   },
   "devDependencies": {
     "rimraf": "*",

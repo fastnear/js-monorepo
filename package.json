@@ -1,6 +1,6 @@
 {
   "name": "fastnear-js-monorepo",
-  "version": "0.9.8",
+  "version": "0.10.4",
   "description": "Easily interact with the NEAR Protocol blockchain",
   "scripts": {
     "type-check": "yarn workspaces foreach --all -t run type-check",
@@ -9,7 +9,8 @@
     "install-all": "yarn workspaces foreach --all -t install",
     "install-all:lock": "yarn workspaces foreach --all -t install --refresh-lockfile",
     "pack-all": "yarn workspaces foreach --all -t pack",
-    "repl": "yarn workspace @fastnear/repl start"
+    "repl": "yarn workspace @fastnear/repl start",
+    "test": "vitest run"
   },
   "license": "MIT",
   "author": "FastNear",
@@ -23,7 +24,7 @@
     "near-wallet",
     "web3",
     "web3-wallet",
-    "nearjs",
+    "fastnearjs",
     "blockchain",
     "fastnear"
   ],
@@ -32,19 +33,17 @@
     "packages/*"
   ],
   "dependencies": {
-    "@fastnear/near-connect": "^0.10.1",
-    "@noble/curves": "^1.7.0",
-    "@noble/hashes": "^1.6.1",
+    "@fastnear/near-connect": "^0.11.2",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@walletconnect/sign-client": "^2.23.7",
     "base58-js": "=2.0.0",
-    "base64-js": "^1.5.1",
-    "big.js": "^6.2.2",
-    "borsh": "^2.0.0",
+    "events": "^3.3.0",
     "js-base64": "^3.7.7"
   },
   "devDependencies": {
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
-    "@types/big.js": "^6.2.2",
     "@types/node": "^22.13.1",
     "http-browserify": "^1.7.0",
     "https-browserify": "^1.0.0",
@@ -52,10 +51,8 @@
     "rimraf": "^6.0.1",
     "stream-browserify": "^3.0.0",
     "tsup": "^8.3.6",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3"
   },
-  "resolutions": {
-    "borsh": "2.0.0"
-  },
-  "packageManager": "yarn@4.6.0"
+  "packageManager": "yarn@4.13.0"
 }

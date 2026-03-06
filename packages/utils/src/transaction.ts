@@ -1,5 +1,5 @@
-import { serialize as borshSerialize, deserialize as borshDeserialize, Schema } from "borsh";
-import { keyFromString } from "./crypto.js";
+import { serialize as borshSerialize, deserialize as borshDeserialize, type Schema } from "@fastnear/borsh";
+import { curveFromKey, keyFromString } from "./crypto.js";
 import {base64ToBytes, fromBase58, fromBase64, toBase64} from "./misc.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
 
@@ -29,14 +29,26 @@ export const txToJsonStringified = (tx: PlainTransaction): string => {
   return JSON.stringify(txToJson(tx));
 }
 
+function mapPublicKey(keyString: string) {
+  const curve = curveFromKey(keyString);
+  const data = keyFromString(keyString);
+  return curve === "secp256k1"
+    ? { secp256k1Key: { data } }
+    : { ed25519Key: { data } };
+}
+
+function mapSignature(sigBase58: string, signerKeyString: string) {
+  const curve = curveFromKey(signerKeyString);
+  const data = fromBase58(sigBase58);
+  return curve === "secp256k1"
+    ? { secp256k1Signature: { data } }
+    : { ed25519Signature: { data } };
+}
+
 export function mapTransaction(jsonTransaction: PlainTransaction) {
   return {
     signerId: jsonTransaction.signerId,
-    publicKey: {
-      ed25519Key: {
-        data: keyFromString(jsonTransaction.publicKey)
-      }
-    },
+    publicKey: mapPublicKey(jsonTransaction.publicKey),
     nonce: BigInt(jsonTransaction.nonce),
     receiverId: jsonTransaction.receiverId,
     blockHash: fromBase58(jsonTransaction.blockHash),
@@ -63,14 +75,10 @@ export function serializeSignedTransaction(jsonTransaction: PlainTransaction, si
 
   const plainSignedTransaction: PlainSignedTransaction = {
     transaction: mappedSignedTx,
-    signature: {
-      ed25519Signature: {
-        data: fromBase58(signature),
-      },
-    },
+    signature: mapSignature(signature, jsonTransaction.publicKey),
   };
 
-  const borshSignedTx = borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction, true);
+  const borshSignedTx = borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
   console.log('fastnear: borsh-serialized signed transaction:', borshSignedTx);
 
   return borshSignedTx;
@@ -113,22 +121,14 @@ export function mapAction(action: any): object {
       return {
         stake: {
           stake: BigInt(action.stake),
-          publicKey: {
-            ed25519Key: {
-              data: keyFromString(action.publicKey),
-            },
-          },
+          publicKey: mapPublicKey(action.publicKey),
         },
       };
     }
     case "AddKey": {
       return {
         addKey: {
-          publicKey: {
-            ed25519Key: {
-              data: keyFromString(action.publicKey),
-            },
-          },
+          publicKey: mapPublicKey(action.publicKey),
           accessKey: {
             nonce: BigInt(action.accessKey.nonce),
             permission:
@@ -150,11 +150,7 @@ export function mapAction(action: any): object {
     case "DeleteKey": {
       return {
         deleteKey: {
-          publicKey: {
-            ed25519Key: {
-              data: keyFromString(action.publicKey),
-            },
-          },
+          publicKey: mapPublicKey(action.publicKey),
         },
       };
     }
@@ -169,9 +165,7 @@ export function mapAction(action: any): object {
       return {
         signedDelegate: {
           delegateAction: mapAction(action.delegateAction),
-          signature: {
-            ed25519Signature: fromBase58(action.signature),
-          },
+          signature: mapSignature(action.signature, action.publicKey),
         },
       };
     }

@@ -1,66 +1,66 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from "tsup";
 /* @ts-ignore */
-// we'll get this package's name and version for the banner
-import pkg from './package.json'
+import pkg from "./package.json";
 
-const globalName = 'NearUtils'
-const friendlyPackageName = 'Utils'
+const globalName = "nearWalletAdapters";
+const friendlyPackageName = "Wallet Adapters";
 
-// Aids in certain guards on the global's mutability
 const footerRedefiningGlobal = `
 Object.defineProperty(globalThis, '${globalName}', {
   value: ${globalName},
   enumerable: true,
   configurable: false,
 });
-`
+`;
 
 export default defineConfig([
   {
-    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
-    outDir: 'dist/cjs',
-    format: ['cjs'],
+    entry: ["src/**/*.ts"],
+    outDir: "dist/cjs",
+    format: ["cjs"],
     splitting: false,
     bundle: false,
     dts: {
       resolve: true,
-      entry: 'src/index.ts',
+      entry: "src/index.ts",
     },
     sourcemap: true,
     minify: false,
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
+      js:
+        `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - CJS (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
   {
-    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
-    outDir: 'dist/esm',
-    format: ['esm'],
+    entry: ["src/**/*.ts"],
+    outDir: "dist/esm",
+    format: ["esm"],
     shims: true,
     splitting: false,
     bundle: false,
     dts: {
       resolve: true,
-      entry: 'src/index.ts',
+      entry: "src/index.ts",
     },
     sourcemap: true,
     minify: false,
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
+      js:
+        `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - ESM (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
   },
   {
     entry: {
-      browser: 'src/index.ts',
+      browser: "src/index.ts",
     },
-    outDir: 'dist/umd',
-    format: ['iife'],
+    outDir: "dist/umd",
+    format: ["iife"],
     globalName,
     sourcemap: true,
     minify: false,
@@ -70,11 +70,12 @@ export default defineConfig([
     clean: true,
     keepNames: true,
     banner: {
-      js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
+      js:
+        `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,
     },
     footer: {
-      js: footerRedefiningGlobal
-    }
+      js: footerRedefiningGlobal,
+    },
   },
-])
+]);

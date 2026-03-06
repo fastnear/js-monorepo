@@ -1,7 +1,8 @@
 {
-  "name": "@fastnear/utils",
+  "name": "@fastnear/borsh",
   "version": "0.10.4",
-  "description": "Utility functions for interactions with the NEAR blockchain",
+  "description": "Lean borsh serializer/deserializer for NEAR Protocol",
+  "license": "MIT",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/cjs/index.cjs",
@@ -20,8 +21,9 @@
     "url": "git+https://github.com/fastnear/js-monorepo.git"
   },
   "keywords": [
+    "binary-serialization",
+    "borsh",
     "near-protocol",
-    "web3-utils",
     "blockchain",
     "fastnear",
     "web3"
@@ -35,15 +37,8 @@
       "import": "./dist/esm/index.js"
     }
   },
-  "dependencies": {
-    "@fastnear/borsh": "workspace:*",
-    "@fastnear/borsh-schema": "workspace:*",
-    "@noble/curves": "*",
-    "@noble/hashes": "*",
-    "base58-js": "*",
-    "js-base64": "*"
-  },
   "devDependencies": {
+    "@types/node": "*",
     "rimraf": "*",
     "tsup": "*",
     "typescript": "*"

@@ -74,6 +74,7 @@ export default defineConfig([
     dts: false,
     clean: true,
     keepNames: true,
+    platform: 'browser',
     banner: {
       js: `/* ⋈ 🏃🏻💨 FastNear ${friendlyPackageName} - IIFE/UMD (${pkg.name} version ${pkg.version}) */\n` +
         `/* https://www.npmjs.com/package/${pkg.name}/v/${pkg.version} */`,

@@ -1,4 +1,4 @@
-import { Schema } from "borsh"
+import type { Schema } from "@fastnear/borsh"
 
 export const nearChainSchema = new (class BorshSchema {
   Ed25519Signature: Schema = {
