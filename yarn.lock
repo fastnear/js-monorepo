@@ -427,14 +427,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/near-connect@npm:*":
-  version: 0.11.0
-  resolution: "@fastnear/near-connect@npm:0.11.0"
-  checksum: 10c0/3d1d452241ae81e80acf0b2c5cde57e3f506a4328440443bd338b301997bb327fb9240199ffb8f9a6e54ba26a6cea3bad0e301e7fd261ae33b16f817af88b897
-  languageName: node
-  linkType: hard
-
-"@fastnear/near-connect@npm:^0.11.2":
+"@fastnear/near-connect@npm:0.11.2, @fastnear/near-connect@npm:^0.11.2":
   version: 0.11.2
   resolution: "@fastnear/near-connect@npm:0.11.2"
   checksum: 10c0/3df38dc0a8f841f3338f4d906ad075789847462f0ac3b146770e79aaf06d31033e6a3d33e223b11cbfb109f592e7d5910b950f8b903d9aee289fb33633a41793
@@ -486,7 +479,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@fastnear/wallet@workspace:packages/wallet"
   dependencies:
-    "@fastnear/near-connect": "npm:*"
+    "@fastnear/near-connect": "npm:0.11.2"
     rimraf: "npm:*"
     tsup: "npm:*"
     typescript: "npm:*"
