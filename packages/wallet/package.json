@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/wallet",
-  "version": "0.10.4",
+  "version": "1.0.0",
   "description": "Multi-wallet connector for NEAR dApps — MyNearWallet, HERE, Meteor, and more",
   "license": "MIT",
   "type": "module",
