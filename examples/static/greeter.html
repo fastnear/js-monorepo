@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Greeter — @fastnear example</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Load @fastnear/api — the core `near` global
+       CDN: https://cdn.jsdelivr.net/npm/@fastnear/api@0.10/dist/umd/browser.global.js -->
+  <script src="../../packages/api/dist/umd/browser.global.js"></script>
+
+  <!-- Load @fastnear/wallet — adds wallet UI (iframe selector, popup, etc.)
+       Auto-wires with `near` regardless of script load order.
+       CDN: https://cdn.jsdelivr.net/npm/@fastnear/wallet@0.10/dist/umd/browser.global.js -->
+  <script src="../../packages/wallet/dist/umd/browser.global.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>Greeter</h1>
+  <p class="subtitle">
+    Read + write on testnet with wallet sign-in
+    &nbsp;·&nbsp; <a href="index.html">back</a>
+  </p>
+
+  <!-- Status bar -->
+  <div class="status-bar" id="status-bar">Not connected — sign in to send transactions</div>
+
+  <!-- 1. Auth -->
+  <section>
+    <h2>Authentication</h2>
+    <div class="row">
+      <button id="btn-sign-in" class="primary" onclick="handleSignIn()">Sign In</button>
+      <button id="btn-sign-out" class="danger" onclick="handleSignOut()" disabled>Sign Out</button>
+    </div>
+    <p class="note">Sign In opens Intear Wallet in an iframe. Sign Out clears the session.</p>
+  </section>
+
+  <!-- 2. View call -->
+  <section>
+    <h2>Current Greeting</h2>
+    <div class="value" id="current-greeting">—</div>
+    <button onclick="fetchGreeting()">Refresh</button>
+    <p class="note">View calls use <code>near.view()</code> — free, no wallet needed.</p>
+  </section>
+
+  <!-- 3. Transaction -->
+  <section>
+    <h2>Set Greeting</h2>
+    <input type="text" id="new-greeting" placeholder="Enter a new greeting...">
+    <button id="btn-set-greeting" class="primary" onclick="handleSetGreeting()" disabled>Set Greeting</button>
+    <p class="note">Sends a transaction via <code>near.sendTx()</code> with <code>near.actions.functionCall()</code>.</p>
+  </section>
+
+  <!-- 4. Sign message (NEP-413) -->
+  <section>
+    <h2>Sign Message (NEP-413)</h2>
+    <input type="text" id="message-to-sign" placeholder="Message to sign..." value="Hello from my dApp!">
+    <button id="btn-sign-message" onclick="handleSignMessage()" disabled>Sign Message</button>
+    <p class="note">Off-chain message signing — proves account ownership without an on-chain transaction.</p>
+  </section>
+
+  <!-- 5. Event log -->
+  <section>
+    <h2>Event Log</h2>
+    <div id="event-log" class="log">(events will appear here)</div>
+  </section>
+</div>
+
+<script>
+  // ============================================================
+  // CONFIGURATION
+  // ============================================================
+  near.config({ networkId: 'testnet' });
+
+  const CONTRACT_ID = 'greeter.testnet';
+  let currentAccount = near.accountId();
+
+
+  // ============================================================
+  // EVENTS
+  // ============================================================
+  // Fires when the signed-in account changes (sign-in, sign-out,
+  // or session restore from localStorage on page load).
+  near.event.onAccount((accountId) => {
+    currentAccount = accountId;
+    log(`[account] ${accountId ? 'Signed in as ' + accountId : 'Signed out'}`);
+    updateUI();
+  });
+
+  // Fires on every transaction status change:
+  //   status: 'Pending' → 'Included' → 'Executed' (or 'Error', 'RejectedByUser')
+  near.event.onTx((txStatus) => {
+    log(`[tx] ${txStatus.status}${txStatus.txHash ? ' — ' + txStatus.txHash : ''}`);
+
+    // Refresh the greeting once the tx lands
+    if (txStatus.status === 'Included' || txStatus.status === 'Executed') {
+      fetchGreeting();
+    }
+  });
+
+
+  // ============================================================
+  // VIEW CALL
+  // ============================================================
+  async function fetchGreeting() {
+    try {
+      const greeting = await near.view({
+        contractId: CONTRACT_ID,
+        methodName: 'get_greeting',
+      });
+      document.getElementById('current-greeting').textContent = greeting || '(empty)';
+    } catch (err) {
+      console.error('View call failed:', err);
+      document.getElementById('current-greeting').textContent = '(error — see console)';
+    }
+  }
+
+
+  // ============================================================
+  // SIGN IN / SIGN OUT
+  // ============================================================
+  function handleSignIn() {
+    near.requestSignIn({ contractId: CONTRACT_ID });
+  }
+
+  function handleSignOut() {
+    near.signOut();
+    currentAccount = null;
+    updateUI();
+  }
+
+
+  // ============================================================
+  // SEND TRANSACTION
+  // ============================================================
+  async function handleSetGreeting() {
+    const input = document.getElementById('new-greeting');
+    const greeting = input.value.trim();
+    if (!greeting) { log('[ui] Enter a greeting first'); return; }
+    if (!currentAccount) { log('[ui] Sign in first'); return; }
+
+    try {
+      log('[ui] Sending set_greeting...');
+      const result = await near.sendTx({
+        receiverId: CONTRACT_ID,
+        actions: [
+          near.actions.functionCall({
+            methodName: 'set_greeting',
+            args: { greeting },
+            gas: '30000000000000',   // 30 TGas
+            deposit: '0',
+          }),
+        ],
+      });
+      if (result && result.rejected) {
+        log('[ui] Transaction rejected by user');
+      }
+    } catch (err) {
+      console.error('Transaction failed:', err);
+      log('[ui] Transaction error — see console');
+    }
+  }
+
+
+  // ============================================================
+  // SIGN MESSAGE (NEP-413)
+  // ============================================================
+  async function handleSignMessage() {
+    if (!currentAccount) { log('[ui] Sign in first'); return; }
+
+    const messageText = document.getElementById('message-to-sign').value.trim();
+    if (!messageText) { log('[ui] Enter a message'); return; }
+
+    try {
+      const nonce = crypto.getRandomValues(new Uint8Array(32));
+      log('[ui] Requesting signature...');
+      const signed = await near.signMessage({
+        message: messageText,
+        nonce,
+        recipient: 'greeter-example.fastnear.com',
+      });
+
+      if (signed) {
+        log(`[sign] Signed by ${signed.accountId}`);
+        log(`[sign] Key: ${signed.publicKey}`);
+        log(`[sign] Sig: ${signed.signature.substring(0, 40)}...`);
+      } else {
+        log('[sign] User rejected');
+      }
+    } catch (err) {
+      console.error('Sign message failed:', err);
+      log('[sign] Error — see console');
+    }
+  }
+
+
+  // ============================================================
+  // UI HELPERS
+  // ============================================================
+  function updateUI() {
+    const statusBar = document.getElementById('status-bar');
+    const btnSignIn = document.getElementById('btn-sign-in');
+    const btnSignOut = document.getElementById('btn-sign-out');
+    const btnSetGreeting = document.getElementById('btn-set-greeting');
+    const btnSignMessage = document.getElementById('btn-sign-message');
+
+    if (currentAccount) {
+      statusBar.textContent = 'Connected as: ' + currentAccount;
+      btnSignIn.disabled = true;
+      btnSignOut.disabled = false;
+      btnSetGreeting.disabled = false;
+      btnSignMessage.disabled = false;
+    } else {
+      statusBar.textContent = 'Not connected — sign in to send transactions';
+      btnSignIn.disabled = false;
+      btnSignOut.disabled = true;
+      btnSetGreeting.disabled = true;
+      btnSignMessage.disabled = true;
+    }
+  }
+
+  function log(message) {
+    const el = document.getElementById('event-log');
+    const ts = new Date().toLocaleTimeString();
+    el.textContent += `${ts}  ${message}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  updateUI();
+  fetchGreeting();
+</script>
+</body>
+</html>

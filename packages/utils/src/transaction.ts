@@ -24,7 +24,7 @@ export const txToJson = (tx: PlainTransaction): Record<string, any> => {
   ));
 };
 
-// dude let's make this better. head just couldn't find a good name
+// Return a compact JSON string of the transaction (for display/logging)
 export const txToJsonStringified = (tx: PlainTransaction): string => {
   return JSON.stringify(txToJson(tx));
 }
@@ -57,31 +57,19 @@ export function mapTransaction(jsonTransaction: PlainTransaction) {
 }
 
 export function serializeTransaction(jsonTransaction: PlainTransaction) {
-  console.log("fastnear: serializing transaction");
-
   const transaction = mapTransaction(jsonTransaction);
-  console.log("fastnear: mapped transaction for borsh:", transaction);
-
   return borshSerialize(SCHEMA.Transaction, transaction);
 }
 
-export function serializeSignedTransaction(jsonTransaction: PlainTransaction, signature) {
-  console.log("fastnear: Serializing Signed Transaction", jsonTransaction);
-  console.log('fastnear: signature', signature)
-  console.log('fastnear: signature length', fromBase58(signature).length)
-
-  const mappedSignedTx = mapTransaction(jsonTransaction)
-  console.log('fastnear: mapped (for borsh schema) signed transaction', mappedSignedTx)
+export function serializeSignedTransaction(jsonTransaction: PlainTransaction, signature: string) {
+  const mappedSignedTx = mapTransaction(jsonTransaction);
 
   const plainSignedTransaction: PlainSignedTransaction = {
     transaction: mappedSignedTx,
     signature: mapSignature(signature, jsonTransaction.publicKey),
   };
 
-  const borshSignedTx = borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
-  console.log('fastnear: borsh-serialized signed transaction:', borshSignedTx);
-
-  return borshSignedTx;
+  return borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
 }
 
 export function mapAction(action: any): object {

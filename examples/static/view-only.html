@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View Only — @fastnear example</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Load @fastnear/api — gives us the global `near` object.
+       No wallet needed for read-only view calls.
+       CDN: https://cdn.jsdelivr.net/npm/@fastnear/api@0.10/dist/umd/browser.global.js -->
+  <script src="../../packages/api/dist/umd/browser.global.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>View Only</h1>
+  <p class="subtitle">
+    Read on-chain data with <code>near.view()</code> — no wallet, no sign-in
+    &nbsp;·&nbsp; <a href="index.html">back</a>
+  </p>
+
+  <section>
+    <h2>wNEAR Token Metadata</h2>
+    <div id="metadata">Loading...</div>
+  </section>
+
+  <section>
+    <h2>Code</h2>
+    <pre><code>near.config({ networkId: 'mainnet' });
+
+const metadata = await near.view({
+  contractId: 'wrap.near',
+  methodName: 'ft_metadata',
+});</code></pre>
+  </section>
+</div>
+
+<script>
+  near.config({ networkId: 'mainnet' });
+
+  (async () => {
+    try {
+      const meta = await near.view({
+        contractId: 'wrap.near',
+        methodName: 'ft_metadata',
+      });
+
+      document.getElementById('metadata').innerHTML = `
+        <table class="metadata-table">
+          <tr><td>Name</td><td>${meta.name}</td></tr>
+          <tr><td>Symbol</td><td>${meta.symbol}</td></tr>
+          <tr><td>Decimals</td><td>${meta.decimals}</td></tr>
+          <tr><td>Icon</td><td><img src="${meta.icon}" alt="${meta.name}" width="48" height="48" style="border-radius:8px"></td></tr>
+        </table>
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;color:var(--text-muted);font-size:0.85rem">Raw JSON</summary>
+          <pre style="margin-top:8px">${JSON.stringify(meta, null, 2)}</pre>
+        </details>`;
+    } catch (err) {
+      document.getElementById('metadata').textContent = 'Error: ' + err.message;
+    }
+  })();
+</script>
+</body>
+</html>

@@ -18,7 +18,13 @@ try {
   throw error;
 }
 
-window.$$ = near.utils.convertUnit;
+if (typeof globalThis !== 'undefined' && typeof globalThis.$$ === 'undefined') {
+  globalThis.$$ = near.utils.convertUnit;
+}
+
+if (typeof window !== 'undefined' && typeof window.$$ === 'undefined') {
+  window.$$ = near.utils.convertUnit;
+}
 
 if (typeof globalThis.nearWallet !== 'undefined') {
   near.useWallet(globalThis.nearWallet);
@@ -28,7 +34,7 @@ if (typeof globalThis.nearWallet !== 'undefined') {
 export default defineConfig([
   // 1) CommonJS (CJS) build (unbundled)
   {
-    entry: ['src/**/*.ts'],
+    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
     outDir: 'dist/cjs',
     format: ['cjs'],
     bundle: false,
@@ -49,7 +55,7 @@ export default defineConfig([
 
   // 2) ESM build (unbundled)
   {
-    entry: ['src/**/*.ts'],
+    entry: ['src/**/*.ts', '!src/**/*.test.ts'],
     outDir: 'dist/esm',
     format: ['esm'],
     shims: true,

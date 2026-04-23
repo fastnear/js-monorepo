@@ -29,6 +29,70 @@ await sendTransaction({
 await disconnect();
 ```
 
+<!-- BEGIN GENERATED:agent-wallet-surface -->
+## Agent-first tasks
+
+When you pair `@fastnear/wallet` with `@fastnear/api`, the shortest task-oriented entrypoints are the wallet-backed recipes:
+
+- `near.recipes.connect`
+- `near.recipes.functionCall`
+- `near.recipes.transfer`
+- `near.recipes.signMessage`
+
+### Connect a wallet
+
+```js
+const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+});
+
+near.print(result ?? near.selected());
+```
+
+### Send a function call
+
+```js
+const cu = near.utils.convertUnit;
+
+const result = await near.recipes.functionCall({
+  receiverId: "berryclub.ek.near",
+  methodName: "draw",
+  args: {
+    pixels: [{ x: 10, y: 20, color: 65280 }],
+  },
+  gas: cu("100 Tgas"),
+  deposit: "0",
+});
+
+near.print(result);
+```
+
+### Transfer NEAR
+
+```js
+const cu = near.utils.convertUnit;
+
+const result = await near.recipes.transfer({
+  receiverId: "escrow.ai.near",
+  amount: cu("0.1 NEAR"),
+});
+
+near.print(result);
+```
+
+### Sign a message
+
+```js
+const result = await near.recipes.signMessage({
+  message: "Sign in to FastNear Berry Club",
+  recipient: window.location.host,
+  nonce: crypto.getRandomValues(new Uint8Array(32)),
+});
+
+near.print(result);
+```
+<!-- END GENERATED:agent-wallet-surface -->
+
 ## Restore session
 
 ```js

@@ -1,0 +1,1202 @@
+export const FASTNEAR_CDN_BASE = "https://js.fastnear.com";
+export const FASTNEAR_AGENT_ENTRY = `${FASTNEAR_CDN_BASE}/agents.js`;
+export const FASTNEAR_RECIPE_CATALOG_ENTRY = `${FASTNEAR_CDN_BASE}/recipes.json`;
+export const FASTNEAR_DASHBOARD_URL = "https://dashboard.fastnear.com";
+
+const stringify = (value) => JSON.stringify(value, null, 2);
+const shellApiKeyComment = "# Assumes FASTNEAR_API_KEY is already set in your shell.";
+
+const wrapTerminalSnippet = (body) =>
+  `${shellApiKeyComment}
+node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})" <<'EOF'
+${body}
+EOF`;
+
+const withEsmApiKeyConfig = (body, { includeWallet = false } = {}) => {
+  const imports = includeWallet
+    ? `import * as near from "@fastnear/api";
+import * as nearWallet from "@fastnear/wallet";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+near.useWallet(nearWallet);
+await nearWallet.restore({
+  network: "mainnet",
+  contractId: "berryclub.ek.near",
+  manifest: "./manifest.json",
+});`
+    : `import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });`;
+
+  return `${imports}
+
+${body}`;
+};
+
+const browserOnlyTerminalSnippet = (reason) =>
+  `# Browser wallet required.
+# ${reason}
+# Use the browser-global or ESM snippet for this task.`;
+
+const curlJqViewContractSnippet = `${shellApiKeyComment}
+ACCOUNT_ID=root.near
+ARGS_BASE64="$(jq -nc --arg account_id "$ACCOUNT_ID" '{account_id: $account_id}' | base64 | tr -d '\\n')"
+
+curl -sS "https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY" \
+  -H 'content-type: application/json' \
+  --data "$(jq -nc --arg args "$ARGS_BASE64" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{
+      request_type:"call_function",
+      finality:"final",
+      account_id:"berryclub.ek.near",
+      method_name:"get_account",
+      args_base64:$args
+    }
+  }')" \
+  | jq '.result.result | implode | fromjson | {account_id, avocado_balance, num_pixels}'`;
+
+const curlJqViewAccountSnippet = `${shellApiKeyComment}
+ACCOUNT_ID=root.near
+
+curl -sS "https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY" \
+  -H 'content-type: application/json' \
+  --data "$(jq -nc --arg account_id "$ACCOUNT_ID" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{request_type:"view_account",account_id:$account_id,finality:"final"}
+  }')" \
+  | jq '.result | {amount, locked, storage_usage, block_height, block_hash}'`;
+
+const curlJqInspectTransactionSnippet = `${shellApiKeyComment}
+TX_HASH=7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq
+
+curl -sS "https://tx.main.fastnear.com/v0/transactions" \
+  -H "Authorization: Bearer $FASTNEAR_API_KEY" \
+  -H 'content-type: application/json' \
+  --data "$(jq -nc --arg tx_hash "$TX_HASH" '{tx_hashes: [$tx_hash]}')" \
+  | jq '{
+      hash: .transactions[0].transaction.hash,
+      signer_id: .transactions[0].transaction.signer_id,
+      receiver_id: .transactions[0].transaction.receiver_id,
+      included_block_height: .transactions[0].execution_outcome.block_height,
+      receipt_count: (.transactions[0].receipts | length)
+    }'`;
+
+const curlJqAccountFullSnippet = `${shellApiKeyComment}
+ACCOUNT_ID=root.near
+
+curl -sS "https://api.fastnear.com/v1/account/$ACCOUNT_ID/full" \
+  -H "Authorization: Bearer $FASTNEAR_API_KEY" \
+  | jq '{
+      account_id,
+      near_balance_yocto: .state.balance,
+      ft_contracts: (.tokens | length),
+      nft_contracts: (.nfts | length),
+      staking_pool_contracts: (.pools | length)
+    }'`;
+
+const curlJqTransfersSnippet = `${shellApiKeyComment}
+ACCOUNT_ID=root.near
+
+curl -sS "https://transfers.main.fastnear.com/v0/transfers" \
+  -H "Authorization: Bearer $FASTNEAR_API_KEY" \
+  -H 'content-type: application/json' \
+  --data "$(jq -nc --arg account_id "$ACCOUNT_ID" '{account_id: $account_id, desc: true, limit: 5}')" \
+  | jq '{
+      recent: [.transfers[] | {
+        block_height,
+        asset_id,
+        human_amount,
+        other_account_id,
+        transfer_type,
+        tx: .transaction_id
+      }]
+    }'`;
+
+const curlJqLastBlockFinalSnippet = `${shellApiKeyComment}
+curl -sSL "https://mainnet.neardata.xyz/v0/last_block/final?apiKey=$FASTNEAR_API_KEY" \
+  | jq '{
+      height: .block.header.height,
+      timestamp_nanosec: .block.header.timestamp_nanosec,
+      txs_per_shard: [.shards[] | {shard_id, tx_count: (.chunk.transactions | length)}],
+      total_txs: ([.shards[].chunk.transactions[]?] | length)
+    }'`;
+
+const curlJqKvLatestKeySnippet = `${shellApiKeyComment}
+CURRENT_ACCOUNT_ID=social.near
+PREDECESSOR_ID=james.near
+KEY='graph/follow/sleet.near'
+
+ENCODED_KEY="$(jq -rn --arg key "$KEY" '$key | @uri')"
+
+curl -sS "https://kv.main.fastnear.com/v0/latest/$CURRENT_ACCOUNT_ID/$PREDECESSOR_ID/$ENCODED_KEY" \
+  -H "Authorization: Bearer $FASTNEAR_API_KEY" \
+  | jq '{
+      latest: (
+        .entries[0]
+        | {
+            current_account_id,
+            predecessor_id,
+            block_height,
+            key,
+            value
+          }
+      )
+    }'`;
+
+const code = {
+  viewContract: `const result = await near.recipes.viewContract({
+  contractId: "berryclub.ek.near",
+  methodName: "get_account",
+  args: { account_id: "root.near" },
+});
+
+near.print({
+  account_id: result.account_id,
+  avocado_balance: result.avocado_balance,
+  num_pixels: result.num_pixels,
+});`,
+
+  viewAccount: `const account = await near.recipes.viewAccount("root.near");
+
+const { amount, locked, storage_usage, block_height, block_hash } = account;
+
+near.print({
+  amount,
+  locked,
+  storage_usage,
+  block_height,
+  block_hash,
+});`,
+
+  captureViewAccount: `const account = await near.recipes.viewAccount("root.near");
+
+const { block_hash, storage_usage } = account;
+
+near.print({ block_hash, storage_usage });`,
+
+  inspectTransaction: `const tx = await near.recipes.inspectTransaction(
+  "7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq"
+);
+
+near.print(
+  tx
+    ? {
+        hash: tx.transaction.hash,
+        signer_id: tx.transaction.signer_id,
+        receiver_id: tx.transaction.receiver_id,
+        included_block_height: tx.execution_outcome.block_height,
+        receipt_count: tx.receipts.length,
+      }
+    : null
+);`,
+
+  accountFull: `const account = await near.api.v1.accountFull({
+  accountId: "root.near",
+});
+
+near.print({
+  account_id: account.account_id,
+  near_balance_yocto: account.state.balance,
+  ft_contracts: account.tokens.length,
+  nft_contracts: account.nfts.length,
+  staking_pool_contracts: account.pools.length,
+});`,
+
+  transfersQuery: `const feed = await near.transfers.query({
+  accountId: "root.near",
+  desc: true,
+  limit: 5,
+});
+
+near.print({
+  recent: (feed.transfers || []).map((entry) => ({
+    block_height: entry.block_height,
+    asset_id: entry.asset_id,
+    human_amount: entry.human_amount,
+    other_account_id: entry.other_account_id,
+    transfer_type: entry.transfer_type,
+    tx: entry.transaction_id,
+  })),
+});`,
+
+  lastBlockFinal: `const block = await near.neardata.lastBlockFinal();
+
+near.print({
+  height: block.block.header.height,
+  timestamp_nanosec: block.block.header.timestamp_nanosec,
+  txs_per_shard: block.shards.map((shard) => ({
+    shard_id: shard.shard_id,
+    tx_count: shard.chunk.transactions.length,
+  })),
+  total_txs: block.shards.reduce(
+    (count, shard) => count + shard.chunk.transactions.length,
+    0
+  ),
+});`,
+
+  kvLatestKey: `const result = await near.fastdata.kv.getLatestKey({
+  currentAccountId: "social.near",
+  predecessorId: "james.near",
+  key: "graph/follow/sleet.near",
+});
+
+const latest = result.entries?.[0] || null;
+
+near.print({
+  latest: latest
+    ? {
+        current_account_id: latest.current_account_id,
+        predecessor_id: latest.predecessor_id,
+        block_height: latest.block_height,
+        key: latest.key,
+        value: latest.value,
+      }
+    : null,
+});`,
+
+  connect: `const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+});
+
+near.print(result ?? near.selected());`,
+
+  functionCall: `const cu = near.utils.convertUnit;
+
+const result = await near.recipes.functionCall({
+  receiverId: "berryclub.ek.near",
+  methodName: "draw",
+  args: {
+    pixels: [{ x: 10, y: 20, color: 65280 }],
+  },
+  gas: cu("100 Tgas"),
+  deposit: "0",
+});
+
+near.print(result);`,
+
+  transfer: `const cu = near.utils.convertUnit;
+
+const result = await near.recipes.transfer({
+  receiverId: "escrow.ai.near",
+  amount: cu("0.1 NEAR"),
+});
+
+near.print(result);`,
+
+  signMessage: `const result = await near.recipes.signMessage({
+  message: "Sign in to FastNear Berry Club",
+  recipient: window.location.host,
+  nonce: crypto.getRandomValues(new Uint8Array(32)),
+});
+
+near.print(result);`,
+};
+
+export const supportSurface = {
+  apiKeyEnvVar: "FASTNEAR_API_KEY",
+  apiKeySummary: "Set FASTNEAR_API_KEY before running the authenticated snippets.",
+  hostedCatalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
+  hostedCatalogLabel: "js.fastnear.com/recipes.json",
+  hostedAgentEntry: FASTNEAR_AGENT_ENTRY,
+  trialCreditsUrl: FASTNEAR_DASHBOARD_URL,
+  trialCreditsLabel: "dashboard.fastnear.com",
+  trialCreditsSummary: "Free trial credits are available at dashboard.fastnear.com.",
+  discoveryOrder: [
+    {
+      step: 1,
+      label: "Read llms.txt",
+      detail: "Start with the concise repo and runtime map.",
+    },
+    {
+      step: 2,
+      label: "Fetch recipes.json",
+      detail: "Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.",
+    },
+    {
+      step: 3,
+      label: "Run agents.js",
+      detail: "Use the hosted terminal wrapper when you want the FastNear JS surface.",
+    },
+    {
+      step: 4,
+      label: "Fall back to curl + jq",
+      detail: "Use raw transport when survey scripting or HTTP-level inspection is more useful.",
+    },
+  ],
+  captureExample: {
+    title: "Capture and chain one result",
+    summary: "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step.",
+    language: "bash",
+    code: `${shellApiKeyComment}
+ACCOUNT_SUMMARY="$(node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})" <<'EOF'
+${code.captureViewAccount}
+EOF
+)"
+BLOCK_HASH="$(printf '%s\\n' "$ACCOUNT_SUMMARY" | jq -r '.block_hash')"
+STORAGE_USAGE="$(printf '%s\\n' "$ACCOUNT_SUMMARY" | jq -r '.storage_usage')"
+
+printf 'block_hash=%s\\nstorage_usage=%s\\n' "$BLOCK_HASH" "$STORAGE_USAGE"`,
+  },
+};
+
+const paginationNone = {
+  kind: "none",
+  requestFields: [],
+  responseFields: [],
+  filtersMustStayStable: false,
+};
+
+const paginationResumeToken = {
+  kind: "resume_token",
+  requestFields: ["resume_token"],
+  responseFields: ["resume_token"],
+  filtersMustStayStable: true,
+};
+
+const paginationPageToken = {
+  kind: "page_token",
+  requestFields: ["page_token"],
+  responseFields: ["page_token"],
+  filtersMustStayStable: true,
+};
+
+const paginationRange = {
+  kind: "range",
+  requestFields: ["blockHeight", "from_block_height", "to_block_height"],
+  responseFields: [],
+  filtersMustStayStable: false,
+};
+
+function clonePagination(pagination) {
+  return {
+    kind: pagination.kind,
+    requestFields: [...pagination.requestFields],
+    responseFields: [...pagination.responseFields],
+    filtersMustStayStable: pagination.filtersMustStayStable,
+  };
+}
+
+function enrichRecipe(recipe, discovery) {
+  return {
+    ...recipe,
+    ...discovery,
+    outputKeys: [...discovery.outputKeys],
+    responseNotes: [...discovery.responseNotes],
+    chooseWhen: [...discovery.chooseWhen],
+    followUps: [...discovery.followUps],
+    relatedRecipes: [...discovery.relatedRecipes],
+    pagination: clonePagination(discovery.pagination),
+  };
+}
+
+export const familyCatalog = [
+  {
+    id: "rpc",
+    summary: "Canonical NEAR JSON-RPC defaults for direct contract views, account state, and transaction status checks.",
+    authStyle: "query",
+    defaultBaseUrls: {
+      mainnet: "https://rpc.mainnet.fastnear.com/",
+      testnet: "https://rpc.testnet.fastnear.com/",
+    },
+    bestFor: [
+      "Direct contract view calls with exact method names and args.",
+      "Canonical account state and access key reads.",
+      "Low-level RPC questions before you need indexed or aggregated surfaces.",
+    ],
+    pagination: clonePagination(paginationNone),
+    entrypoints: [
+      "near.view",
+      "near.queryAccount",
+      "near.queryAccessKey",
+      "near.queryBlock",
+      "near.queryTx",
+      "near.sendTx",
+    ],
+  },
+  {
+    id: "api",
+    summary: "FastNear REST aggregations for account holdings, staking, and public-key oriented lookups.",
+    authStyle: "bearer",
+    defaultBaseUrls: {
+      mainnet: "https://api.fastnear.com",
+      testnet: "https://test.api.fastnear.com",
+    },
+    bestFor: [
+      "Combined account snapshots with fungible tokens, NFTs, and staking.",
+      "Public-key-to-account discovery.",
+      "Questions where one aggregated response is better than stitching multiple RPC calls.",
+    ],
+    pagination: clonePagination(paginationPageToken),
+    entrypoints: [
+      "near.api.v1.accountFull",
+      "near.api.v1.accountFt",
+      "near.api.v1.accountNft",
+      "near.api.v1.accountStaking",
+      "near.api.v1.publicKey",
+      "near.api.v1.publicKeyAll",
+      "near.api.v1.ftTop",
+    ],
+  },
+  {
+    id: "tx",
+    summary: "Indexed transaction and receipt lookups for readable execution history by hash, account, or block.",
+    authStyle: "bearer",
+    defaultBaseUrls: {
+      mainnet: "https://tx.main.fastnear.com",
+      testnet: "https://tx.test.fastnear.com",
+    },
+    bestFor: [
+      "Starting from one transaction hash or receipt id.",
+      "Readable execution stories with receipts already joined in.",
+      "Recent account or block-centered transaction history queries.",
+    ],
+    pagination: clonePagination(paginationResumeToken),
+    entrypoints: [
+      "near.tx.transactions",
+      "near.tx.receipt",
+      "near.tx.account",
+      "near.tx.block",
+      "near.tx.blocks",
+    ],
+  },
+  {
+    id: "transfers",
+    summary: "Asset-movement-focused history for accounts when the question is specifically about transfers, not full execution.",
+    authStyle: "bearer",
+    defaultBaseUrls: {
+      mainnet: "https://transfers.main.fastnear.com",
+      testnet: null,
+    },
+    bestFor: [
+      "Recent transfer feeds for one account.",
+      "Asset movement summaries across FT, NFT, and native transfers.",
+      "Survey scripting where transfer rows matter more than transaction internals.",
+    ],
+    pagination: clonePagination(paginationResumeToken),
+    entrypoints: [
+      "near.transfers.query",
+    ],
+  },
+  {
+    id: "neardata",
+    summary: "Block and shard documents for recent chain-state inspection without reconstructing shard layouts yourself.",
+    authStyle: "query",
+    defaultBaseUrls: {
+      mainnet: "https://mainnet.neardata.xyz",
+      testnet: "https://testnet.neardata.xyz",
+    },
+    bestFor: [
+      "Recent block inspection and shard-aware exploration.",
+      "Questions about network recency or recent transaction volume.",
+      "Walking block-height ranges and chunk layouts.",
+    ],
+    pagination: clonePagination(paginationRange),
+    entrypoints: [
+      "near.neardata.lastBlockFinal",
+      "near.neardata.lastBlockOptimistic",
+      "near.neardata.block",
+      "near.neardata.blockHeaders",
+      "near.neardata.blockShard",
+      "near.neardata.blockChunk",
+      "near.neardata.blockOptimistic",
+      "near.neardata.firstBlock",
+      "near.neardata.health",
+    ],
+  },
+  {
+    id: "fastdata.kv",
+    summary: "Indexed key-value history for exact keys, predecessor scans, and account-scoped storage exploration.",
+    authStyle: "bearer",
+    defaultBaseUrls: {
+      mainnet: "https://kv.main.fastnear.com",
+      testnet: "https://kv.test.fastnear.com",
+    },
+    bestFor: [
+      "Exact-key lookups when you already know the contract, predecessor, and key.",
+      "Storage history scans keyed by predecessor or current account.",
+      "Questions about SocialDB-style writes and indexed storage history.",
+    ],
+    pagination: clonePagination(paginationResumeToken),
+    entrypoints: [
+      "near.fastdata.kv.getLatestKey",
+      "near.fastdata.kv.getHistoryKey",
+      "near.fastdata.kv.latestByAccount",
+      "near.fastdata.kv.historyByAccount",
+      "near.fastdata.kv.latestByPredecessor",
+      "near.fastdata.kv.historyByPredecessor",
+      "near.fastdata.kv.allByPredecessor",
+      "near.fastdata.kv.multi",
+    ],
+  },
+];
+
+function readOnlySnippets({ terminalBody, curlCode }) {
+  return [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: true,
+      code: wrapTerminalSnippet(terminalBody),
+    },
+    {
+      id: "curl-jq",
+      label: "curl + jq",
+      environment: "curl",
+      language: "bash",
+      runnable: true,
+      code: curlCode,
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: terminalBody,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(terminalBody),
+    },
+  ];
+}
+
+const walletSnippets = {
+  connect: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Opening the wallet picker needs a browser environment."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.connect,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.connect, { includeWallet: true }),
+    },
+  ],
+  functionCall: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Signing and broadcasting a contract call needs a wallet session."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.functionCall,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.functionCall, { includeWallet: true }),
+    },
+  ],
+  transfer: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Sending NEAR needs a wallet-backed signature flow."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.transfer,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.transfer, { includeWallet: true }),
+    },
+  ],
+  signMessage: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Message signing depends on a connected wallet provider."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.signMessage,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.signMessage, { includeWallet: true }),
+    },
+  ],
+};
+
+export const recipeCatalog = [
+  enrichRecipe({
+    id: "view-contract",
+    title: "What does this contract method return?",
+    summary: "Start with one view call when you already know the contract, method, and arguments.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.recipes.viewContract",
+    example: {
+      contractId: "berryclub.ek.near",
+      methodName: "get_account",
+      args: { account_id: "root.near" },
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.viewContract,
+      curlCode: curlJqViewContractSnippet,
+    }),
+  }, {
+    service: "rpc",
+    returns: "BerryClubAccountView",
+    outputKeys: ["account_id", "avocado_balance", "num_pixels"],
+    responseNotes: [
+      "This recipe returns the parsed JSON value from the contract method, not the raw RPC wrapper.",
+      "Use the curl + jq variant when you want to inspect the encoded args or the raw RPC envelope.",
+    ],
+    chooseWhen: [
+      "Choose this when you already know the exact contract method and want the smallest answer quickly.",
+      "Stay on RPC when the question is still about one direct view call rather than indexed history.",
+    ],
+    followUps: [
+      "If the method output looks wrong, compare it with the canonical account state from near.recipes.viewAccount.",
+      "If you need a broader ownership snapshot, move to near.api.v1.accountFull.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["view-account", "account-full"],
+  }),
+  enrichRecipe({
+    id: "view-account",
+    title: "What does this account look like on chain?",
+    summary: "Use canonical RPC account state when the question is still about one account record.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.recipes.viewAccount",
+    example: {
+      accountId: "root.near",
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.viewAccount,
+      curlCode: curlJqViewAccountSnippet,
+    }),
+  }, {
+    service: "rpc",
+    returns: "RpcViewAccountResponse",
+    outputKeys: ["amount", "locked", "storage_usage", "block_height", "block_hash"],
+    responseNotes: [
+      "This is the canonical on-chain account record from JSON-RPC.",
+      "The snippet keeps the object work in JS and emits only the fields most useful for survey scripting.",
+    ],
+    chooseWhen: [
+      "Choose this when the question is about one account's chain state rather than token holdings or transfers.",
+      "Use this before reaching for aggregations if you need the raw account state answer first.",
+    ],
+    followUps: [
+      "If the account is active but you need holdings, switch to near.api.v1.accountFull.",
+      "If you need recent transfer activity, continue with near.transfers.query.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["account-full", "transfers-query"],
+  }),
+  enrichRecipe({
+    id: "inspect-transaction",
+    title: "What happened in this transaction?",
+    summary: "Start with the indexed transaction family when all you have is the hash and you want the readable story.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.tx.transactions",
+    example: {
+      txHashes: ["7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq"],
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.inspectTransaction,
+      curlCode: curlJqInspectTransactionSnippet,
+    }),
+  }, {
+    service: "tx",
+    returns: "FastNearTxTransactionsResponse",
+    outputKeys: ["transactions[].transaction.hash", "transactions[].transaction.signer_id", "transactions[].transaction.receiver_id", "transactions[].execution_outcome.block_height", "transactions[].receipts"],
+    responseNotes: [
+      "The low-level tx family returns raw indexed JSON with receipts already attached.",
+      "This recipe narrows that response to the one transaction row and prints a compact human-readable summary.",
+    ],
+    chooseWhen: [
+      "Choose this when the only durable identifier you have is the transaction hash.",
+      "Prefer this over transfers when you need the execution story, receipts, or included block details.",
+    ],
+    followUps: [
+      "If you care only about asset movement, pivot to near.transfers.query.",
+      "If you need a block-centered history scan, continue with near.tx.account or near.tx.blocks.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["transfers-query", "last-block-final"],
+  }),
+  enrichRecipe({
+    id: "account-full",
+    title: "What does this account own?",
+    summary: "Use the FastNear account aggregator when the question is about holdings, NFTs, or staking in one response.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.api.v1.accountFull",
+    example: {
+      accountId: "root.near",
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.accountFull,
+      curlCode: curlJqAccountFullSnippet,
+    }),
+  }, {
+    service: "api",
+    returns: "FastNearApiV1AccountFullResponse",
+    outputKeys: ["account_id", "state.balance", "tokens", "nfts", "pools"],
+    responseNotes: [
+      "This is the aggregated account surface for holdings and staking, not a raw RPC account object.",
+      "It is the best one-response answer when the task is portfolio-style discovery.",
+    ],
+    chooseWhen: [
+      "Choose this when you want holdings, NFTs, and staking without stitching multiple calls together.",
+      "Use it after a canonical RPC account check when the next question becomes 'what does this account own?'.",
+    ],
+    followUps: [
+      "If you need movement history instead of holdings, continue with near.transfers.query.",
+      "If you need one exact contract state read, go back to near.recipes.viewContract.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["view-account", "transfers-query"],
+  }),
+  enrichRecipe({
+    id: "transfers-query",
+    title: "What is this account's recent transfer activity?",
+    summary: "Use the transfers family when the question is specifically about asset movement, not the broader execution story.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.transfers.query",
+    example: {
+      accountId: "root.near",
+      desc: true,
+      limit: 5,
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.transfersQuery,
+      curlCode: curlJqTransfersSnippet,
+    }),
+  }, {
+    service: "transfers",
+    returns: "FastNearTransfersQueryResponse",
+    outputKeys: ["transfers[].block_height", "transfers[].asset_id", "transfers[].human_amount", "transfers[].other_account_id", "transfers[].transaction_id", "resume_token"],
+    responseNotes: [
+      "Transfers answers the asset-movement question directly and returns raw rows plus resume-token pagination when available.",
+      "It is intentionally narrower than the tx family and better suited to feed-style scripting.",
+    ],
+    chooseWhen: [
+      "Choose this when the question is about who sent what asset and when.",
+      "Prefer this over near.tx when you do not need receipt details or execution outcomes.",
+    ],
+    followUps: [
+      "If one transfer row needs a deeper execution story, pivot to near.tx.transactions with the related hash.",
+      "If you need holdings instead of movement, switch to near.api.v1.accountFull.",
+    ],
+    pagination: paginationResumeToken,
+    relatedRecipes: ["inspect-transaction", "account-full"],
+  }),
+  enrichRecipe({
+    id: "last-block-final",
+    title: "What block is NEAR on right now?",
+    summary: "Use the NEAR Data family when you want a recent block document without stitching shards together yourself.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.neardata.lastBlockFinal",
+    example: {},
+    snippets: readOnlySnippets({
+      terminalBody: code.lastBlockFinal,
+      curlCode: curlJqLastBlockFinalSnippet,
+    }),
+  }, {
+    service: "neardata",
+    returns: "FastNearNeardataLastBlockFinalResponse",
+    outputKeys: ["block.header.height", "block.header.timestamp_nanosec", "shards[].shard_id", "shards[].chunk.transactions"],
+    responseNotes: [
+      "NEAR Data returns block documents with shard content already grouped for block-level inspection.",
+      "This recipe highlights the smallest useful block recency summary while keeping the full response available in JS.",
+    ],
+    chooseWhen: [
+      "Choose this when the question starts with recent block recency or transaction volume.",
+      "Use the family-level block endpoints when you want to walk heights or inspect one shard or chunk next.",
+    ],
+    followUps: [
+      "If one transaction in the block matters, continue with near.tx.transactions.",
+      "If you need a specific historical block, move to near.neardata.block or near.neardata.blockChunk.",
+    ],
+    pagination: paginationRange,
+    relatedRecipes: ["inspect-transaction"],
+  }),
+  enrichRecipe({
+    id: "kv-latest-key",
+    title: "What is the latest indexed value for this exact key?",
+    summary: "Start narrow with KV FastData when you already know the contract, predecessor, and exact storage key.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.fastdata.kv.getLatestKey",
+    example: {
+      currentAccountId: "social.near",
+      predecessorId: "james.near",
+      key: "graph/follow/sleet.near",
+    },
+    snippets: readOnlySnippets({
+      terminalBody: code.kvLatestKey,
+      curlCode: curlJqKvLatestKeySnippet,
+    }),
+  }, {
+    service: "fastdata.kv",
+    returns: "FastNearKvGetLatestKeyResponse",
+    outputKeys: ["entries[].current_account_id", "entries[].predecessor_id", "entries[].block_height", "entries[].key", "entries[].value"],
+    responseNotes: [
+      "KV FastData keeps the exact indexed storage history question narrow and fast when you already know the key.",
+      "The raw response keeps the full entry list; the example snippet extracts the most informative first entry.",
+    ],
+    chooseWhen: [
+      "Choose this when you already know the exact key and want the latest indexed value immediately.",
+      "Use the broader history or predecessor scans only after this exact-key lookup stops being enough.",
+    ],
+    followUps: [
+      "If you need history for the same key, continue with near.fastdata.kv.getHistoryKey.",
+      "If you only know the predecessor and need discovery, continue with near.fastdata.kv.allByPredecessor.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["view-contract"],
+  }),
+  enrichRecipe({
+    id: "connect-wallet",
+    title: "How do I connect a wallet?",
+    summary: "Open the wallet picker and attach a signer to the FastNear runtime.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "near.recipes.connect",
+    example: {
+      contractId: "berryclub.ek.near",
+    },
+    snippets: walletSnippets.connect,
+  }, {
+    service: "wallet",
+    returns: "{ accountId: string } | undefined",
+    outputKeys: ["accountId"],
+    responseNotes: [
+      "Wallet-backed recipes are browser-first because they need an interactive signer.",
+      "This recipe is the smallest explicit connect step before sending transactions or signing messages.",
+    ],
+    chooseWhen: [
+      "Choose this when the task crosses from read-only inspection into user-approved signing.",
+      "Use it once per browser session before function calls, transfers, or message signatures.",
+    ],
+    followUps: [
+      "After connecting, send one contract action with near.recipes.functionCall.",
+      "If the next step is a simple NEAR payment, continue with near.recipes.transfer.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["function-call", "transfer", "sign-message"],
+  }),
+  enrichRecipe({
+    id: "function-call",
+    title: "How do I send one function call?",
+    summary: "Sign and broadcast a single contract call with readable gas units.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "near.recipes.functionCall",
+    example: {
+      receiverId: "berryclub.ek.near",
+      methodName: "draw",
+      args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+      gas: "100 Tgas",
+      deposit: "0",
+    },
+    snippets: walletSnippets.functionCall,
+  }, {
+    service: "wallet",
+    returns: "WalletTransactionResult",
+    outputKeys: ["transaction", "outcomes", "status"],
+    responseNotes: [
+      "This is the thinnest wallet-backed transaction recipe and keeps the action declaration explicit.",
+      "The example uses readable unit conversion before handing the transaction to the runtime.",
+    ],
+    chooseWhen: [
+      "Choose this when you need one contract call and already know the receiver, method, and args.",
+      "Prefer this recipe over the lower-level sendTx path when you want the smallest wallet-backed API surface.",
+    ],
+    followUps: [
+      "If the user only needs a native NEAR transfer, continue with near.recipes.transfer.",
+      "If you want to preview the action before signing, use near.explain.tx on the same action list.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet", "transfer", "sign-message"],
+  }),
+  enrichRecipe({
+    id: "transfer",
+    title: "How do I transfer NEAR?",
+    summary: "Send a simple NEAR transfer with a wallet-backed signature.",
+    network: "mainnet",
+    auth: "wallet+deposit",
+    api: "near.recipes.transfer",
+    example: {
+      receiverId: "escrow.ai.near",
+      amount: "0.1 NEAR",
+    },
+    snippets: walletSnippets.transfer,
+  }, {
+    service: "wallet",
+    returns: "WalletTransactionResult",
+    outputKeys: ["transaction", "outcomes", "status"],
+    responseNotes: [
+      "This recipe keeps a simple NEAR transfer readable without constructing the action list manually.",
+      "The transaction still goes through the same wallet-backed approval flow as other signing tasks.",
+    ],
+    chooseWhen: [
+      "Choose this when the task is a plain NEAR payment and not a contract method call.",
+      "Use the function-call recipe instead when the receiver expects method args or custom gas settings.",
+    ],
+    followUps: [
+      "If you want to explain the transfer before sending it, use near.explain.tx with a Transfer action.",
+      "If the next task is another signed action, keep the same wallet session and continue with near.recipes.functionCall.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet", "function-call"],
+  }),
+  enrichRecipe({
+    id: "sign-message",
+    title: "How do I sign a message?",
+    summary: "Request a wallet-backed NEP-413 signature for an app message.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "near.recipes.signMessage",
+    example: {
+      message: "Sign in to FastNear Berry Club",
+    },
+    snippets: walletSnippets.signMessage,
+  }, {
+    service: "wallet",
+    returns: "WalletMessageSignatureResult",
+    outputKeys: ["signature", "accountId", "publicKey"],
+    responseNotes: [
+      "This is the wallet-backed message-signing path for NEP-413 style app messages.",
+      "It stays separate from transaction recipes because no chain write is involved.",
+    ],
+    chooseWhen: [
+      "Choose this when you need user-approved application auth without broadcasting a transaction.",
+      "Prefer this over functionCall or transfer when the task is strictly off-chain signing.",
+    ],
+    followUps: [
+      "If you need to connect the wallet first, start with near.recipes.connect.",
+      "If the flow turns into an on-chain action, move to near.recipes.functionCall or near.recipes.transfer.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet"],
+  }),
+];
+
+export const explainSurface = [
+  {
+    api: "near.explain.action",
+    summary: "Normalize one action into a stable JSON summary.",
+    example: stringify({
+      kind: "action",
+      type: "FunctionCall",
+      methodName: "draw",
+      gas: "100000000000000",
+      deposit: "0",
+      args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+      argsBase64: null,
+      params: {
+        methodName: "draw",
+        gas: "100000000000000",
+        deposit: "0",
+        args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+        argsBase64: null,
+      },
+    }),
+  },
+  {
+    api: "near.explain.tx",
+    summary: "Summarize a signer, receiver, and action list into stable JSON.",
+    example: stringify({
+      kind: "transaction",
+      signerId: "root.near",
+      receiverId: "berryclub.ek.near",
+      actionCount: 1,
+      actions: [
+        {
+          kind: "action",
+          type: "FunctionCall",
+          methodName: "draw",
+          gas: "100000000000000",
+          deposit: "0",
+          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+          argsBase64: null,
+          params: {
+            methodName: "draw",
+            gas: "100000000000000",
+            deposit: "0",
+            args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+            argsBase64: null,
+          },
+        },
+      ],
+    }),
+  },
+  {
+    api: "near.explain.error",
+    summary: "Turn thrown RPC, wallet, or transport failures into a predictable JSON object.",
+    example: stringify({
+      kind: "rpc_error",
+      code: -32000,
+      name: "FastNearError",
+      message: "Server error",
+      data: { name: "HANDLER_ERROR" },
+      retryable: true,
+    }),
+  },
+];
+
+export const generatedArtifact = {
+  version: 3,
+  homepage: FASTNEAR_CDN_BASE,
+  source: "recipes/source.mjs",
+  catalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
+  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils"],
+  support: supportSurface,
+  families: familyCatalog,
+  runtimes: {
+    api: {
+      config: [
+        "near.config({ networkId })",
+        "near.config({ apiKey })",
+        "near.config({ nodeUrl })",
+      ],
+      types: [
+        "FastNearRecipeDiscoveryEntry",
+        "FastNearApiV1AccountFullResponse",
+        "FastNearApiV1AccountFtResponse",
+        "FastNearApiV1AccountNftResponse",
+        "FastNearApiV1AccountStakingResponse",
+        "FastNearApiV1PublicKeyResponse",
+        "FastNearApiV1PublicKeyAllResponse",
+        "FastNearApiV1FtTopResponse",
+        "FastNearTxTransactionsResponse",
+        "FastNearTxReceiptResponse",
+        "FastNearTxAccountResponse",
+        "FastNearTxBlockResponse",
+        "FastNearTxBlocksResponse",
+        "FastNearTransfersQueryResponse",
+        "FastNearNeardataLastBlockFinalResponse",
+        "FastNearNeardataLastBlockOptimisticResponse",
+        "FastNearNeardataBlockResponse",
+        "FastNearNeardataBlockHeadersResponse",
+        "FastNearNeardataBlockShardResponse",
+        "FastNearNeardataBlockChunkResponse",
+        "FastNearNeardataBlockOptimisticResponse",
+        "FastNearNeardataFirstBlockResponse",
+        "FastNearNeardataHealthResponse",
+        "FastNearKvGetLatestKeyResponse",
+        "FastNearKvGetHistoryKeyResponse",
+        "FastNearKvLatestByAccountResponse",
+        "FastNearKvHistoryByAccountResponse",
+        "FastNearKvLatestByPredecessorResponse",
+        "FastNearKvHistoryByPredecessorResponse",
+        "FastNearKvAllByPredecessorResponse",
+        "FastNearKvMultiResponse",
+      ],
+      recipes: recipeCatalog
+        .filter(({ api }) => api.startsWith("near.recipes."))
+        .map(({ api }) => api),
+      explain: explainSurface.map(({ api }) => api),
+      lowLevel: [
+        "near.view",
+        "near.queryAccount",
+        "near.queryTx",
+        "near.sendTx",
+        "near.requestSignIn",
+        "near.signMessage",
+        "near.api.v1.accountFull",
+        "near.api.v1.accountFt",
+        "near.api.v1.accountNft",
+        "near.api.v1.accountStaking",
+        "near.api.v1.publicKey",
+        "near.api.v1.publicKeyAll",
+        "near.api.v1.ftTop",
+        "near.tx.transactions",
+        "near.tx.receipt",
+        "near.tx.account",
+        "near.tx.block",
+        "near.tx.blocks",
+        "near.transfers.query",
+        "near.neardata.lastBlockFinal",
+        "near.neardata.lastBlockOptimistic",
+        "near.neardata.block",
+        "near.neardata.blockHeaders",
+        "near.neardata.blockShard",
+        "near.neardata.blockChunk",
+        "near.neardata.blockOptimistic",
+        "near.neardata.firstBlock",
+        "near.neardata.health",
+        "near.fastdata.kv.getLatestKey",
+        "near.fastdata.kv.getHistoryKey",
+        "near.fastdata.kv.latestByAccount",
+        "near.fastdata.kv.historyByAccount",
+        "near.fastdata.kv.latestByPredecessor",
+        "near.fastdata.kv.historyByPredecessor",
+        "near.fastdata.kv.allByPredecessor",
+        "near.fastdata.kv.multi",
+      ],
+    },
+  },
+  recipes: recipeCatalog,
+  explain: explainSurface,
+};

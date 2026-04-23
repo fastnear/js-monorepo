@@ -120,11 +120,11 @@ export function lsGet(key: string): any {
   return storage.get(key);
 }
 
-export function deepCopy(obj) {
+export function deepCopy(obj: any) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-export function tryParseJson(...args) {
+export function tryParseJson(...args: any[]) {
   try {
     return JSON.parse(args[0]);
   } catch {
@@ -161,7 +161,7 @@ export interface NEP413Message {
   state?: string | null;
 }
 
-export function canSignWithLAK(actions) {
+export function canSignWithLAK(actions: Array<{type: string; deposit?: string}>) {
   return (
     actions.length === 1 &&
     actions[0].type === "FunctionCall" &&

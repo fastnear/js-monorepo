@@ -390,7 +390,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fastnear/api@workspace:*, @fastnear/api@workspace:packages/api":
+"@fastnear/api@workspace:packages/api":
   version: 0.0.0-use.local
   resolution: "@fastnear/api@workspace:packages/api"
   dependencies:
@@ -427,23 +427,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/near-connect@npm:0.11.2, @fastnear/near-connect@npm:^0.11.2":
+"@fastnear/near-connect@npm:*, @fastnear/near-connect@npm:^0.11.2":
   version: 0.11.2
   resolution: "@fastnear/near-connect@npm:0.11.2"
   checksum: 10c0/3df38dc0a8f841f3338f4d906ad075789847462f0ac3b146770e79aaf06d31033e6a3d33e223b11cbfb109f592e7d5910b950f8b903d9aee289fb33633a41793
   languageName: node
   linkType: hard
-
-"@fastnear/repl@workspace:packages/repl":
-  version: 0.0.0-use.local
-  resolution: "@fastnear/repl@workspace:packages/repl"
-  dependencies:
-    "@fastnear/api": "workspace:*"
-    rimraf: "npm:*"
-  bin:
-    repl: bin/repl.cjs
-  languageName: unknown
-  linkType: soft
 
 "@fastnear/utils@workspace:*, @fastnear/utils@workspace:packages/utils":
   version: 0.0.0-use.local
@@ -479,7 +468,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@fastnear/wallet@workspace:packages/wallet"
   dependencies:
-    "@fastnear/near-connect": "npm:0.11.2"
+    "@fastnear/near-connect": "npm:*"
     rimraf: "npm:*"
     tsup: "npm:*"
     typescript: "npm:*"

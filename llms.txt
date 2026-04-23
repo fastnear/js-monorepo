@@ -1,0 +1,84 @@
+# FastNear JS monorepo
+
+Homepage: https://js.fastnear.com
+
+Primary packages:
+- @fastnear/api
+- @fastnear/wallet
+- @fastnear/utils
+
+Low-level-first runtime surfaces:
+- near.config({ apiKey })
+- near.view
+- near.queryAccount
+- near.tx.transactions
+- near.api.v1.accountFull
+- near.transfers.query
+- near.neardata.lastBlockFinal
+- near.fastdata.kv.getLatestKey
+- near.recipes.viewContract
+- near.recipes.viewAccount
+- near.recipes.inspectTransaction
+- near.recipes.functionCall
+- near.recipes.transfer
+- near.recipes.connect
+- near.recipes.signMessage
+- near.recipes.list
+- near.recipes.toJSON
+- near.explain.action
+- near.explain.tx
+- near.explain.error
+
+Named endpoint response types:
+- FastNearRecipeDiscoveryEntry
+- FastNearApiV1AccountFullResponse
+- FastNearTxTransactionsResponse
+- FastNearTransfersQueryResponse
+- FastNearNeardataLastBlockFinalResponse
+- FastNearKvGetLatestKeyResponse
+
+Canonical machine-readable catalog:
+- recipes/index.json
+- https://js.fastnear.com/recipes.json
+
+Canonical hosted agent wrapper:
+- https://js.fastnear.com/agents.js
+
+Wrapper source in repo:
+- recipes/near-node.mjs
+
+Mental model:
+- Start with the low-level APIs when you know the exact FastNear family you want.
+- Use near.recipes.* as compact task helpers layered on top of those lower-level APIs.
+- Use near.recipes.list() or near.recipes.toJSON() when you want to discover the task helpers at runtime.
+
+Trial credits / API keys:
+- https://dashboard.fastnear.com
+
+Discovery order:
+- 1. Read llms.txt: Start with the concise repo and runtime map.
+- 2. Fetch recipes.json: Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.
+- 3. Run agents.js: Use the hosted terminal wrapper when you want the FastNear JS surface.
+- 4. Fall back to curl + jq: Use raw transport when survey scripting or HTTP-level inspection is more useful.
+
+Families:
+- rpc: Canonical NEAR JSON-RPC defaults for direct contract views, account state, and transaction status checks. Best for Direct contract view calls with exact method names and args. / Canonical account state and access key reads. / Low-level RPC questions before you need indexed or aggregated surfaces..
+- api: FastNear REST aggregations for account holdings, staking, and public-key oriented lookups. Best for Combined account snapshots with fungible tokens, NFTs, and staking. / Public-key-to-account discovery. / Questions where one aggregated response is better than stitching multiple RPC calls..
+- tx: Indexed transaction and receipt lookups for readable execution history by hash, account, or block. Best for Starting from one transaction hash or receipt id. / Readable execution stories with receipts already joined in. / Recent account or block-centered transaction history queries..
+- transfers: Asset-movement-focused history for accounts when the question is specifically about transfers, not full execution. Best for Recent transfer feeds for one account. / Asset movement summaries across FT, NFT, and native transfers. / Survey scripting where transfer rows matter more than transaction internals..
+- neardata: Block and shard documents for recent chain-state inspection without reconstructing shard layouts yourself. Best for Recent block inspection and shard-aware exploration. / Questions about network recency or recent transaction volume. / Walking block-height ranges and chunk layouts..
+- fastdata.kv: Indexed key-value history for exact keys, predecessor scans, and account-scoped storage exploration. Best for Exact-key lookups when you already know the contract, predecessor, and key. / Storage history scans keyed by predecessor or current account. / Questions about SocialDB-style writes and indexed storage history..
+
+Recipe index:
+- view-contract: What does this contract method return? (rpc, BerryClubAccountView, none, mainnet)
+- view-account: What does this account look like on chain? (rpc, RpcViewAccountResponse, none, mainnet)
+- inspect-transaction: What happened in this transaction? (tx, FastNearTxTransactionsResponse, none, mainnet)
+- account-full: What does this account own? (api, FastNearApiV1AccountFullResponse, none, mainnet)
+- transfers-query: What is this account's recent transfer activity? (transfers, FastNearTransfersQueryResponse, none, mainnet)
+- last-block-final: What block is NEAR on right now? (neardata, FastNearNeardataLastBlockFinalResponse, none, mainnet)
+- kv-latest-key: What is the latest indexed value for this exact key? (fastdata.kv, FastNearKvGetLatestKeyResponse, none, mainnet)
+- connect-wallet: How do I connect a wallet? (wallet, { accountId: string } | undefined, wallet, mainnet)
+- function-call: How do I send one function call? (wallet, WalletTransactionResult, wallet, mainnet)
+- transfer: How do I transfer NEAR? (wallet, WalletTransactionResult, wallet+deposit, mainnet)
+- sign-message: How do I sign a message? (wallet, WalletMessageSignatureResult, wallet, mainnet)
+

@@ -14,18 +14,11 @@ export function curveFromKey(key: string): KeyCurve {
   throw new Error(`Unsupported curve: ${curve}`);
 }
 
-export const keyFromString = (key) =>
-  fromBase58(
-    key.includes(":")
-      ? (() => {
-          const [curve, keyPart] = key.split(":");
-          if (curve !== "ed25519" && curve !== "secp256k1") {
-            throw new Error(`Unsupported curve: ${curve}`);
-          }
-          return keyPart;
-        })()
-      : key,
-  );
+export const keyFromString = (key: string) => {
+  const curve = curveFromKey(key);
+  const keyPart = key.includes(":") ? key.split(":")[1] : key;
+  return fromBase58(keyPart);
+};
 
 export const keyToString = (key: Uint8Array, curve: KeyCurve = "ed25519") =>
   `${curve}:${toBase58(key)}`;
@@ -50,7 +43,7 @@ export function privateKeyFromRandom(curve: KeyCurve = "ed25519") {
   return keyToString(privateKey, curve);
 }
 
-export function signHash(hashBytes: Uint8Array, privateKey: string, opts?: any): Uint8Array | string {
+export function signHash(hashBytes: Uint8Array, privateKey: string, opts?: { returnBase58?: boolean }): Uint8Array | string {
   const curve = curveFromKey(privateKey);
 
   let signature: Uint8Array;

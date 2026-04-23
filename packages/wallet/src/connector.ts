@@ -314,7 +314,7 @@ export async function sendTransactions(params: SignAndSendTransactionsParams | {
   if (!connectedWallet) {
     throw new Error("No wallet connected. Call connect() first.");
   }
-  const transactions = (params as any).transactions.map((tx: any) => ({
+  const transactions = ('transactions' in params ? params.transactions : []).map((tx: any) => ({
     receiverId: tx.receiverId,
     actions: tx.actions.some(isFastnearAction)
       ? toConnectorActions(tx.actions)
@@ -355,7 +355,7 @@ export function isConnected(): boolean {
  */
 export function walletName(): string | null {
   if (!connectedWallet) return null;
-  return (connectedWallet as any).metadata?.name ?? null;
+  return (connectedWallet as NearWalletBase & { metadata?: { name?: string } }).metadata?.name ?? null;
 }
 
 /**

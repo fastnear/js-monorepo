@@ -4,26 +4,146 @@ import {
   publicKeyFromPrivate,
 } from "@fastnear/utils";
 
-export const DEFAULT_NETWORK_ID = "mainnet";
-export const NETWORKS = {
-  testnet: {
-    networkId: "testnet",
-    nodeUrl: "https://rpc.testnet.fastnear.com/",
-  },
-  mainnet: {
-    networkId: "mainnet",
-    nodeUrl: "https://rpc.mainnet.fastnear.com/",
-  },
-};
+export type FastNearNetworkId = "mainnet" | "testnet";
+
+export interface FastNearServiceConfig {
+  baseUrl?: string | null;
+}
+
+export interface FastNearServicesConfig {
+  rpc?: FastNearServiceConfig;
+  api?: FastNearServiceConfig;
+  tx?: FastNearServiceConfig;
+  transfers?: FastNearServiceConfig;
+  neardata?: FastNearServiceConfig;
+  fastdata?: {
+    kvBaseUrl?: string | null;
+  };
+}
 
 export interface NetworkConfig {
-  networkId: string;
+  networkId: FastNearNetworkId;
+  apiKey?: string | null;
   nodeUrl?: string;
   walletUrl?: string;
   helperUrl?: string;
   explorerUrl?: string;
+  services?: FastNearServicesConfig;
 
   [key: string]: any;
+}
+
+function mergeServiceConfig(
+  base?: FastNearServiceConfig,
+  override?: FastNearServiceConfig
+): FastNearServiceConfig {
+  return {
+    ...(base || {}),
+    ...(override || {}),
+  };
+}
+
+function mergeServices(
+  base?: FastNearServicesConfig,
+  override?: FastNearServicesConfig
+): FastNearServicesConfig {
+  return {
+    rpc: mergeServiceConfig(base?.rpc, override?.rpc),
+    api: mergeServiceConfig(base?.api, override?.api),
+    tx: mergeServiceConfig(base?.tx, override?.tx),
+    transfers: mergeServiceConfig(base?.transfers, override?.transfers),
+    neardata: mergeServiceConfig(base?.neardata, override?.neardata),
+    fastdata: {
+      ...(base?.fastdata || {}),
+      ...(override?.fastdata || {}),
+    },
+  };
+}
+
+function normalizeNetworkId(networkId?: string | null): FastNearNetworkId {
+  return networkId === "testnet" ? "testnet" : "mainnet";
+}
+
+function normalizeApiKey(apiKey?: string | null): string | null {
+  if (typeof apiKey !== "string") {
+    return null;
+  }
+  const trimmed = apiKey.trim();
+  return trimmed ? trimmed : null;
+}
+
+export const DEFAULT_NETWORK_ID: FastNearNetworkId = "mainnet";
+export const NETWORKS: Record<FastNearNetworkId, NetworkConfig> = {
+  testnet: {
+    networkId: "testnet",
+    nodeUrl: "https://rpc.testnet.fastnear.com/",
+    services: {
+      rpc: { baseUrl: "https://rpc.testnet.fastnear.com/" },
+      api: { baseUrl: "https://test.api.fastnear.com" },
+      tx: { baseUrl: "https://tx.test.fastnear.com" },
+      transfers: { baseUrl: null },
+      neardata: { baseUrl: "https://testnet.neardata.xyz" },
+      fastdata: { kvBaseUrl: "https://kv.test.fastnear.com" },
+    },
+  },
+  mainnet: {
+    networkId: "mainnet",
+    nodeUrl: "https://rpc.mainnet.fastnear.com/",
+    services: {
+      rpc: { baseUrl: "https://rpc.mainnet.fastnear.com/" },
+      api: { baseUrl: "https://api.fastnear.com" },
+      tx: { baseUrl: "https://tx.main.fastnear.com" },
+      transfers: { baseUrl: "https://transfers.main.fastnear.com" },
+      neardata: { baseUrl: "https://mainnet.neardata.xyz" },
+      fastdata: { kvBaseUrl: "https://kv.main.fastnear.com" },
+    },
+  },
+};
+
+export function resolveConfig(
+  input?: Partial<NetworkConfig> | null,
+  base?: NetworkConfig | null
+): NetworkConfig {
+  const requested = input || {};
+  const baseConfig = base || NETWORKS[DEFAULT_NETWORK_ID];
+  const networkId = normalizeNetworkId(requested.networkId ?? baseConfig.networkId);
+  const networkDefaults = NETWORKS[networkId];
+  const services = mergeServices(
+    mergeServices(networkDefaults.services, baseConfig.services),
+    requested.services
+  );
+
+  const requestedRpcBaseUrl = requested.services?.rpc?.baseUrl;
+  const requestedNodeUrl = requested.nodeUrl;
+  const rpcBaseUrl =
+    requestedRpcBaseUrl ??
+    requestedNodeUrl ??
+    services.rpc?.baseUrl ??
+    networkDefaults.nodeUrl ??
+    null;
+  const nodeUrl = requestedNodeUrl ?? rpcBaseUrl ?? networkDefaults.nodeUrl;
+
+  services.rpc = {
+    ...(services.rpc || {}),
+    baseUrl: rpcBaseUrl,
+  };
+
+  const next: NetworkConfig = {
+    ...networkDefaults,
+    ...baseConfig,
+    ...requested,
+    networkId,
+    nodeUrl,
+    services,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(requested, "apiKey")) {
+    next.apiKey = normalizeApiKey(requested.apiKey);
+  } else {
+    next.apiKey = normalizeApiKey(baseConfig.apiKey);
+  }
+
+  return next;
 }
 
 export interface AppState {
@@ -56,9 +176,7 @@ export interface UnbroadcastedEvents {
 }
 
 // Load config from localStorage or default to the network's config
-export let _config: NetworkConfig = lsGet("config") || {
-  ...NETWORKS[DEFAULT_NETWORK_ID]
-};
+export let _config: NetworkConfig = resolveConfig(lsGet("config"));
 
 // Load application state from localStorage
 export let _state: AppState = lsGet("state") || {};
@@ -204,8 +322,11 @@ export const getTxHistory = (): TxHistory => {
 }
 
 // Exposed "write" functions
-export const setConfig = (newConf: NetworkConfig): void => {
-  _config = { ...NETWORKS[newConf.networkId], ...newConf };
+export const setConfig = (newConf: Partial<NetworkConfig> | FastNearNetworkId): void => {
+  const partial = typeof newConf === "string" ? { networkId: newConf } : newConf;
+  const nextNetworkId = normalizeNetworkId(partial.networkId ?? _config.networkId);
+  const base = nextNetworkId !== _config.networkId ? NETWORKS[nextNetworkId] : _config;
+  _config = resolveConfig(partial, base);
   lsSet("config", _config);
 }
 

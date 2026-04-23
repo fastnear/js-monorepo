@@ -1,23 +1,9 @@
-# REPL
+# @fastnear/utils
 
-Run with:
+Crypto (ed25519, secp256k1, sha256), encoding (base58/64/hex), unit conversion, storage abstraction, and transaction serialization utilities for NEAR Protocol.
 
-    yarn repl
+See the [project-level README](https://github.com/fastnear/js-monorepo#global-near-js) for more details.
 
-and try the following:
+## Attributions
 
-    mockTx
-
-and see how it is displayed. and then the verbose call:
-
-    v(mockTx)
-
-## alpha version
-
-The focus thus far has been of a highly technical nature, and after releasing this alpha version the devs will let their minds gestate. then this file will fill out with more meaningful info and snippets. 🙏🏼
-
-Make sure to visit the [project-level README](https://github.com/fastnear/js-monorepo#global-near-js)
-
-## attributions
-
-This package in particular is thankful for the open source contributors whose functions we export. There's a note about this in the main [README here](https://github.com/fastnear/js-monorepo#attribution).
+This package is thankful for the open source contributors whose functions we export. There's a note about this in the main [README here](https://github.com/fastnear/js-monorepo#attribution).

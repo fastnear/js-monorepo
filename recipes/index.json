@@ -1,0 +1,1175 @@
+{
+  "version": 3,
+  "homepage": "https://js.fastnear.com",
+  "source": "recipes/source.mjs",
+  "catalogUrl": "https://js.fastnear.com/recipes.json",
+  "packages": [
+    "@fastnear/api",
+    "@fastnear/wallet",
+    "@fastnear/utils"
+  ],
+  "support": {
+    "apiKeyEnvVar": "FASTNEAR_API_KEY",
+    "apiKeySummary": "Set FASTNEAR_API_KEY before running the authenticated snippets.",
+    "hostedCatalogUrl": "https://js.fastnear.com/recipes.json",
+    "hostedCatalogLabel": "js.fastnear.com/recipes.json",
+    "hostedAgentEntry": "https://js.fastnear.com/agents.js",
+    "trialCreditsUrl": "https://dashboard.fastnear.com",
+    "trialCreditsLabel": "dashboard.fastnear.com",
+    "trialCreditsSummary": "Free trial credits are available at dashboard.fastnear.com.",
+    "discoveryOrder": [
+      {
+        "step": 1,
+        "label": "Read llms.txt",
+        "detail": "Start with the concise repo and runtime map."
+      },
+      {
+        "step": 2,
+        "label": "Fetch recipes.json",
+        "detail": "Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets."
+      },
+      {
+        "step": 3,
+        "label": "Run agents.js",
+        "detail": "Use the hosted terminal wrapper when you want the FastNear JS surface."
+      },
+      {
+        "step": 4,
+        "label": "Fall back to curl + jq",
+        "detail": "Use raw transport when survey scripting or HTTP-level inspection is more useful."
+      }
+    ],
+    "captureExample": {
+      "title": "Capture and chain one result",
+      "summary": "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step.",
+      "language": "bash",
+      "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_SUMMARY=\"$(node -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { block_hash, storage_usage } = account;\n\nnear.print({ block_hash, storage_usage });\nEOF\n)\"\nBLOCK_HASH=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.block_hash')\"\nSTORAGE_USAGE=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.storage_usage')\"\n\nprintf 'block_hash=%s\\nstorage_usage=%s\\n' \"$BLOCK_HASH\" \"$STORAGE_USAGE\""
+    }
+  },
+  "families": [
+    {
+      "id": "rpc",
+      "summary": "Canonical NEAR JSON-RPC defaults for direct contract views, account state, and transaction status checks.",
+      "authStyle": "query",
+      "defaultBaseUrls": {
+        "mainnet": "https://rpc.mainnet.fastnear.com/",
+        "testnet": "https://rpc.testnet.fastnear.com/"
+      },
+      "bestFor": [
+        "Direct contract view calls with exact method names and args.",
+        "Canonical account state and access key reads.",
+        "Low-level RPC questions before you need indexed or aggregated surfaces."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "entrypoints": [
+        "near.view",
+        "near.queryAccount",
+        "near.queryAccessKey",
+        "near.queryBlock",
+        "near.queryTx",
+        "near.sendTx"
+      ]
+    },
+    {
+      "id": "api",
+      "summary": "FastNear REST aggregations for account holdings, staking, and public-key oriented lookups.",
+      "authStyle": "bearer",
+      "defaultBaseUrls": {
+        "mainnet": "https://api.fastnear.com",
+        "testnet": "https://test.api.fastnear.com"
+      },
+      "bestFor": [
+        "Combined account snapshots with fungible tokens, NFTs, and staking.",
+        "Public-key-to-account discovery.",
+        "Questions where one aggregated response is better than stitching multiple RPC calls."
+      ],
+      "pagination": {
+        "kind": "page_token",
+        "requestFields": [
+          "page_token"
+        ],
+        "responseFields": [
+          "page_token"
+        ],
+        "filtersMustStayStable": true
+      },
+      "entrypoints": [
+        "near.api.v1.accountFull",
+        "near.api.v1.accountFt",
+        "near.api.v1.accountNft",
+        "near.api.v1.accountStaking",
+        "near.api.v1.publicKey",
+        "near.api.v1.publicKeyAll",
+        "near.api.v1.ftTop"
+      ]
+    },
+    {
+      "id": "tx",
+      "summary": "Indexed transaction and receipt lookups for readable execution history by hash, account, or block.",
+      "authStyle": "bearer",
+      "defaultBaseUrls": {
+        "mainnet": "https://tx.main.fastnear.com",
+        "testnet": "https://tx.test.fastnear.com"
+      },
+      "bestFor": [
+        "Starting from one transaction hash or receipt id.",
+        "Readable execution stories with receipts already joined in.",
+        "Recent account or block-centered transaction history queries."
+      ],
+      "pagination": {
+        "kind": "resume_token",
+        "requestFields": [
+          "resume_token"
+        ],
+        "responseFields": [
+          "resume_token"
+        ],
+        "filtersMustStayStable": true
+      },
+      "entrypoints": [
+        "near.tx.transactions",
+        "near.tx.receipt",
+        "near.tx.account",
+        "near.tx.block",
+        "near.tx.blocks"
+      ]
+    },
+    {
+      "id": "transfers",
+      "summary": "Asset-movement-focused history for accounts when the question is specifically about transfers, not full execution.",
+      "authStyle": "bearer",
+      "defaultBaseUrls": {
+        "mainnet": "https://transfers.main.fastnear.com",
+        "testnet": null
+      },
+      "bestFor": [
+        "Recent transfer feeds for one account.",
+        "Asset movement summaries across FT, NFT, and native transfers.",
+        "Survey scripting where transfer rows matter more than transaction internals."
+      ],
+      "pagination": {
+        "kind": "resume_token",
+        "requestFields": [
+          "resume_token"
+        ],
+        "responseFields": [
+          "resume_token"
+        ],
+        "filtersMustStayStable": true
+      },
+      "entrypoints": [
+        "near.transfers.query"
+      ]
+    },
+    {
+      "id": "neardata",
+      "summary": "Block and shard documents for recent chain-state inspection without reconstructing shard layouts yourself.",
+      "authStyle": "query",
+      "defaultBaseUrls": {
+        "mainnet": "https://mainnet.neardata.xyz",
+        "testnet": "https://testnet.neardata.xyz"
+      },
+      "bestFor": [
+        "Recent block inspection and shard-aware exploration.",
+        "Questions about network recency or recent transaction volume.",
+        "Walking block-height ranges and chunk layouts."
+      ],
+      "pagination": {
+        "kind": "range",
+        "requestFields": [
+          "blockHeight",
+          "from_block_height",
+          "to_block_height"
+        ],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "entrypoints": [
+        "near.neardata.lastBlockFinal",
+        "near.neardata.lastBlockOptimistic",
+        "near.neardata.block",
+        "near.neardata.blockHeaders",
+        "near.neardata.blockShard",
+        "near.neardata.blockChunk",
+        "near.neardata.blockOptimistic",
+        "near.neardata.firstBlock",
+        "near.neardata.health"
+      ]
+    },
+    {
+      "id": "fastdata.kv",
+      "summary": "Indexed key-value history for exact keys, predecessor scans, and account-scoped storage exploration.",
+      "authStyle": "bearer",
+      "defaultBaseUrls": {
+        "mainnet": "https://kv.main.fastnear.com",
+        "testnet": "https://kv.test.fastnear.com"
+      },
+      "bestFor": [
+        "Exact-key lookups when you already know the contract, predecessor, and key.",
+        "Storage history scans keyed by predecessor or current account.",
+        "Questions about SocialDB-style writes and indexed storage history."
+      ],
+      "pagination": {
+        "kind": "resume_token",
+        "requestFields": [
+          "resume_token"
+        ],
+        "responseFields": [
+          "resume_token"
+        ],
+        "filtersMustStayStable": true
+      },
+      "entrypoints": [
+        "near.fastdata.kv.getLatestKey",
+        "near.fastdata.kv.getHistoryKey",
+        "near.fastdata.kv.latestByAccount",
+        "near.fastdata.kv.historyByAccount",
+        "near.fastdata.kv.latestByPredecessor",
+        "near.fastdata.kv.historyByPredecessor",
+        "near.fastdata.kv.allByPredecessor",
+        "near.fastdata.kv.multi"
+      ]
+    }
+  ],
+  "runtimes": {
+    "api": {
+      "config": [
+        "near.config({ networkId })",
+        "near.config({ apiKey })",
+        "near.config({ nodeUrl })"
+      ],
+      "types": [
+        "FastNearRecipeDiscoveryEntry",
+        "FastNearApiV1AccountFullResponse",
+        "FastNearApiV1AccountFtResponse",
+        "FastNearApiV1AccountNftResponse",
+        "FastNearApiV1AccountStakingResponse",
+        "FastNearApiV1PublicKeyResponse",
+        "FastNearApiV1PublicKeyAllResponse",
+        "FastNearApiV1FtTopResponse",
+        "FastNearTxTransactionsResponse",
+        "FastNearTxReceiptResponse",
+        "FastNearTxAccountResponse",
+        "FastNearTxBlockResponse",
+        "FastNearTxBlocksResponse",
+        "FastNearTransfersQueryResponse",
+        "FastNearNeardataLastBlockFinalResponse",
+        "FastNearNeardataLastBlockOptimisticResponse",
+        "FastNearNeardataBlockResponse",
+        "FastNearNeardataBlockHeadersResponse",
+        "FastNearNeardataBlockShardResponse",
+        "FastNearNeardataBlockChunkResponse",
+        "FastNearNeardataBlockOptimisticResponse",
+        "FastNearNeardataFirstBlockResponse",
+        "FastNearNeardataHealthResponse",
+        "FastNearKvGetLatestKeyResponse",
+        "FastNearKvGetHistoryKeyResponse",
+        "FastNearKvLatestByAccountResponse",
+        "FastNearKvHistoryByAccountResponse",
+        "FastNearKvLatestByPredecessorResponse",
+        "FastNearKvHistoryByPredecessorResponse",
+        "FastNearKvAllByPredecessorResponse",
+        "FastNearKvMultiResponse"
+      ],
+      "recipes": [
+        "near.recipes.viewContract",
+        "near.recipes.viewAccount",
+        "near.recipes.connect",
+        "near.recipes.functionCall",
+        "near.recipes.transfer",
+        "near.recipes.signMessage"
+      ],
+      "explain": [
+        "near.explain.action",
+        "near.explain.tx",
+        "near.explain.error"
+      ],
+      "lowLevel": [
+        "near.view",
+        "near.queryAccount",
+        "near.queryTx",
+        "near.sendTx",
+        "near.requestSignIn",
+        "near.signMessage",
+        "near.api.v1.accountFull",
+        "near.api.v1.accountFt",
+        "near.api.v1.accountNft",
+        "near.api.v1.accountStaking",
+        "near.api.v1.publicKey",
+        "near.api.v1.publicKeyAll",
+        "near.api.v1.ftTop",
+        "near.tx.transactions",
+        "near.tx.receipt",
+        "near.tx.account",
+        "near.tx.block",
+        "near.tx.blocks",
+        "near.transfers.query",
+        "near.neardata.lastBlockFinal",
+        "near.neardata.lastBlockOptimistic",
+        "near.neardata.block",
+        "near.neardata.blockHeaders",
+        "near.neardata.blockShard",
+        "near.neardata.blockChunk",
+        "near.neardata.blockOptimistic",
+        "near.neardata.firstBlock",
+        "near.neardata.health",
+        "near.fastdata.kv.getLatestKey",
+        "near.fastdata.kv.getHistoryKey",
+        "near.fastdata.kv.latestByAccount",
+        "near.fastdata.kv.historyByAccount",
+        "near.fastdata.kv.latestByPredecessor",
+        "near.fastdata.kv.historyByPredecessor",
+        "near.fastdata.kv.allByPredecessor",
+        "near.fastdata.kv.multi"
+      ]
+    }
+  },
+  "recipes": [
+    {
+      "id": "view-contract",
+      "title": "What does this contract method return?",
+      "summary": "Start with one view call when you already know the contract, method, and arguments.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.recipes.viewContract",
+      "example": {
+        "contractId": "berryclub.ek.near",
+        "methodName": "get_account",
+        "args": {
+          "account_id": "root.near"
+        }
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst result = await near.recipes.viewContract({\n  contractId: \"berryclub.ek.near\",\n  methodName: \"get_account\",\n  args: { account_id: \"root.near\" },\n});\n\nnear.print({\n  account_id: result.account_id,\n  avocado_balance: result.avocado_balance,\n  num_pixels: result.num_pixels,\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\nARGS_BASE64=\"$(jq -nc --arg account_id \"$ACCOUNT_ID\" '{account_id: $account_id}' | base64 | tr -d '\\n')\"\n\ncurl -sS \"https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY\"   -H 'content-type: application/json'   --data \"$(jq -nc --arg args \"$ARGS_BASE64\" '{\n    jsonrpc:\"2.0\",id:\"fastnear\",method:\"query\",\n    params:{\n      request_type:\"call_function\",\n      finality:\"final\",\n      account_id:\"berryclub.ek.near\",\n      method_name:\"get_account\",\n      args_base64:$args\n    }\n  }')\"   | jq '.result.result | implode | fromjson | {account_id, avocado_balance, num_pixels}'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const result = await near.recipes.viewContract({\n  contractId: \"berryclub.ek.near\",\n  methodName: \"get_account\",\n  args: { account_id: \"root.near\" },\n});\n\nnear.print({\n  account_id: result.account_id,\n  avocado_balance: result.avocado_balance,\n  num_pixels: result.num_pixels,\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst result = await near.recipes.viewContract({\n  contractId: \"berryclub.ek.near\",\n  methodName: \"get_account\",\n  args: { account_id: \"root.near\" },\n});\n\nnear.print({\n  account_id: result.account_id,\n  avocado_balance: result.avocado_balance,\n  num_pixels: result.num_pixels,\n});"
+        }
+      ],
+      "service": "rpc",
+      "returns": "BerryClubAccountView",
+      "outputKeys": [
+        "account_id",
+        "avocado_balance",
+        "num_pixels"
+      ],
+      "responseNotes": [
+        "This recipe returns the parsed JSON value from the contract method, not the raw RPC wrapper.",
+        "Use the curl + jq variant when you want to inspect the encoded args or the raw RPC envelope."
+      ],
+      "chooseWhen": [
+        "Choose this when you already know the exact contract method and want the smallest answer quickly.",
+        "Stay on RPC when the question is still about one direct view call rather than indexed history."
+      ],
+      "followUps": [
+        "If the method output looks wrong, compare it with the canonical account state from near.recipes.viewAccount.",
+        "If you need a broader ownership snapshot, move to near.api.v1.accountFull."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "view-account",
+        "account-full"
+      ]
+    },
+    {
+      "id": "view-account",
+      "title": "What does this account look like on chain?",
+      "summary": "Use canonical RPC account state when the question is still about one account record.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.recipes.viewAccount",
+      "example": {
+        "accountId": "root.near"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { amount, locked, storage_usage, block_height, block_hash } = account;\n\nnear.print({\n  amount,\n  locked,\n  storage_usage,\n  block_height,\n  block_hash,\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\n\ncurl -sS \"https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY\"   -H 'content-type: application/json'   --data \"$(jq -nc --arg account_id \"$ACCOUNT_ID\" '{\n    jsonrpc:\"2.0\",id:\"fastnear\",method:\"query\",\n    params:{request_type:\"view_account\",account_id:$account_id,finality:\"final\"}\n  }')\"   | jq '.result | {amount, locked, storage_usage, block_height, block_hash}'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const account = await near.recipes.viewAccount(\"root.near\");\n\nconst { amount, locked, storage_usage, block_height, block_hash } = account;\n\nnear.print({\n  amount,\n  locked,\n  storage_usage,\n  block_height,\n  block_hash,\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { amount, locked, storage_usage, block_height, block_hash } = account;\n\nnear.print({\n  amount,\n  locked,\n  storage_usage,\n  block_height,\n  block_hash,\n});"
+        }
+      ],
+      "service": "rpc",
+      "returns": "RpcViewAccountResponse",
+      "outputKeys": [
+        "amount",
+        "locked",
+        "storage_usage",
+        "block_height",
+        "block_hash"
+      ],
+      "responseNotes": [
+        "This is the canonical on-chain account record from JSON-RPC.",
+        "The snippet keeps the object work in JS and emits only the fields most useful for survey scripting."
+      ],
+      "chooseWhen": [
+        "Choose this when the question is about one account's chain state rather than token holdings or transfers.",
+        "Use this before reaching for aggregations if you need the raw account state answer first."
+      ],
+      "followUps": [
+        "If the account is active but you need holdings, switch to near.api.v1.accountFull.",
+        "If you need recent transfer activity, continue with near.transfers.query."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "account-full",
+        "transfers-query"
+      ]
+    },
+    {
+      "id": "inspect-transaction",
+      "title": "What happened in this transaction?",
+      "summary": "Start with the indexed transaction family when all you have is the hash and you want the readable story.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.tx.transactions",
+      "example": {
+        "txHashes": [
+          "7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq"
+        ]
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst tx = await near.recipes.inspectTransaction(\n  \"7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq\"\n);\n\nnear.print(\n  tx\n    ? {\n        hash: tx.transaction.hash,\n        signer_id: tx.transaction.signer_id,\n        receiver_id: tx.transaction.receiver_id,\n        included_block_height: tx.execution_outcome.block_height,\n        receipt_count: tx.receipts.length,\n      }\n    : null\n);\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nTX_HASH=7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq\n\ncurl -sS \"https://tx.main.fastnear.com/v0/transactions\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   -H 'content-type: application/json'   --data \"$(jq -nc --arg tx_hash \"$TX_HASH\" '{tx_hashes: [$tx_hash]}')\"   | jq '{\n      hash: .transactions[0].transaction.hash,\n      signer_id: .transactions[0].transaction.signer_id,\n      receiver_id: .transactions[0].transaction.receiver_id,\n      included_block_height: .transactions[0].execution_outcome.block_height,\n      receipt_count: (.transactions[0].receipts | length)\n    }'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const tx = await near.recipes.inspectTransaction(\n  \"7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq\"\n);\n\nnear.print(\n  tx\n    ? {\n        hash: tx.transaction.hash,\n        signer_id: tx.transaction.signer_id,\n        receiver_id: tx.transaction.receiver_id,\n        included_block_height: tx.execution_outcome.block_height,\n        receipt_count: tx.receipts.length,\n      }\n    : null\n);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst tx = await near.recipes.inspectTransaction(\n  \"7ZKnhzt2MqMNmsk13dV8GAjGu3Db8aHzSBHeNeu9MJCq\"\n);\n\nnear.print(\n  tx\n    ? {\n        hash: tx.transaction.hash,\n        signer_id: tx.transaction.signer_id,\n        receiver_id: tx.transaction.receiver_id,\n        included_block_height: tx.execution_outcome.block_height,\n        receipt_count: tx.receipts.length,\n      }\n    : null\n);"
+        }
+      ],
+      "service": "tx",
+      "returns": "FastNearTxTransactionsResponse",
+      "outputKeys": [
+        "transactions[].transaction.hash",
+        "transactions[].transaction.signer_id",
+        "transactions[].transaction.receiver_id",
+        "transactions[].execution_outcome.block_height",
+        "transactions[].receipts"
+      ],
+      "responseNotes": [
+        "The low-level tx family returns raw indexed JSON with receipts already attached.",
+        "This recipe narrows that response to the one transaction row and prints a compact human-readable summary."
+      ],
+      "chooseWhen": [
+        "Choose this when the only durable identifier you have is the transaction hash.",
+        "Prefer this over transfers when you need the execution story, receipts, or included block details."
+      ],
+      "followUps": [
+        "If you care only about asset movement, pivot to near.transfers.query.",
+        "If you need a block-centered history scan, continue with near.tx.account or near.tx.blocks."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "transfers-query",
+        "last-block-final"
+      ]
+    },
+    {
+      "id": "account-full",
+      "title": "What does this account own?",
+      "summary": "Use the FastNear account aggregator when the question is about holdings, NFTs, or staking in one response.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.api.v1.accountFull",
+      "example": {
+        "accountId": "root.near"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.api.v1.accountFull({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  account_id: account.account_id,\n  near_balance_yocto: account.state.balance,\n  ft_contracts: account.tokens.length,\n  nft_contracts: account.nfts.length,\n  staking_pool_contracts: account.pools.length,\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\n\ncurl -sS \"https://api.fastnear.com/v1/account/$ACCOUNT_ID/full\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   | jq '{\n      account_id,\n      near_balance_yocto: .state.balance,\n      ft_contracts: (.tokens | length),\n      nft_contracts: (.nfts | length),\n      staking_pool_contracts: (.pools | length)\n    }'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const account = await near.api.v1.accountFull({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  account_id: account.account_id,\n  near_balance_yocto: account.state.balance,\n  ft_contracts: account.tokens.length,\n  nft_contracts: account.nfts.length,\n  staking_pool_contracts: account.pools.length,\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst account = await near.api.v1.accountFull({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  account_id: account.account_id,\n  near_balance_yocto: account.state.balance,\n  ft_contracts: account.tokens.length,\n  nft_contracts: account.nfts.length,\n  staking_pool_contracts: account.pools.length,\n});"
+        }
+      ],
+      "service": "api",
+      "returns": "FastNearApiV1AccountFullResponse",
+      "outputKeys": [
+        "account_id",
+        "state.balance",
+        "tokens",
+        "nfts",
+        "pools"
+      ],
+      "responseNotes": [
+        "This is the aggregated account surface for holdings and staking, not a raw RPC account object.",
+        "It is the best one-response answer when the task is portfolio-style discovery."
+      ],
+      "chooseWhen": [
+        "Choose this when you want holdings, NFTs, and staking without stitching multiple calls together.",
+        "Use it after a canonical RPC account check when the next question becomes 'what does this account own?'."
+      ],
+      "followUps": [
+        "If you need movement history instead of holdings, continue with near.transfers.query.",
+        "If you need one exact contract state read, go back to near.recipes.viewContract."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "view-account",
+        "transfers-query"
+      ]
+    },
+    {
+      "id": "transfers-query",
+      "title": "What is this account's recent transfer activity?",
+      "summary": "Use the transfers family when the question is specifically about asset movement, not the broader execution story.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.transfers.query",
+      "example": {
+        "accountId": "root.near",
+        "desc": true,
+        "limit": 5
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst feed = await near.transfers.query({\n  accountId: \"root.near\",\n  desc: true,\n  limit: 5,\n});\n\nnear.print({\n  recent: (feed.transfers || []).map((entry) => ({\n    block_height: entry.block_height,\n    asset_id: entry.asset_id,\n    human_amount: entry.human_amount,\n    other_account_id: entry.other_account_id,\n    transfer_type: entry.transfer_type,\n    tx: entry.transaction_id,\n  })),\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\n\ncurl -sS \"https://transfers.main.fastnear.com/v0/transfers\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   -H 'content-type: application/json'   --data \"$(jq -nc --arg account_id \"$ACCOUNT_ID\" '{account_id: $account_id, desc: true, limit: 5}')\"   | jq '{\n      recent: [.transfers[] | {\n        block_height,\n        asset_id,\n        human_amount,\n        other_account_id,\n        transfer_type,\n        tx: .transaction_id\n      }]\n    }'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const feed = await near.transfers.query({\n  accountId: \"root.near\",\n  desc: true,\n  limit: 5,\n});\n\nnear.print({\n  recent: (feed.transfers || []).map((entry) => ({\n    block_height: entry.block_height,\n    asset_id: entry.asset_id,\n    human_amount: entry.human_amount,\n    other_account_id: entry.other_account_id,\n    transfer_type: entry.transfer_type,\n    tx: entry.transaction_id,\n  })),\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst feed = await near.transfers.query({\n  accountId: \"root.near\",\n  desc: true,\n  limit: 5,\n});\n\nnear.print({\n  recent: (feed.transfers || []).map((entry) => ({\n    block_height: entry.block_height,\n    asset_id: entry.asset_id,\n    human_amount: entry.human_amount,\n    other_account_id: entry.other_account_id,\n    transfer_type: entry.transfer_type,\n    tx: entry.transaction_id,\n  })),\n});"
+        }
+      ],
+      "service": "transfers",
+      "returns": "FastNearTransfersQueryResponse",
+      "outputKeys": [
+        "transfers[].block_height",
+        "transfers[].asset_id",
+        "transfers[].human_amount",
+        "transfers[].other_account_id",
+        "transfers[].transaction_id",
+        "resume_token"
+      ],
+      "responseNotes": [
+        "Transfers answers the asset-movement question directly and returns raw rows plus resume-token pagination when available.",
+        "It is intentionally narrower than the tx family and better suited to feed-style scripting."
+      ],
+      "chooseWhen": [
+        "Choose this when the question is about who sent what asset and when.",
+        "Prefer this over near.tx when you do not need receipt details or execution outcomes."
+      ],
+      "followUps": [
+        "If one transfer row needs a deeper execution story, pivot to near.tx.transactions with the related hash.",
+        "If you need holdings instead of movement, switch to near.api.v1.accountFull."
+      ],
+      "pagination": {
+        "kind": "resume_token",
+        "requestFields": [
+          "resume_token"
+        ],
+        "responseFields": [
+          "resume_token"
+        ],
+        "filtersMustStayStable": true
+      },
+      "relatedRecipes": [
+        "inspect-transaction",
+        "account-full"
+      ]
+    },
+    {
+      "id": "last-block-final",
+      "title": "What block is NEAR on right now?",
+      "summary": "Use the NEAR Data family when you want a recent block document without stitching shards together yourself.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.neardata.lastBlockFinal",
+      "example": {},
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\ncurl -sSL \"https://mainnet.neardata.xyz/v0/last_block/final?apiKey=$FASTNEAR_API_KEY\"   | jq '{\n      height: .block.header.height,\n      timestamp_nanosec: .block.header.timestamp_nanosec,\n      txs_per_shard: [.shards[] | {shard_id, tx_count: (.chunk.transactions | length)}],\n      total_txs: ([.shards[].chunk.transactions[]?] | length)\n    }'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});"
+        }
+      ],
+      "service": "neardata",
+      "returns": "FastNearNeardataLastBlockFinalResponse",
+      "outputKeys": [
+        "block.header.height",
+        "block.header.timestamp_nanosec",
+        "shards[].shard_id",
+        "shards[].chunk.transactions"
+      ],
+      "responseNotes": [
+        "NEAR Data returns block documents with shard content already grouped for block-level inspection.",
+        "This recipe highlights the smallest useful block recency summary while keeping the full response available in JS."
+      ],
+      "chooseWhen": [
+        "Choose this when the question starts with recent block recency or transaction volume.",
+        "Use the family-level block endpoints when you want to walk heights or inspect one shard or chunk next."
+      ],
+      "followUps": [
+        "If one transaction in the block matters, continue with near.tx.transactions.",
+        "If you need a specific historical block, move to near.neardata.block or near.neardata.blockChunk."
+      ],
+      "pagination": {
+        "kind": "range",
+        "requestFields": [
+          "blockHeight",
+          "from_block_height",
+          "to_block_height"
+        ],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "inspect-transaction"
+      ]
+    },
+    {
+      "id": "kv-latest-key",
+      "title": "What is the latest indexed value for this exact key?",
+      "summary": "Start narrow with KV FastData when you already know the contract, predecessor, and exact storage key.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.fastdata.kv.getLatestKey",
+      "example": {
+        "currentAccountId": "social.near",
+        "predecessorId": "james.near",
+        "key": "graph/follow/sleet.near"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst result = await near.fastdata.kv.getLatestKey({\n  currentAccountId: \"social.near\",\n  predecessorId: \"james.near\",\n  key: \"graph/follow/sleet.near\",\n});\n\nconst latest = result.entries?.[0] || null;\n\nnear.print({\n  latest: latest\n    ? {\n        current_account_id: latest.current_account_id,\n        predecessor_id: latest.predecessor_id,\n        block_height: latest.block_height,\n        key: latest.key,\n        value: latest.value,\n      }\n    : null,\n});\nEOF"
+        },
+        {
+          "id": "curl-jq",
+          "label": "curl + jq",
+          "environment": "curl",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nCURRENT_ACCOUNT_ID=social.near\nPREDECESSOR_ID=james.near\nKEY='graph/follow/sleet.near'\n\nENCODED_KEY=\"$(jq -rn --arg key \"$KEY\" '$key | @uri')\"\n\ncurl -sS \"https://kv.main.fastnear.com/v0/latest/$CURRENT_ACCOUNT_ID/$PREDECESSOR_ID/$ENCODED_KEY\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   | jq '{\n      latest: (\n        .entries[0]\n        | {\n            current_account_id,\n            predecessor_id,\n            block_height,\n            key,\n            value\n          }\n      )\n    }'"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const result = await near.fastdata.kv.getLatestKey({\n  currentAccountId: \"social.near\",\n  predecessorId: \"james.near\",\n  key: \"graph/follow/sleet.near\",\n});\n\nconst latest = result.entries?.[0] || null;\n\nnear.print({\n  latest: latest\n    ? {\n        current_account_id: latest.current_account_id,\n        predecessor_id: latest.predecessor_id,\n        block_height: latest.block_height,\n        key: latest.key,\n        value: latest.value,\n      }\n    : null,\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst result = await near.fastdata.kv.getLatestKey({\n  currentAccountId: \"social.near\",\n  predecessorId: \"james.near\",\n  key: \"graph/follow/sleet.near\",\n});\n\nconst latest = result.entries?.[0] || null;\n\nnear.print({\n  latest: latest\n    ? {\n        current_account_id: latest.current_account_id,\n        predecessor_id: latest.predecessor_id,\n        block_height: latest.block_height,\n        key: latest.key,\n        value: latest.value,\n      }\n    : null,\n});"
+        }
+      ],
+      "service": "fastdata.kv",
+      "returns": "FastNearKvGetLatestKeyResponse",
+      "outputKeys": [
+        "entries[].current_account_id",
+        "entries[].predecessor_id",
+        "entries[].block_height",
+        "entries[].key",
+        "entries[].value"
+      ],
+      "responseNotes": [
+        "KV FastData keeps the exact indexed storage history question narrow and fast when you already know the key.",
+        "The raw response keeps the full entry list; the example snippet extracts the most informative first entry."
+      ],
+      "chooseWhen": [
+        "Choose this when you already know the exact key and want the latest indexed value immediately.",
+        "Use the broader history or predecessor scans only after this exact-key lookup stops being enough."
+      ],
+      "followUps": [
+        "If you need history for the same key, continue with near.fastdata.kv.getHistoryKey.",
+        "If you only know the predecessor and need discovery, continue with near.fastdata.kv.allByPredecessor."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "view-contract"
+      ]
+    },
+    {
+      "id": "connect-wallet",
+      "title": "How do I connect a wallet?",
+      "summary": "Open the wallet picker and attach a signer to the FastNear runtime.",
+      "network": "mainnet",
+      "auth": "wallet",
+      "api": "near.recipes.connect",
+      "example": {
+        "contractId": "berryclub.ek.near"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Opening the wallet picker needs a browser environment.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n});\n\nnear.print(result ?? near.selected());"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n});\n\nnear.print(result ?? near.selected());"
+        }
+      ],
+      "service": "wallet",
+      "returns": "{ accountId: string } | undefined",
+      "outputKeys": [
+        "accountId"
+      ],
+      "responseNotes": [
+        "Wallet-backed recipes are browser-first because they need an interactive signer.",
+        "This recipe is the smallest explicit connect step before sending transactions or signing messages."
+      ],
+      "chooseWhen": [
+        "Choose this when the task crosses from read-only inspection into user-approved signing.",
+        "Use it once per browser session before function calls, transfers, or message signatures."
+      ],
+      "followUps": [
+        "After connecting, send one contract action with near.recipes.functionCall.",
+        "If the next step is a simple NEAR payment, continue with near.recipes.transfer."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "function-call",
+        "transfer",
+        "sign-message"
+      ]
+    },
+    {
+      "id": "function-call",
+      "title": "How do I send one function call?",
+      "summary": "Sign and broadcast a single contract call with readable gas units.",
+      "network": "mainnet",
+      "auth": "wallet",
+      "api": "near.recipes.functionCall",
+      "example": {
+        "receiverId": "berryclub.ek.near",
+        "methodName": "draw",
+        "args": {
+          "pixels": [
+            {
+              "x": 10,
+              "y": 20,
+              "color": 65280
+            }
+          ]
+        },
+        "gas": "100 Tgas",
+        "deposit": "0"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Signing and broadcasting a contract call needs a wallet session.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const cu = near.utils.convertUnit;\n\nconst result = await near.recipes.functionCall({\n  receiverId: \"berryclub.ek.near\",\n  methodName: \"draw\",\n  args: {\n    pixels: [{ x: 10, y: 20, color: 65280 }],\n  },\n  gas: cu(\"100 Tgas\"),\n  deposit: \"0\",\n});\n\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.functionCall({\n  receiverId: \"berryclub.ek.near\",\n  methodName: \"draw\",\n  args: {\n    pixels: [{ x: 10, y: 20, color: 65280 }],\n  },\n  gas: cu(\"100 Tgas\"),\n  deposit: \"0\",\n});\n\nnear.print(result);"
+        }
+      ],
+      "service": "wallet",
+      "returns": "WalletTransactionResult",
+      "outputKeys": [
+        "transaction",
+        "outcomes",
+        "status"
+      ],
+      "responseNotes": [
+        "This is the thinnest wallet-backed transaction recipe and keeps the action declaration explicit.",
+        "The example uses readable unit conversion before handing the transaction to the runtime."
+      ],
+      "chooseWhen": [
+        "Choose this when you need one contract call and already know the receiver, method, and args.",
+        "Prefer this recipe over the lower-level sendTx path when you want the smallest wallet-backed API surface."
+      ],
+      "followUps": [
+        "If the user only needs a native NEAR transfer, continue with near.recipes.transfer.",
+        "If you want to preview the action before signing, use near.explain.tx on the same action list."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-wallet",
+        "transfer",
+        "sign-message"
+      ]
+    },
+    {
+      "id": "transfer",
+      "title": "How do I transfer NEAR?",
+      "summary": "Send a simple NEAR transfer with a wallet-backed signature.",
+      "network": "mainnet",
+      "auth": "wallet+deposit",
+      "api": "near.recipes.transfer",
+      "example": {
+        "receiverId": "escrow.ai.near",
+        "amount": "0.1 NEAR"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Sending NEAR needs a wallet-backed signature flow.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const cu = near.utils.convertUnit;\n\nconst result = await near.recipes.transfer({\n  receiverId: \"escrow.ai.near\",\n  amount: cu(\"0.1 NEAR\"),\n});\n\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.transfer({\n  receiverId: \"escrow.ai.near\",\n  amount: cu(\"0.1 NEAR\"),\n});\n\nnear.print(result);"
+        }
+      ],
+      "service": "wallet",
+      "returns": "WalletTransactionResult",
+      "outputKeys": [
+        "transaction",
+        "outcomes",
+        "status"
+      ],
+      "responseNotes": [
+        "This recipe keeps a simple NEAR transfer readable without constructing the action list manually.",
+        "The transaction still goes through the same wallet-backed approval flow as other signing tasks."
+      ],
+      "chooseWhen": [
+        "Choose this when the task is a plain NEAR payment and not a contract method call.",
+        "Use the function-call recipe instead when the receiver expects method args or custom gas settings."
+      ],
+      "followUps": [
+        "If you want to explain the transfer before sending it, use near.explain.tx with a Transfer action.",
+        "If the next task is another signed action, keep the same wallet session and continue with near.recipes.functionCall."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-wallet",
+        "function-call"
+      ]
+    },
+    {
+      "id": "sign-message",
+      "title": "How do I sign a message?",
+      "summary": "Request a wallet-backed NEP-413 signature for an app message.",
+      "network": "mainnet",
+      "auth": "wallet",
+      "api": "near.recipes.signMessage",
+      "example": {
+        "message": "Sign in to FastNear Berry Club"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Message signing depends on a connected wallet provider.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const result = await near.recipes.signMessage({\n  message: \"Sign in to FastNear Berry Club\",\n  recipient: window.location.host,\n  nonce: crypto.getRandomValues(new Uint8Array(32)),\n});\n\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst result = await near.recipes.signMessage({\n  message: \"Sign in to FastNear Berry Club\",\n  recipient: window.location.host,\n  nonce: crypto.getRandomValues(new Uint8Array(32)),\n});\n\nnear.print(result);"
+        }
+      ],
+      "service": "wallet",
+      "returns": "WalletMessageSignatureResult",
+      "outputKeys": [
+        "signature",
+        "accountId",
+        "publicKey"
+      ],
+      "responseNotes": [
+        "This is the wallet-backed message-signing path for NEP-413 style app messages.",
+        "It stays separate from transaction recipes because no chain write is involved."
+      ],
+      "chooseWhen": [
+        "Choose this when you need user-approved application auth without broadcasting a transaction.",
+        "Prefer this over functionCall or transfer when the task is strictly off-chain signing."
+      ],
+      "followUps": [
+        "If you need to connect the wallet first, start with near.recipes.connect.",
+        "If the flow turns into an on-chain action, move to near.recipes.functionCall or near.recipes.transfer."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-wallet"
+      ]
+    }
+  ],
+  "explain": [
+    {
+      "api": "near.explain.action",
+      "summary": "Normalize one action into a stable JSON summary.",
+      "example": "{\n  \"kind\": \"action\",\n  \"type\": \"FunctionCall\",\n  \"methodName\": \"draw\",\n  \"gas\": \"100000000000000\",\n  \"deposit\": \"0\",\n  \"args\": {\n    \"pixels\": [\n      {\n        \"x\": 10,\n        \"y\": 20,\n        \"color\": 65280\n      }\n    ]\n  },\n  \"argsBase64\": null,\n  \"params\": {\n    \"methodName\": \"draw\",\n    \"gas\": \"100000000000000\",\n    \"deposit\": \"0\",\n    \"args\": {\n      \"pixels\": [\n        {\n          \"x\": 10,\n          \"y\": 20,\n          \"color\": 65280\n        }\n      ]\n    },\n    \"argsBase64\": null\n  }\n}"
+    },
+    {
+      "api": "near.explain.tx",
+      "summary": "Summarize a signer, receiver, and action list into stable JSON.",
+      "example": "{\n  \"kind\": \"transaction\",\n  \"signerId\": \"root.near\",\n  \"receiverId\": \"berryclub.ek.near\",\n  \"actionCount\": 1,\n  \"actions\": [\n    {\n      \"kind\": \"action\",\n      \"type\": \"FunctionCall\",\n      \"methodName\": \"draw\",\n      \"gas\": \"100000000000000\",\n      \"deposit\": \"0\",\n      \"args\": {\n        \"pixels\": [\n          {\n            \"x\": 10,\n            \"y\": 20,\n            \"color\": 65280\n          }\n        ]\n      },\n      \"argsBase64\": null,\n      \"params\": {\n        \"methodName\": \"draw\",\n        \"gas\": \"100000000000000\",\n        \"deposit\": \"0\",\n        \"args\": {\n          \"pixels\": [\n            {\n              \"x\": 10,\n              \"y\": 20,\n              \"color\": 65280\n            }\n          ]\n        },\n        \"argsBase64\": null\n      }\n    }\n  ]\n}"
+    },
+    {
+      "api": "near.explain.error",
+      "summary": "Turn thrown RPC, wallet, or transport failures into a predictable JSON object.",
+      "example": "{\n  \"kind\": \"rpc_error\",\n  \"code\": -32000,\n  \"name\": \"FastNearError\",\n  \"message\": \"Server error\",\n  \"data\": {\n    \"name\": \"HANDLER_ERROR\"\n  },\n  \"retryable\": true\n}"
+    }
+  ]
+}

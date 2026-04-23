@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FASTNEAR_API_KEY: ${{ secrets.FASTNEAR_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: yarn.lock
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Type-check workspaces
+        run: yarn type-check
+
+      - name: Build workspaces
+        run: yarn build
+
+      - name: Run tests
+        run: yarn test

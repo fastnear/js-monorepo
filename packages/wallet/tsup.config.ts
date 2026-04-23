@@ -8,17 +8,22 @@ const friendlyPackageName = 'Wallet Connector'
 
 // Aids in certain guards on the global's mutability
 const footerRedefiningGlobal = `
-Object.defineProperty(globalThis, '${globalName}', {
-  value: ${globalName},
-  enumerable: true,
-  configurable: false,
-});
+try {
+  Object.defineProperty(globalThis, '${globalName}', {
+    value: ${globalName},
+    enumerable: true,
+    configurable: false,
+  });
+} catch (error) {
+  console.error('Could not define global "nearWallet" object', error);
+  throw error;
+}
 
 // Auto-wire with @fastnear/api if it loaded first
 if (typeof globalThis.near !== 'undefined' && globalThis.near.useWallet) {
   globalThis.near.useWallet(${globalName});
 }
-`
+`;
 
 export default defineConfig([
   {

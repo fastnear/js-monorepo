@@ -7,18 +7,32 @@ export interface StorageBackend {
   clear(): void;
 }
 
-// Default: Use `localStorage` if available, otherwise an in-memory fallback
-export const createDefaultStorage = (): StorageBackend =>
-  typeof localStorage !== "undefined"
-    ? localStorage
-    : {
-      getItem: (key) => memoryStore.get(key) || null,
-      setItem: (key, value) => memoryStore.set(key, value),
-      removeItem: (key) => memoryStore.delete(key),
-      clear: () => memoryStore.clear(),
-    };
-
 export const memoryStore = new Map<string, string>(); // Internal memory storage
+
+const memoryStorageBackend: StorageBackend = {
+  getItem: (key) => memoryStore.get(key) || null,
+  setItem: (key, value) => memoryStore.set(key, value),
+  removeItem: (key) => memoryStore.delete(key),
+  clear: () => memoryStore.clear(),
+};
+
+// Default: Use `localStorage` if available, otherwise an in-memory fallback.
+// Some environments expose `localStorage` but throw on access, such as `data:` URLs.
+export const createDefaultStorage = (): StorageBackend => {
+  try {
+    if (
+      typeof globalThis !== "undefined" &&
+      "localStorage" in globalThis &&
+      globalThis.localStorage
+    ) {
+      return globalThis.localStorage;
+    }
+  } catch {
+    // Fall through to memory storage.
+  }
+
+  return memoryStorageBackend;
+};
 
 let storageBackend: StorageBackend = createDefaultStorage();
 

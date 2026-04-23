@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Berry Club — @fastnear example</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Load @fastnear/api and @fastnear/wallet
+       CDN: https://cdn.jsdelivr.net/npm/@fastnear/api@0.10/dist/umd/browser.global.js
+       CDN: https://cdn.jsdelivr.net/npm/@fastnear/wallet@0.10/dist/umd/browser.global.js -->
+  <script src="../../packages/api/dist/umd/browser.global.js"></script>
+  <script src="../../packages/wallet/dist/umd/browser.global.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>Berry Club</h1>
+  <p class="subtitle">
+    Session keys + full-access transactions on mainnet
+    &nbsp;·&nbsp; <a href="index.html">back</a>
+  </p>
+
+  <!-- Status bar -->
+  <div class="status-bar" id="status-bar">Not connected</div>
+
+  <!-- 1. Pixel board -->
+  <section>
+    <h2>Pixel Board (50 &times; 50)</h2>
+    <div id="board" class="pixel-board">Loading board...</div>
+    <button onclick="loadBoard()" style="margin-top:8px">Refresh Board</button>
+  </section>
+
+  <!-- 2. Auth -->
+  <section>
+    <h2>Authentication</h2>
+    <div class="row">
+      <button id="btn-sign-in" class="primary" onclick="handleSignIn()">Sign In</button>
+      <button id="btn-sign-out" class="danger" onclick="handleSignOut()" disabled>Sign Out</button>
+    </div>
+    <p class="note">
+      Signs in with a <strong>session key</strong> scoped to <code>berryclub.ek.near</code>.
+      The session key lets you call contract methods (like <code>draw</code>) without a wallet
+      popup each time. Actions that require a deposit (like <code>buy_tokens</code>) still go
+      through the wallet for approval.
+    </p>
+  </section>
+
+  <!-- 3. Draw pixel (session key — no popup) -->
+  <section>
+    <h2>Draw Pixel</h2>
+    <div class="row">
+      <label>Color:</label>
+      <input type="text" id="pixel-color" value="#00ff00" style="width:100px">
+      <button id="btn-draw" class="primary" onclick="handleDraw()" disabled>Draw Random Pixel</button>
+    </div>
+    <p class="note">
+      Uses the <strong>session key</strong> — signs locally, no wallet popup.
+      The pixel is placed at a random position on the board.
+    </p>
+  </section>
+
+  <!-- 4. Buy tokens (full-access — wallet popup) -->
+  <section>
+    <h2>Buy Tokens</h2>
+    <div class="row">
+      <button id="btn-buy" class="accent" onclick="handleBuy()" disabled>Buy 25 Avocados (0.1 NEAR)</button>
+    </div>
+    <p class="note">
+      Requires a NEAR <strong>deposit</strong>, so this goes through the wallet for approval.
+      Uses <code>near.utils.convertUnit("0.1 NEAR")</code> for the deposit amount.
+    </p>
+  </section>
+
+  <!-- 5. Balances -->
+  <section>
+    <h2>Balances</h2>
+    <table class="metadata-table">
+      <tr><td>Total supply</td><td id="total-supply">—</td></tr>
+      <tr><td>Your balance</td><td id="your-balance">—</td></tr>
+    </table>
+    <button onclick="loadBalances()" style="margin-top:8px">Refresh</button>
+  </section>
+
+  <!-- 6. Event log -->
+  <section>
+    <h2>Event Log</h2>
+    <div id="event-log" class="log">(events will appear here)</div>
+  </section>
+</div>
+
+<script>
+  // ============================================================
+  // CONFIGURATION
+  // ============================================================
+  near.config({ networkId: 'mainnet' });
+
+  const CONTRACT_ID = 'berryclub.ek.near';
+  const BOARD_SIZE = 50;
+  let currentAccount = near.accountId();
+
+  // Shorthand for unit conversion: cu("100 Tgas"), cu("0.1 NEAR")
+  const cu = near.utils.convertUnit;
+
+
+  // ============================================================
+  // PIXEL BOARD
+  // ============================================================
+  function intToColor(c) {
+    return `#${(c >>> 0).toString(16).padStart(6, '0')}`;
+  }
+
+  function decodeLine(line) {
+    const binary = atob(line);
+    const buf = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      buf[i] = binary.charCodeAt(i);
+    }
+    const pixels = [];
+    // Each pixel is 8 bytes; first 4 bytes at offset 4 are color
+    for (let i = 4; i < buf.length; i += 8) {
+      const color = buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16) | (buf[i + 3] << 24);
+      pixels.push(intToColor(color));
+    }
+    return pixels;
+  }
+
+  async function loadBoard() {
+    const board = document.getElementById('board');
+    try {
+      const lines = await near.view({
+        contractId: CONTRACT_ID,
+        methodName: 'get_lines',
+        args: { lines: [...Array(BOARD_SIZE).keys()] },
+      });
+
+      board.innerHTML = lines.flatMap(line => {
+        return decodeLine(line).map(color =>
+          `<div class="pixel" style="background:${color}"></div>`
+        );
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load board:', err);
+      board.textContent = 'Error loading board — see console';
+    }
+  }
+
+
+  // ============================================================
+  // BALANCES
+  // ============================================================
+  async function loadBalances() {
+    try {
+      const totalSupply = await near.view({
+        contractId: CONTRACT_ID,
+        methodName: 'ft_total_supply',
+        args: {},
+      });
+      document.getElementById('total-supply').textContent =
+        totalSupply ? `${(parseFloat(totalSupply) / 1e18).toFixed(4)} avocados` : '—';
+
+      if (currentAccount) {
+        const account = await near.view({
+          contractId: CONTRACT_ID,
+          methodName: 'get_account',
+          args: { account_id: currentAccount },
+        });
+        document.getElementById('your-balance').textContent =
+          account && !isNaN(account.avocado_balance)
+            ? `${(parseFloat(account.avocado_balance) / 1e18).toFixed(4)} avocados`
+            : '0.0000 avocados';
+      } else {
+        document.getElementById('your-balance').textContent = '(sign in to view)';
+      }
+    } catch (err) {
+      console.error('Failed to load balances:', err);
+    }
+  }
+
+
+  // ============================================================
+  // AUTH
+  // ============================================================
+  function handleSignIn() {
+    // Passing contractId creates a session key scoped to this contract
+    near.requestSignIn({ contractId: CONTRACT_ID });
+  }
+
+  function handleSignOut() {
+    near.signOut();
+    currentAccount = null;
+    updateUI();
+  }
+
+
+  // ============================================================
+  // DRAW PIXEL (session key — no wallet popup)
+  // ============================================================
+  async function handleDraw() {
+    if (!currentAccount) { log('[ui] Sign in first'); return; }
+
+    const hex = document.getElementById('pixel-color').value.trim();
+    const color = parseInt(hex.replace('#', ''), 16) || 0x00ff00;
+    const x = Math.floor(Math.random() * BOARD_SIZE);
+    const y = Math.floor(Math.random() * BOARD_SIZE);
+
+    try {
+      log(`[ui] Drawing pixel at (${x}, ${y})...`);
+      await near.sendTx({
+        receiverId: CONTRACT_ID,
+        actions: [
+          near.actions.functionCall({
+            methodName: 'draw',
+            args: { pixels: [{ x, y, color }] },
+            gas: cu('100 Tgas'),
+            deposit: '0',
+          }),
+        ],
+      });
+    } catch (err) {
+      console.error('Draw failed:', err);
+      log('[ui] Draw error — see console');
+    }
+  }
+
+
+  // ============================================================
+  // BUY TOKENS (full-access — wallet popup for deposit)
+  // ============================================================
+  async function handleBuy() {
+    if (!currentAccount) { log('[ui] Sign in first'); return; }
+
+    try {
+      log('[ui] Buying tokens (0.1 NEAR)...');
+      await near.sendTx({
+        receiverId: CONTRACT_ID,
+        actions: [
+          near.actions.functionCall({
+            methodName: 'buy_tokens',
+            args: {},
+            gas: cu('100 Tgas'),
+            deposit: cu('0.1 NEAR'),
+          }),
+        ],
+      });
+    } catch (err) {
+      console.error('Buy failed:', err);
+      log('[ui] Buy error — see console');
+    }
+  }
+
+
+  // ============================================================
+  // EVENTS
+  // ============================================================
+  near.event.onAccount((accountId) => {
+    currentAccount = accountId;
+    log(`[account] ${accountId ? 'Signed in as ' + accountId : 'Signed out'}`);
+    updateUI();
+    loadBalances();
+  });
+
+  near.event.onTx((txStatus) => {
+    const status = txStatus.status;
+    const hash = txStatus.txHash ? txStatus.txHash.slice(0, 12) + '...' : '';
+    log(`[tx] ${status}${hash ? ' — ' + hash : ''}`);
+
+    // Refresh board and balances after tx lands
+    if (status === 'Included' || status === 'Executed') {
+      loadBoard();
+      loadBalances();
+    }
+  });
+
+
+  // ============================================================
+  // UI HELPERS
+  // ============================================================
+  function updateUI() {
+    const statusBar = document.getElementById('status-bar');
+    const btnSignIn = document.getElementById('btn-sign-in');
+    const btnSignOut = document.getElementById('btn-sign-out');
+    const btnDraw = document.getElementById('btn-draw');
+    const btnBuy = document.getElementById('btn-buy');
+
+    if (currentAccount) {
+      statusBar.textContent = 'Connected as: ' + currentAccount;
+      btnSignIn.disabled = true;
+      btnSignOut.disabled = false;
+      btnDraw.disabled = false;
+      btnBuy.disabled = false;
+    } else {
+      statusBar.textContent = 'Not connected — sign in to draw and buy tokens';
+      btnSignIn.disabled = false;
+      btnSignOut.disabled = true;
+      btnDraw.disabled = true;
+      btnBuy.disabled = true;
+    }
+  }
+
+  function log(message) {
+    const el = document.getElementById('event-log');
+    const ts = new Date().toLocaleTimeString();
+    el.textContent += `${ts}  ${message}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  updateUI();
+  loadBoard();
+  loadBalances();
+</script>
+</body>
+</html>
