@@ -1,5 +1,6 @@
 .yarn
 node_modules
 packages/*/dist/
+packages/*/.package.json.publish-backup
 .DS_Store
 yarn.lock

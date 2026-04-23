@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Utility functions for interactions with the NEAR blockchain",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -9,6 +9,8 @@
   "browser": "./dist/umd/browser.global.js",
   "scripts": {
     "build": "tsup",
+    "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
+    "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
     "release": "npm publish",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
