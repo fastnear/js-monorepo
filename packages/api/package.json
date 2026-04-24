@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/api",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Interact with NEAR Protocol blockchain including transaction signing, utilities, and more.",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -11,7 +11,7 @@
     "build": "tsup && node ../../scripts/ensure-trailing-newline.mjs dist/umd/browser.global.js",
     "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
     "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
-    "release": "npm publish",
+    "release": "node ../../scripts/publish-packed.mjs",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },

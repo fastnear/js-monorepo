@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/wallet",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Multi-wallet connector for NEAR dApps — MyNearWallet, HERE, Meteor, and more",
   "license": "MIT",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "tsup && node ../../scripts/ensure-trailing-newline.mjs dist/umd/browser.global.js",
     "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
     "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
-    "release": "npm publish",
+    "release": "node ../../scripts/publish-packed.mjs",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },

@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/wallet-adapter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Wallet adapter implementations for Meteor Wallet and Near Mobile",
   "license": "MIT",
   "type": "module",
@@ -12,7 +12,7 @@
     "build": "tsup",
     "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
     "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
-    "release": "npm publish",
+    "release": "node ../../scripts/publish-packed.mjs",
     "clean": "yarn rimraf dist node_modules",
     "type-check": "tsc --noEmit"
   },

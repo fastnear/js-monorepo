@@ -228,8 +228,7 @@ function createMockLink(assetKey) {
   };
 }
 
-async function assertHostedPageUsesCurrentOrigin() {
-  const pageOrigin = "http://127.0.0.1:8123";
+async function assertHostedPageUsesCurrentOrigin(pageOrigin) {
   const pageModule = await import(`${pathToFileURL(hostedPageModulePath).href}?smoke=${Date.now()}`);
   const elements = new Map(
     ["hero-quickstart", "surface-grid", "docs-launch", "agent-guidance", "agent-recipes"].map((id) => [
@@ -471,7 +470,7 @@ process.stdout.write(JSON.stringify(discovery));
       );
     }
 
-    const hostedPage = await assertHostedPageUsesCurrentOrigin();
+    const hostedPage = await assertHostedPageUsesCurrentOrigin(baseUrl);
 
     const renderedQuickstartOutput = runCommand("bash", ["-lc", hostedPage.quickstartSnippets[0]], {
       env: terminalEnv,

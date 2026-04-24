@@ -378,6 +378,8 @@ OTP is required and can be input into the command:
 
     yarn workspaces foreach --all -tv run release --access public --otp <OTP>
 
+Use the workspace `release` script rather than raw `npm publish`. The release scripts publish a tarball produced by `yarn pack`, so workspace dependencies are packed with concrete versions while npm CLI auth and OTP handling still work normally.
+
 ## IN PROGRESS
 
 ### Wallets
