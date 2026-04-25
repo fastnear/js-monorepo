@@ -58,5 +58,16 @@
     "typescript": "^5.7.2",
     "vitest": "^3"
   },
+  "resolutions": {
+    "defu": "^6.1.5",
+    "glob": "^10.5.0",
+    "h3": "^1.15.9",
+    "minimatch": "^9.0.7",
+    "picomatch": "^2.3.2",
+    "postcss": "^8.5.10",
+    "rollup": "^4.59.0",
+    "tar": "^7.5.11",
+    "vite": "^7.3.2"
+  },
   "packageManager": "yarn@4.13.0"
 }
