@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "rimraf": "*",
-    "tsup": "*",
+    "tsup": "^8.3.6",
     "typescript": "*"
   }
 }

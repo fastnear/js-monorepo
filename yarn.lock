@@ -399,7 +399,7 @@ __metadata:
     "@noble/hashes": "npm:*"
     base58-js: "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -411,7 +411,7 @@ __metadata:
     "@fastnear/borsh": "workspace:*"
     "@types/node": "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -422,7 +422,7 @@ __metadata:
   dependencies:
     "@types/node": "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -452,7 +452,7 @@ __metadata:
     base58-js: "npm:*"
     js-base64: "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -466,7 +466,7 @@ __metadata:
     "@fastnear/utils": "workspace:*"
     "@noble/curves": "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -477,7 +477,7 @@ __metadata:
   dependencies:
     "@fastnear/near-connect": "npm:*"
     rimraf: "npm:*"
-    tsup: "npm:*"
+    tsup: "npm:^8.3.6"
     typescript: "npm:*"
   languageName: unknown
   linkType: soft
@@ -3138,7 +3138,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsup@npm:*, tsup@npm:^8.3.6":
+"tsup@npm:^8.3.6":
   version: 8.4.0
   resolution: "tsup@npm:8.4.0"
   dependencies:
