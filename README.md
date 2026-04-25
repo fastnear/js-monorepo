@@ -63,7 +63,7 @@ Set `FASTNEAR_API_KEY` before running the authenticated snippets.
 
 #### Capture and chain one result
 
-Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step.
+Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step. Every `near.recipes.*`, `near.view`, `near.ft.*`, and `near.nft.*` accepts a per-call `{ network: "testnet" }` override; see the `connect-testnet` and `function-call-testnet` recipes for the end-to-end testnet flow.
 
 ```bash
 # Assumes FASTNEAR_API_KEY is already set in your shell.

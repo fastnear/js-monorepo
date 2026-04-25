@@ -41,7 +41,7 @@
     ],
     "captureExample": {
       "title": "Capture and chain one result",
-      "summary": "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step.",
+      "summary": "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step. Every `near.recipes.*`, `near.view`, `near.ft.*`, and `near.nft.*` accepts a per-call `{ network: \"testnet\" }` override; see the `connect-testnet` and `function-call-testnet` recipes for the end-to-end testnet flow.",
       "language": "bash",
       "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_SUMMARY=\"$(node -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { block_hash, storage_usage } = account;\n\nnear.print({ block_hash, storage_usage });\nEOF\n)\"\nBLOCK_HASH=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.block_hash')\"\nSTORAGE_USAGE=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.storage_usage')\"\n\nprintf 'block_hash=%s\\nstorage_usage=%s\\n' \"$BLOCK_HASH\" \"$STORAGE_USAGE\""
     }

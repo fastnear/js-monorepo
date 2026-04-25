@@ -530,7 +530,7 @@ export const supportSurface = {
   ],
   captureExample: {
     title: "Capture and chain one result",
-    summary: "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step.",
+    summary: "Keep the object work in JS, then hand the emitted JSON back to shell tooling when you need one more filter step. Every `near.recipes.*`, `near.view`, `near.ft.*`, and `near.nft.*` accepts a per-call `{ network: \"testnet\" }` override; see the `connect-testnet` and `function-call-testnet` recipes for the end-to-end testnet flow.",
     language: "bash",
     code: `${shellApiKeyComment}
 ACCOUNT_SUMMARY="$(node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})" <<'EOF'
