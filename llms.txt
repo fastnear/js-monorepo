@@ -29,6 +29,21 @@ Low-level-first runtime surfaces:
 - near.explain.tx
 - near.explain.error
 
+Wallet runtime surfaces (@fastnear/wallet):
+- nearWallet.connect({ network, contractId, manifest })
+- nearWallet.disconnect({ network })
+- nearWallet.restore({ network })
+- nearWallet.sendTransaction({ receiverId, actions, network })
+- nearWallet.sendTransactions({ transactions, network })
+- nearWallet.signMessage({ message, recipient, nonce, network })
+- nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })
+- nearWallet.accountId({ network })
+- nearWallet.isConnected({ network })
+- nearWallet.connectedNetworks()
+- nearWallet.switchNetwork(network)
+- nearWallet.onConnect(handler)
+- nearWallet.onDisconnect(handler)
+
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
 - FastNearApiV1AccountFullResponse
@@ -68,6 +83,8 @@ Families:
 - transfers: Asset-movement-focused history for accounts when the question is specifically about transfers, not full execution. Best for Recent transfer feeds for one account. / Asset movement summaries across FT, NFT, and native transfers. / Survey scripting where transfer rows matter more than transaction internals..
 - neardata: Block and shard documents for recent chain-state inspection without reconstructing shard layouts yourself. Best for Recent block inspection and shard-aware exploration. / Questions about network recency or recent transaction volume. / Walking block-height ranges and chunk layouts..
 - fastdata.kv: Indexed key-value history for exact keys, predecessor scans, and account-scoped storage exploration. Best for Exact-key lookups when you already know the contract, predecessor, and key. / Storage history scans keyed by predecessor or current account. / Questions about SocialDB-style writes and indexed storage history..
+
+Recipe index format: id: question (family, return type, auth style, default network)
 
 Recipe index:
 - view-contract: What does this contract method return? (rpc, BerryClubAccountView, none, mainnet)

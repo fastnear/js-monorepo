@@ -202,6 +202,15 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - `near.neardata.lastBlockFinal` / `lastBlockOptimistic` / `block` / `blockHeaders` / `blockShard` / `blockChunk` / `blockOptimistic` / `firstBlock` / `health`
 - `near.fastdata.kv.getLatestKey` / `getHistoryKey` / `latestByAccount` / `historyByAccount` / `latestByPredecessor` / `historyByPredecessor` / `allByPredecessor` / `multi`
 
+## Wallet entrypoints (`@fastnear/wallet`)
+
+- `nearWallet.connect` / `disconnect` / `restore`: open, close, or rehydrate a session per network. `connect({ network, contractId, manifest })` is the canonical entrypoint; `contractId` mints a function-call key scoped to that contract so zero-deposit calls sign silently.
+- `nearWallet.sendTransaction({ receiverId, actions, network })` / `sendTransactions`: dispatch one or many transactions through the connected wallet on the chosen network.
+- `nearWallet.signMessage({ message, recipient, nonce, network })`: NEP-413 message signing.
+- `nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })` (`@fastnear/wallet@1.1.4+`): grant a second function-call key on another contract after sign-in, so a follow-on zero-deposit call to that contract also signs silently.
+- `nearWallet.accountId` / `isConnected` / `connectedNetworks` / `switchNetwork`: per-network session inspection and the active-network cursor.
+- `nearWallet.onConnect` / `onDisconnect`: subscribe to session lifecycle.
+
 ## Access and chaining
 
 - API key env var: `FASTNEAR_API_KEY`

@@ -425,6 +425,21 @@ Low-level-first runtime surfaces:
 - near.explain.tx
 - near.explain.error
 
+Wallet runtime surfaces (@fastnear/wallet):
+- nearWallet.connect({ network, contractId, manifest })
+- nearWallet.disconnect({ network })
+- nearWallet.restore({ network })
+- nearWallet.sendTransaction({ receiverId, actions, network })
+- nearWallet.sendTransactions({ transactions, network })
+- nearWallet.signMessage({ message, recipient, nonce, network })
+- nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })
+- nearWallet.accountId({ network })
+- nearWallet.isConnected({ network })
+- nearWallet.connectedNetworks()
+- nearWallet.switchNetwork(network)
+- nearWallet.onConnect(handler)
+- nearWallet.onDisconnect(handler)
+
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
 - FastNearApiV1AccountFullResponse
@@ -456,6 +471,8 @@ ${supportSurface.discoveryOrder.map((entry) => `- ${entry.step}. ${entry.label}:
 
 Families:
 ${generatedArtifact.families.map((family) => `- ${family.id}: ${family.summary} Best for ${family.bestFor.join(" / ")}.`).join("\n")}
+
+Recipe index format: id: question (family, return type, auth style, default network)
 
 Recipe index:
 ${recipeCatalog.map((recipe) => `- ${recipe.id}: ${recipe.title} (${recipe.service}, ${recipe.returns}, ${recipe.auth}, ${recipe.network})`).join("\n")}
@@ -517,6 +534,15 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 - ` + "`near.transfers.query`" + `
 - ` + "`near.neardata.lastBlockFinal`" + ` / ` + "`lastBlockOptimistic`" + ` / ` + "`block`" + ` / ` + "`blockHeaders`" + ` / ` + "`blockShard`" + ` / ` + "`blockChunk`" + ` / ` + "`blockOptimistic`" + ` / ` + "`firstBlock`" + ` / ` + "`health`" + `
 - ` + "`near.fastdata.kv.getLatestKey`" + ` / ` + "`getHistoryKey`" + ` / ` + "`latestByAccount`" + ` / ` + "`historyByAccount`" + ` / ` + "`latestByPredecessor`" + ` / ` + "`historyByPredecessor`" + ` / ` + "`allByPredecessor`" + ` / ` + "`multi`" + `
+
+## Wallet entrypoints (` + "`@fastnear/wallet`" + `)
+
+- ` + "`nearWallet.connect`" + ` / ` + "`disconnect`" + ` / ` + "`restore`" + `: open, close, or rehydrate a session per network. ` + "`connect({ network, contractId, manifest })`" + ` is the canonical entrypoint; ` + "`contractId`" + ` mints a function-call key scoped to that contract so zero-deposit calls sign silently.
+- ` + "`nearWallet.sendTransaction({ receiverId, actions, network })`" + ` / ` + "`sendTransactions`" + `: dispatch one or many transactions through the connected wallet on the chosen network.
+- ` + "`nearWallet.signMessage({ message, recipient, nonce, network })`" + `: NEP-413 message signing.
+- ` + "`nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })`" + ` (` + "`@fastnear/wallet@1.1.4+`" + `): grant a second function-call key on another contract after sign-in, so a follow-on zero-deposit call to that contract also signs silently.
+- ` + "`nearWallet.accountId`" + ` / ` + "`isConnected`" + ` / ` + "`connectedNetworks`" + ` / ` + "`switchNetwork`" + `: per-network session inspection and the active-network cursor.
+- ` + "`nearWallet.onConnect`" + ` / ` + "`onDisconnect`" + `: subscribe to session lifecycle.
 
 ## Access and chaining
 
