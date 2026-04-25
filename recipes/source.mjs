@@ -462,11 +462,10 @@ near.print({
   block_height: past.block_height,
 });`,
 
-  connectTestnet: `// nearWallet.connect supports parallel mainnet+testnet sessions —
-// signing in on testnet here leaves any active mainnet session alone.
-// (near.recipes.connect uses the global config's network; for an explicit
-// per-network session, call nearWallet.connect directly.)
-const result = await nearWallet.connect({
+  connectTestnet: `// near.recipes.connect honors a per-call network override
+// (@fastnear/api 1.1.1+), so this opens a testnet session alongside any
+// existing mainnet session — wallet state is keyed per network.
+const result = await near.recipes.connect({
   network: "testnet",
   contractId: "guest-book.testnet",
 });
@@ -1472,7 +1471,7 @@ export const recipeCatalog = [
     summary: "Use the per-network connect parameter to keep mainnet and testnet sessions side by side.",
     network: "testnet",
     auth: "wallet",
-    api: "nearWallet.connect",
+    api: "near.recipes.connect",
     example: {
       network: "testnet",
       contractId: "guest-book.testnet",
@@ -1480,11 +1479,11 @@ export const recipeCatalog = [
     snippets: walletSnippets.connectTestnet,
   }, {
     service: "wallet",
-    returns: "{ accountId: string; network: \"mainnet\" | \"testnet\" } | undefined",
+    returns: "{ accountId: string; network?: \"mainnet\" | \"testnet\" } | undefined",
     outputKeys: ["connected.accountId", "connected.network", "active_networks"],
     responseNotes: [
       "@fastnear/wallet 1.1.0 keys session state per network, so signing in on testnet does not evict an active mainnet session.",
-      "near.recipes.connect uses the global config's network — call nearWallet.connect directly when you want an explicit per-network override.",
+      "@fastnear/api 1.1.1 added a `network` parameter to near.recipes.connect (and signOut) — earlier versions silently used near.config().networkId.",
       "nearWallet.connectedNetworks() returns the list of networks with an active session.",
     ],
     chooseWhen: [

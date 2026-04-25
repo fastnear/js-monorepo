@@ -25,7 +25,7 @@ import {
   updateTxHistory,
 } from "./state.js";
 
-import type { WalletProvider } from "./state.js";
+import type { WalletProvider, FastNearNetworkId } from "./state.js";
 import type { NetworkConfig } from "./state.js";
 import type {
   AccessKeyWithError,
@@ -512,34 +512,43 @@ export const requestSignIn = async ({
   contractId,
   excludedWallets,
   features,
+  network,
 }: {
   contractId?: string;
   excludedWallets?: string[];
   features?: Record<string, boolean>;
+  network?: FastNearNetworkId;
 } = {}) => {
   const provider = getWalletProvider();
   if (!provider) {
     throw new Error("No wallet provider set. Call useWallet() first or load the @fastnear/wallet IIFE bundle.");
   }
 
-  // Disconnect if already connected
-  if (provider.isConnected()) {
-    await provider.disconnect();
+  const targetNetwork = network ?? getConfig().networkId;
+
+  // Drop any prior session on the *target* network only — leaving sessions
+  // on other networks intact. With @fastnear/wallet 1.1.0+ the optional
+  // `{ network }` argument scopes both checks; older providers that ignore
+  // the option fall back to "active network", which matches pre-1.1.2
+  // behavior since `targetNetwork` defaulted to the active config.
+  if (provider.isConnected({ network: targetNetwork })) {
+    await provider.disconnect({ network: targetNetwork });
   }
 
   const result = await provider.connect({
     contractId,
-    network: getConfig().networkId,
+    network: targetNetwork,
     excludedWallets,
     features,
   });
 
   if (!result) {
     // User rejected
-    return;
+    return undefined;
   }
 
   update({ accountId: result.accountId });
+  return result;
 };
 
 export const view = async ({
@@ -997,13 +1006,25 @@ export const localTxHistory = () => {
   return getTxHistory();
 };
 
-export const signOut = async () => {
+export const signOut = async ({
+  network,
+}: { network?: FastNearNetworkId } = {}) => {
   const provider = getWalletProvider();
-  if (provider?.isConnected()) {
-    await provider.disconnect();
+  const targetNetwork = network ?? getConfig().networkId;
+
+  if (provider?.isConnected({ network: targetNetwork })) {
+    await provider.disconnect({ network: targetNetwork });
   }
-  update({ accountId: null, privateKey: null, contractId: null });
-  setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
+
+  // Only reset the api-level global state when signing out the *active*
+  // network. Signing out a non-active network (e.g. testnet while the
+  // active config is mainnet) leaves `_state.accountId` and the active
+  // config untouched so the active session survives. Once api gains a
+  // per-network state map, this clear can move to per-network too.
+  if (targetNetwork === getConfig().networkId) {
+    update({ accountId: null, privateKey: null, contractId: null });
+    setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
+  }
 };
 
 export const sendTx = async ({

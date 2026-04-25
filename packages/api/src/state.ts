@@ -189,13 +189,13 @@ export let _config: NetworkConfig = resolveConfig(lsGet("config"));
 export let _state: AppState = lsGet("state") || {};
 
 export interface WalletProvider {
-  connect(options?: { contractId?: string; network?: string; excludedWallets?: string[]; features?: Record<string, boolean> }): Promise<{ accountId: string } | null>;
-  restore?(options?: { contractId?: string; network?: string }): Promise<{ accountId: string } | null>;
-  disconnect(): Promise<void>;
-  sendTransaction(params: { receiverId: string; actions: any[]; signerId?: string }): Promise<any>;
-  signMessage?(params: { message: string; recipient: string; nonce: Uint8Array }): Promise<any>;
-  accountId(): string | null;
-  isConnected(): boolean;
+  connect(options?: { contractId?: string; network?: string; excludedWallets?: string[]; features?: Record<string, boolean> }): Promise<{ accountId: string; network?: string } | null>;
+  restore?(options?: { contractId?: string; network?: string }): Promise<{ accountId: string; network?: string } | null>;
+  disconnect(options?: { network?: string }): Promise<void>;
+  sendTransaction(params: { receiverId: string; actions: any[]; signerId?: string; network?: string }): Promise<any>;
+  signMessage?(params: { message: string; recipient: string; nonce: Uint8Array; network?: string }): Promise<any>;
+  accountId(options?: { network?: string }): string | null;
+  isConnected(options?: { network?: string }): boolean;
 }
 
 let _walletProvider: WalletProvider | null = null;

@@ -88,6 +88,10 @@ export interface RecipeConnectParams {
   contractId?: string;
   excludedWallets?: string[];
   features?: Record<string, boolean>;
+  // When set, opens the wallet picker scoped to this network — otherwise
+  // falls back to `near.config().networkId`. With @fastnear/wallet 1.1.0+
+  // the per-network sessions live alongside each other on the same page.
+  network?: "mainnet" | "testnet";
 }
 
 export interface FastNearRecipeDiscoveryEntry {

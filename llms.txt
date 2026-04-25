@@ -87,5 +87,5 @@ Recipe index:
 - nft-for-owner: Which NFTs does this account own on this contract? (rpc, Array<{ token_id: string; owner_id: string; metadata?: { title?: string; media?: string; description?: string } }>, none, mainnet)
 - nft-inventory: Which NFT contracts does this account hold tokens on? (api, { tokens: Array<{ contract_id: string; tokens?: Array<{ token_id: string }> }> }, bearer, mainnet)
 - archival-snapshot: What did this account look like at a specific block? (rpc, RpcViewAccountResponse, none, mainnet)
-- connect-testnet: How do I open a testnet wallet session alongside mainnet? (wallet, { accountId: string; network: "mainnet" | "testnet" } | undefined, wallet, testnet)
+- connect-testnet: How do I open a testnet wallet session alongside mainnet? (wallet, { accountId: string; network?: "mainnet" | "testnet" } | undefined, wallet, testnet)
 

@@ -2154,9 +2154,9 @@ near.print({
 ## How do I open a testnet wallet session alongside mainnet?
 
 - ID: `connect-testnet`
-- API: `nearWallet.connect`
+- API: `near.recipes.connect`
 - Service: `wallet`
-- Returns: `{ accountId: string; network: "mainnet" | "testnet" } | undefined`
+- Returns: `{ accountId: string; network?: "mainnet" | "testnet" } | undefined`
 - Network: `testnet`
 - Auth: `wallet`
 - Summary: Use the per-network connect parameter to keep mainnet and testnet sessions side by side.
@@ -2171,7 +2171,7 @@ Choose this when:
 Response notes:
 
 - @fastnear/wallet 1.1.0 keys session state per network, so signing in on testnet does not evict an active mainnet session.
-- near.recipes.connect uses the global config's network — call nearWallet.connect directly when you want an explicit per-network override.
+- @fastnear/api 1.1.1 added a `network` parameter to near.recipes.connect (and signOut) — earlier versions silently used near.config().networkId.
 - nearWallet.connectedNetworks() returns the list of networks with an active session.
 
 Follow-ups:
@@ -2204,11 +2204,10 @@ Example inputs:
 ### Browser Global
 
 ```js
-// nearWallet.connect supports parallel mainnet+testnet sessions —
-// signing in on testnet here leaves any active mainnet session alone.
-// (near.recipes.connect uses the global config's network; for an explicit
-// per-network session, call nearWallet.connect directly.)
-const result = await nearWallet.connect({
+// near.recipes.connect honors a per-call network override
+// (@fastnear/api 1.1.1+), so this opens a testnet session alongside any
+// existing mainnet session — wallet state is keyed per network.
+const result = await near.recipes.connect({
   network: "testnet",
   contractId: "guest-book.testnet",
 });
@@ -2233,11 +2232,10 @@ await nearWallet.restore({
   manifest: "./manifest.json",
 });
 
-// nearWallet.connect supports parallel mainnet+testnet sessions —
-// signing in on testnet here leaves any active mainnet session alone.
-// (near.recipes.connect uses the global config's network; for an explicit
-// per-network session, call nearWallet.connect directly.)
-const result = await nearWallet.connect({
+// near.recipes.connect honors a per-call network override
+// (@fastnear/api 1.1.1+), so this opens a testnet session alongside any
+// existing mainnet session — wallet state is keyed per network.
+const result = await near.recipes.connect({
   network: "testnet",
   contractId: "guest-book.testnet",
 });

@@ -1,15 +1,16 @@
 # 1.1.1
 
-- Metadata-only release that lifts every workspace package to the same
-  monorepo version. No `@fastnear/wallet` source changes — the published
-  bundle is byte-identical to 1.1.0.
+- Metadata-only release for `@fastnear/wallet` itself — no source
+  changes. The bundle is byte-identical to 1.1.0.
+- Pairs with `@fastnear/api@1.1.1`, which closed the
+  `near.recipes.connect({ network })` seam by threading the per-network
+  parameter through to the wallet provider's `connect` /
+  `disconnect` / `isConnected` calls. Pages using `near.recipes.connect`
+  now hit the wallet's per-network code paths the same way direct
+  `nearWallet.connect({ network })` calls do.
 - Recipe catalog (hosted at `js.fastnear.com/recipes.json`) gained a
-  `connect-testnet` recipe that demonstrates the 1.1.0 per-network
-  `nearWallet.connect({ network })` surface and `connectedNetworks()`
-  helper. Documented seam: `near.recipes.connect` (in `@fastnear/api`)
-  still reads the network from `near.config().networkId` rather than
-  forwarding a per-call override; closing this would be a small future
-  `@fastnear/api` patch.
+  `connect-testnet` recipe that demonstrates the per-network connect
+  parameter and `connectedNetworks()` helper.
 
 # 1.1.0
 
