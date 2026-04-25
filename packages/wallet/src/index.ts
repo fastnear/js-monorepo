@@ -16,6 +16,7 @@ export {
   registerDebugWallet,
   removeDebugWallet,
   switchNetwork,
+  addFunctionCallKey,
 } from "./connector";
 
 export type { ConnectOptions, ConnectResult, WalletManifest } from "./connector";

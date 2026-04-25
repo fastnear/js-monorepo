@@ -1,3 +1,27 @@
+# 1.1.4
+
+- **New `addFunctionCallKey({ contractId, methodNames, allowance, network, signerId })`
+  export.** Wraps the underlying `NearConnector.addFunctionCallKey` from
+  `@fastnear/near-connect@^0.12.1`. The wallet executor generates a fresh
+  keypair locally, the user approves an `AddKey` transaction (one popup),
+  and the private key is stored under `functionCallKey:<contractId>` so
+  subsequent zero-deposit function calls to that contract sign silently.
+  Routes through the per-network slot — `network` is optional and falls
+  back to the active network.
+- Use case this unlocks: a page can `connect({ contractId: "a.near" })` to
+  set up a session-key sign-in for one contract, then call
+  `nearWallet.addFunctionCallKey({ contractId: "b.near", methodNames: [...] })`
+  immediately afterwards (e.g., from an `onConnect` listener) so a second
+  contract also gets zero-popup signing — without re-entering the
+  sign-in modal. Throws if the connected wallet doesn't implement
+  `addFunctionCallKey` (currently MyNearWallet does; injected wallets
+  forward to the wallet's own implementation when present).
+- Bumps `@fastnear/near-connect` floor to `^0.12.1`. The 0.12.1 release
+  closed the silent-mainnet RPC routing bug in MNW for testnet sessions
+  and added `DEFAULT_PROVIDERS` on `NearConnector`. No api surface
+  changes in `@fastnear/near-connect` itself relevant to consumers.
+- Pairs with `@fastnear/api@1.1.4`, metadata-only.
+
 # 1.1.3
 
 - **Bundle fix:** the published 1.1.2 IIFE/UMD bundle inadvertently

@@ -1,3 +1,15 @@
+# 1.1.4
+
+- Metadata-only release for `@fastnear/api` itself — no source changes.
+  The bundle is byte-identical to 1.1.3.
+- Released alongside `@fastnear/wallet@1.1.4`, which adds an
+  `addFunctionCallKey` export for granting per-contract zero-popup
+  signing after sign-in. Versions across the monorepo are kept in
+  lockstep.
+- Picks up `@fastnear/near-connect@^0.12.1` via the root pin (was
+  `^0.12.0`). 0.12.1 closes a silent-mainnet RPC routing bug that
+  affected MyNearWallet testnet sessions.
+
 # 1.1.3
 
 - Metadata-only release for `@fastnear/api` itself — no source changes.

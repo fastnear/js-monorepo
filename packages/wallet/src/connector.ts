@@ -261,6 +261,49 @@ export async function removeDebugWallet(
 }
 
 /**
+ * Add a per-contract function-call access key to the signed-in account.
+ *
+ * Generates a keypair locally inside the wallet executor, sends an `AddKey`
+ * transaction through the wallet (one popup), and stores the private key
+ * locally so subsequent zero-deposit function calls to `contractId` can be
+ * signed silently.
+ *
+ * Use this to grant zero-popup signing to a contract that was *not* the one
+ * passed to `connect({ contractId })` at sign-in time. For example, if your
+ * page signs in for one contract but also wants silent draws on another,
+ * call this after `onConnect` fires.
+ *
+ * Routes to the per-network session matching `params.network` (or the active
+ * network when omitted). Requires a connected wallet on that network.
+ */
+export async function addFunctionCallKey(params: {
+  contractId: string;
+  methodNames?: string[];
+  allowance?: string;
+  network?: Network;
+  signerId?: string;
+}): Promise<{ publicKey: string; transactionOutcome: any }> {
+  const network = params.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (!state.connectedWallet) {
+    throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
+  }
+  const wallet: any = state.connectedWallet;
+  if (typeof wallet.addFunctionCallKey !== "function") {
+    throw new Error("Connected wallet does not support addFunctionCallKey");
+  }
+  const signerId = params.signerId ?? state.currentAccountId ?? undefined;
+  if (!signerId) throw new Error("No signer account id available");
+  return wallet.addFunctionCallKey({
+    contractId: params.contractId,
+    methodNames: params.methodNames ?? [],
+    allowance: params.allowance,
+    network,
+    signerId,
+  });
+}
+
+/**
  * Switch the connector to a different network.
  *
  * Note: with per-network state this is no longer required for typical use —
