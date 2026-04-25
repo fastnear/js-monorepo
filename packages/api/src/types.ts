@@ -76,12 +76,18 @@ export interface RecipeFunctionCallParams {
   gas?: string;
   deposit?: string;
   waitUntil?: string;
+  // Routes the call through the per-network slot in `@fastnear/api@1.1.1+`
+  // so a page holding parallel mainnet+testnet sessions can dispatch to
+  // either without flipping `near.config()`. Falls back to the active
+  // network when omitted.
+  network?: "mainnet" | "testnet";
 }
 
 export interface RecipeTransferParams {
   receiverId: string;
   amount: string;
   waitUntil?: string;
+  network?: "mainnet" | "testnet";
 }
 
 export interface RecipeConnectParams {

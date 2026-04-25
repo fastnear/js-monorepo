@@ -295,7 +295,8 @@
         "near.recipes.functionCall",
         "near.recipes.transfer",
         "near.recipes.signMessage",
-        "near.recipes.connect"
+        "near.recipes.connect",
+        "near.recipes.functionCall"
       ],
       "explain": [
         "near.explain.action",
@@ -1689,7 +1690,7 @@
         "Use connect-wallet when one network at a time is enough."
       ],
       "followUps": [
-        "Send a function call on the testnet contract with nearWallet.sendTransaction({ network: \"testnet\", … }).",
+        "Send a function call on the testnet contract with near.recipes.functionCall({ network: \"testnet\", … }) — see the function-call-testnet recipe.",
         "Read the active session per network with nearWallet.accountId({ network: \"testnet\" }) and nearWallet.getActiveNetwork()."
       ],
       "pagination": {
@@ -1700,7 +1701,83 @@
       },
       "relatedRecipes": [
         "connect-wallet",
-        "function-call"
+        "function-call",
+        "function-call-testnet"
+      ]
+    },
+    {
+      "id": "function-call-testnet",
+      "title": "How do I send a function call on testnet without losing my mainnet session?",
+      "summary": "Pair near.recipes.connect({ network: \"testnet\" }) with near.recipes.functionCall({ network: \"testnet\" }) — connect honors the per-network override added in 1.1.1; functionCall does the same thanks to per-network account state in 1.1.2.",
+      "network": "testnet",
+      "auth": "wallet",
+      "api": "near.recipes.functionCall",
+      "example": {
+        "network": "testnet",
+        "receiverId": "guest-book.testnet",
+        "methodName": "add_message",
+        "args": {
+          "text": "hello from a per-network call"
+        },
+        "gas": "30000000000000",
+        "deposit": "0"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Signing a transaction needs the wallet picker, which needs a browser.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "// near.recipes.functionCall accepts a per-call network override\n// (@fastnear/api 1.1.2+) — once a testnet session is open, the api reads\n// the testnet account from its per-network state map and dispatches the\n// signed transaction through the wallet's testnet slot. The mainnet\n// session, if any, is untouched.\nawait near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nconst result = await near.recipes.functionCall({\n  network: \"testnet\",\n  receiverId: \"guest-book.testnet\",\n  methodName: \"add_message\",\n  args: { text: \"hello from a per-network call\" },\n  gas: \"30000000000000\",\n  deposit: \"0\",\n});\n\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\n// near.recipes.functionCall accepts a per-call network override\n// (@fastnear/api 1.1.2+) — once a testnet session is open, the api reads\n// the testnet account from its per-network state map and dispatches the\n// signed transaction through the wallet's testnet slot. The mainnet\n// session, if any, is untouched.\nawait near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nconst result = await near.recipes.functionCall({\n  network: \"testnet\",\n  receiverId: \"guest-book.testnet\",\n  methodName: \"add_message\",\n  args: { text: \"hello from a per-network call\" },\n  gas: \"30000000000000\",\n  deposit: \"0\",\n});\n\nnear.print(result);"
+        }
+      ],
+      "service": "wallet",
+      "returns": "{ outcomes?: any[] } | { rejected: true } | undefined",
+      "outputKeys": [
+        "outcomes[].transaction.hash",
+        "outcomes[].status"
+      ],
+      "responseNotes": [
+        "@fastnear/api 1.1.2 keys account state per network, so near.recipes.functionCall reads the testnet signer from its testnet slot regardless of which network is currently active.",
+        "Local-signing also honors the network override in 1.1.2 — the RPC helpers, queryAccessKey/queryBlock/sendTxToRpc, and the nonce/block caches are all keyed per network.",
+        "nearWallet.connectedNetworks() returns the list of networks with an active session if you want to gate the call on testnet being signed in first."
+      ],
+      "chooseWhen": [
+        "Choose this when an action lives on testnet but the page also holds a live mainnet session.",
+        "Use function-call when only one network is involved."
+      ],
+      "followUps": [
+        "Sign a NEP-413 message with the testnet session via near.recipes.signMessage(message, { network: \"testnet\" }).",
+        "Send NEAR with near.recipes.transfer({ network: \"testnet\", … }) — same per-network surface."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-testnet",
+        "function-call",
+        "transfer"
       ]
     }
   ],

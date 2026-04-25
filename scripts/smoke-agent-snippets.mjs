@@ -355,8 +355,8 @@ async function main() {
       "relatedRecipes",
     ];
 
-    if (recipeIndex.version !== 3) {
-      throw new Error(`Expected recipe catalog version 3, received ${recipeIndex.version}`);
+    if (recipeIndex.version !== 4) {
+      throw new Error(`Expected recipe catalog version 4, received ${recipeIndex.version}`);
     }
 
     if (!Array.isArray(recipeIndex.families) || recipeIndex.families.length < 6) {

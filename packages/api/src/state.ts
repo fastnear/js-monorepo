@@ -153,13 +153,19 @@ export function resolveConfig(
   return next;
 }
 
-export interface AppState {
+export interface AccountSlot {
   accountId?: string | null;
   privateKey?: string | null;
-  lastWalletId?: string | null;
   publicKey?: string | null;
+  lastWalletId?: string | null;
   accessKeyContractId?: string | null;
+}
 
+// Pre-1.1.1 callers used `AppState` for the flat global state blob. The
+// shape now lives as `AccountSlot` (one per network), and `AppState`
+// stays as a permissive alias so legacy `update({ … })` callers passing
+// extra keys continue to type-check.
+export interface AppState extends AccountSlot {
   [key: string]: any;
 }
 
@@ -185,8 +191,55 @@ export interface UnbroadcastedEvents {
 // Load config from localStorage or default to the network's config
 export let _config: NetworkConfig = resolveConfig(lsGet("config"));
 
-// Load application state from localStorage
-export let _state: AppState = lsGet("state") || {};
+// Per-network account state. With @fastnear/wallet 1.1.0+ the wallet keeps
+// parallel mainnet+testnet sessions; api now does the same — `_state` is a
+// live alias for whichever network slot is currently active.
+const _networkStates: Record<FastNearNetworkId, AccountSlot> = {
+  mainnet: lsGet("state.mainnet") ?? {},
+  testnet: lsGet("state.testnet") ?? {},
+};
+
+function persistShape(slot: AccountSlot) {
+  return {
+    accountId: slot.accountId,
+    privateKey: slot.privateKey,
+    lastWalletId: slot.lastWalletId,
+    accessKeyContractId: slot.accessKeyContractId,
+  };
+}
+
+// Legacy migration: pre-1.1.1 wrote a single `state` blob. Promote it
+// into the mainnet slot once, then clear the legacy key. Mirrors the
+// wallet's 1.1.0 migration of unscoped storage keys.
+const _legacyState = lsGet("state");
+if (_legacyState && Object.keys(_legacyState).length > 0) {
+  _networkStates.mainnet = { ..._networkStates.mainnet, ..._legacyState };
+  lsSet("state.mainnet", persistShape(_networkStates.mainnet));
+  lsSet("state", null);
+}
+
+// Same migration for the local-signing nonce/block caches — pre-1.1.2
+// kept these as unscoped `nonce` and `block` keys, which collided across
+// networks. Promote into the mainnet slot once and clear. Per-network
+// keys are written by `sendTx`'s local-signing path going forward.
+const _legacyNonce = lsGet("nonce");
+if (_legacyNonce !== null && _legacyNonce !== undefined) {
+  lsSet("nonce.mainnet", _legacyNonce);
+  lsSet("nonce", null);
+}
+const _legacyBlock = lsGet("block");
+if (_legacyBlock) {
+  lsSet("block.mainnet", _legacyBlock);
+  lsSet("block", null);
+}
+
+let _activeNetwork: FastNearNetworkId = normalizeNetworkId(_config.networkId);
+
+// `_state` is a live binding pointing at the active slot. ESM live
+// bindings mean importers see the current value at read time; we
+// reassign on `setActiveNetwork` and `updateAccountState` so reads
+// like `_state.accountId` always resolve to the active network.
+export let _state: AccountSlot = _networkStates[_activeNetwork];
 
 export interface WalletProvider {
   connect(options?: { contractId?: string; network?: string; excludedWallets?: string[]; features?: Record<string, boolean> }): Promise<{ accountId: string; network?: string } | null>;
@@ -208,15 +261,19 @@ export const getWalletProvider = (): WalletProvider | null => {
   return _walletProvider;
 };
 
-// Attempt to set publicKey if we have a privateKey
-try {
-  _state.publicKey = _state.privateKey
-    ? publicKeyFromPrivate(_state.privateKey)
-    : null;
-} catch (e) {
-  console.error("Error parsing private key:", e);
-  _state.privateKey = null;
-  lsSet("nonce", null);
+// Initial publicKey derivation per slot. Each network's persisted
+// privateKey is parsed independently; a parse error clears that slot's
+// keys without touching the other network.
+for (const network of ["mainnet", "testnet"] as const) {
+  try {
+    const slot = _networkStates[network];
+    slot.publicKey = slot.privateKey ? publicKeyFromPrivate(slot.privateKey) : null;
+  } catch (e) {
+    console.error(`Error parsing private key for ${network}:`, e);
+    _networkStates[network].privateKey = null;
+    _networkStates[network].publicKey = null;
+    lsSet(`nonce.${network}`, null);
+  }
 }
 
 // Transaction history
@@ -283,31 +340,50 @@ export const events = {
 }
 
 // Mutators
-export const update = (newState: Partial<AppState>) => {
-  const oldState = _state;
-  _state = {..._state, ...newState};
 
-  lsSet("state", {
-    accountId: _state.accountId,
-    privateKey: _state.privateKey,
-    lastWalletId: _state.lastWalletId,
-    accessKeyContractId: _state.accessKeyContractId,
-  });
+export const updateAccountState = (
+  partial: Partial<AccountSlot>,
+  network?: FastNearNetworkId,
+): void => {
+  const target = network ?? _activeNetwork;
+  const oldSlot = _networkStates[target];
+  const newSlot: AccountSlot = { ...oldSlot, ...partial };
 
   if (
-    newState.hasOwnProperty("privateKey") &&
-    newState.privateKey !== oldState.privateKey
+    Object.prototype.hasOwnProperty.call(partial, "privateKey") &&
+    newSlot.privateKey !== oldSlot.privateKey
   ) {
-    _state.publicKey = newState.privateKey
-      ? publicKeyFromPrivate(newState.privateKey as string)
+    newSlot.publicKey = newSlot.privateKey
+      ? publicKeyFromPrivate(newSlot.privateKey as string)
       : null;
-    lsSet("nonce", null);
+    // Invalidate the per-network nonce cache when the slot's key changes
+    // — the next sendTx local-signing call refetches via view_access_key.
+    lsSet(`nonce.${target}`, null);
   }
 
-  if (newState.accountId !== oldState.accountId) {
-    events.notifyAccountListeners(newState.accountId as string);
+  _networkStates[target] = newSlot;
+  if (target === _activeNetwork) _state = newSlot;
+  lsSet(`state.${target}`, persistShape(newSlot));
+
+  if (target === _activeNetwork && newSlot.accountId !== oldSlot.accountId) {
+    events.notifyAccountListeners(newSlot.accountId as string);
   }
-}
+};
+
+export const getAccountState = (network?: FastNearNetworkId): AccountSlot =>
+  _networkStates[network ?? _activeNetwork];
+
+export const getActiveNetwork = (): FastNearNetworkId => _activeNetwork;
+
+export const setActiveNetwork = (network: FastNearNetworkId): void => {
+  _activeNetwork = normalizeNetworkId(network);
+  _state = _networkStates[_activeNetwork];
+};
+
+// Back-compat: legacy `update(partial)` writes into the active network slot.
+export const update = (newState: Partial<AppState>) => {
+  updateAccountState(newState, _activeNetwork);
+};
 
 export const updateTxHistory = (txStatus: TxStatus) => {
   const txId = txStatus.txId;

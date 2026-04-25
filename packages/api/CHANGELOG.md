@@ -1,3 +1,78 @@
+# 1.1.2
+
+## Per-network account state
+
+- Internal account state is now keyed by network. `_state.accountId`,
+  `_state.privateKey`, `_state.publicKey`, `_state.lastWalletId`, and
+  `_state.accessKeyContractId` move from a single global slot into a
+  `Record<"mainnet" | "testnet", AccountSlot>` map. This finishes the
+  per-network alignment with `@fastnear/wallet@1.1.0+` that started in
+  1.1.1 — the wallet had parallel sessions, but api still read account
+  state from a single global. `sendTx`/`signMessage` on a non-active
+  network now resolve through the right slot.
+- Public API surfaces gain optional `{ network }` arguments —
+  `accountId({ network })`, `publicKey({ network })`,
+  `authStatus({ network })`, `selected({ network })`,
+  `sendTx({ ..., network })`, `signMessage(msg, { network })`. Without
+  the argument, calls operate on the active network (most-recent
+  successful `requestSignIn` / `near.config({ networkId })`).
+- `recipes.functionCall` and `recipes.transfer` accept `network`
+  (forwarded to `sendTx`). `recipes.signMessage(message, { network })`
+  accepts an optional second argument for the same purpose. The hosted
+  recipe catalog at `js.fastnear.com/recipes.json` gains a
+  `function-call-testnet` entry that demonstrates the closed loop:
+  `near.recipes.connect({ network: "testnet" })` followed by
+  `near.recipes.functionCall({ network: "testnet" })` without
+  disturbing an active mainnet session.
+- `signOut({ network })` now clears only that network's slot — parallel
+  sessions on other networks survive untouched. `signOut()` (no arg)
+  keeps the legacy reset-to-default shape so single-session callers
+  are unaffected.
+- `config({ networkId })` keeps per-network slots intact across
+  switches (each network's account state survives) and pins the
+  active-network cursor to the supplied id, even when `config.networkId`
+  already matched. Block cache and tx history still clear on actual
+  networkId flips because both are per-config rather than per-account.
+- New helpers in the `state` namespace: `getActiveNetwork()`,
+  `setActiveNetwork(network)`, `getAccountState({ network })`,
+  `updateAccountState(partial, { network })`. The `state._state`
+  namespace export is now a getter resolving to the active slot
+  (previously a value-copy frozen at module load — could go stale once
+  the active network changed).
+- Legacy localStorage `state` blob is migrated to the mainnet slot on
+  first load and the unscoped key cleared. Mirrors the wallet's 1.1.0
+  legacy migration. New per-network keys are `state.mainnet` and
+  `state.testnet`.
+
+## Per-network RPC routing
+
+- `sendRpc(method, params, { network })` now routes to the override
+  network's `services.rpc.baseUrl` (or `services.archival.baseUrl` when
+  `useArchival` is also set). `view`, `queryAccount`, `queryBlock`,
+  `queryAccessKey`, `queryTx`, and `sendTxToRpc` all forward `network`.
+- `tx.*`, `api.v1.*`, `transfers.*`, `neardata.*`, `fastdata.kv.*`,
+  `ft.*`, and `nft.*` accept an optional `network`. The override's
+  service URL is used for the request; the active config's `apiKey`
+  still flows through unchanged.
+- `sendTx`'s local-signing path is now fully per-network. The
+  `nonce`/`block` localStorage caches move to `nonce.${network}` /
+  `block.${network}` keys, and `queryAccessKey` / `queryBlock` /
+  `sendTxToRpc` are called with the same network. The mismatch guard
+  added earlier in 1.1.2 development is removed — `sendTx({ network })`
+  now signs and broadcasts on the requested network without requiring
+  `near.config({ networkId })` to match.
+- Legacy unscoped `nonce` and `block` localStorage keys are migrated
+  into the mainnet slot on first load and the unscoped keys cleared.
+  Mirrors the `state` blob migration.
+
+## Recipe discovery sync
+
+- `near.recipes.list()` (and `.toJSON()`) now include the eight catalog
+  entries that landed in 1.1.1 plus the new `function-call-testnet`
+  recipe. The runtime list had drifted from `recipes/index.json` since
+  1.1.1; the smoke at `scripts/smoke-agent-snippets.mjs` now flags any
+  future drift.
+
 # 1.1.1
 
 ## Per-network parameter on wallet wrappers

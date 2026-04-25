@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "v
 import { memoryStore } from "@fastnear/utils";
 
 import {
+  accountId,
   actions,
   api,
   config,
   explain,
   fastdata,
+  ft,
   neardata,
   print,
   queryAccessKey,
@@ -16,6 +18,7 @@ import {
   queryTx,
   recipes,
   selected,
+  signOut,
   state,
   transfers,
   tx,
@@ -69,12 +72,21 @@ function resetTestState() {
     ...NETWORKS.mainnet,
     apiKey: null,
   });
-  state.update({
-    accountId: null,
-    privateKey: null,
-    lastWalletId: null,
-    accessKeyContractId: null,
-  });
+  // Per-network state: clear both slots and pin active to mainnet so
+  // tests start from a clean, deterministic state regardless of which
+  // network the previous test left active.
+  for (const network of ["mainnet", "testnet"] as const) {
+    state.updateAccountState(
+      {
+        accountId: null,
+        privateKey: null,
+        lastWalletId: null,
+        accessKeyContractId: null,
+      },
+      network,
+    );
+  }
+  state.setActiveNetwork("mainnet");
   global.fetch = vi.fn();
 }
 
@@ -840,6 +852,7 @@ describe("near.recipes", () => {
     expect(provider.sendTransaction).toHaveBeenCalledWith({
       signerId: "root.near",
       receiverId: "berryclub.ek.near",
+      network: "mainnet",
       actions: [
         {
           type: "FunctionCall",
@@ -870,6 +883,7 @@ describe("near.recipes", () => {
     expect(provider.sendTransaction).toHaveBeenCalledWith({
       signerId: "root.near",
       receiverId: "escrow.ai.near",
+      network: "mainnet",
       actions: [
         {
           type: "Transfer",
@@ -917,8 +931,209 @@ describe("near.recipes", () => {
     };
     const result = await recipes.signMessage(message);
 
-    expect(provider.signMessage).toHaveBeenCalledWith(message);
+    expect(provider.signMessage).toHaveBeenCalledWith({ ...message, network: "mainnet" });
     expect(result).toEqual({ signature: "ed25519:signature" });
+  });
+});
+
+describe("near per-network state", () => {
+  beforeEach(() => {
+    resetTestState();
+  });
+
+  afterEach(() => {
+    if (originalFetch) {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("requestSignIn({ network: 'testnet' }) writes the testnet slot and leaves mainnet untouched", async () => {
+    const provider = createWalletProvider({
+      isConnected: vi.fn().mockReturnValue(false),
+      connect: vi.fn().mockResolvedValue({ accountId: "alice.testnet", network: "testnet" }),
+    });
+    useWallet(provider as any);
+
+    await recipes.connect({ network: "testnet", contractId: "count.mike.testnet" });
+
+    expect(provider.connect).toHaveBeenCalledWith({
+      contractId: "count.mike.testnet",
+      network: "testnet",
+      excludedWallets: undefined,
+      features: undefined,
+    });
+    expect(state.getActiveNetwork()).toBe("testnet");
+    expect(selected({ network: "testnet" }).account).toBe("alice.testnet");
+    expect(selected({ network: "mainnet" }).account == null).toBe(true);
+  });
+
+  it("two parallel sign-ins preserve both slots and active follows the latest", async () => {
+    const mainnetProvider = createWalletProvider({
+      isConnected: vi.fn().mockReturnValue(false),
+      connect: vi.fn().mockResolvedValue({ accountId: "main.near", network: "mainnet" }),
+    });
+    useWallet(mainnetProvider as any);
+    await recipes.connect({ network: "mainnet" });
+
+    // Same provider reused for both networks — wallet 1.1.0+ keeps
+    // per-network sessions internally, so the api just sees one provider.
+    const testnetProvider = createWalletProvider({
+      isConnected: vi.fn().mockReturnValue(false),
+      connect: vi.fn().mockResolvedValue({ accountId: "alice.testnet", network: "testnet" }),
+    });
+    useWallet(testnetProvider as any);
+    await recipes.connect({ network: "testnet" });
+
+    expect(state.getActiveNetwork()).toBe("testnet");
+    expect(accountId({ network: "mainnet" })).toBe("main.near");
+    expect(accountId({ network: "testnet" })).toBe("alice.testnet");
+    expect(accountId()).toBe("alice.testnet");
+  });
+
+  it("signOut({ network: 'testnet' }) clears only the testnet slot", async () => {
+    state.updateAccountState({ accountId: "main.near" }, "mainnet");
+    state.updateAccountState({ accountId: "alice.testnet" }, "testnet");
+    state.setActiveNetwork("testnet");
+
+    const provider = createWalletProvider({
+      isConnected: vi.fn((opts: any) => opts?.network === "testnet"),
+    });
+    useWallet(provider as any);
+
+    await signOut({ network: "testnet" });
+
+    expect(accountId({ network: "mainnet" })).toBe("main.near");
+    expect(accountId({ network: "testnet" }) == null).toBe(true);
+    // Active was testnet — explicit signOut on a specific network does
+    // *not* flip the active cursor or reset the config.
+    expect(state.getActiveNetwork()).toBe("testnet");
+  });
+
+  it("sendTx({ network: 'testnet' }) reads the testnet slot for the signer and threads network to the provider", async () => {
+    state.updateAccountState({ accountId: "main.near" }, "mainnet");
+    state.updateAccountState({ accountId: "alice.testnet" }, "testnet");
+    state.setActiveNetwork("mainnet");
+
+    const provider = createWalletProvider({
+      isConnected: vi.fn((opts: any) => opts?.network === "testnet"),
+    });
+    useWallet(provider as any);
+
+    await recipes.functionCall({
+      network: "testnet",
+      receiverId: "count.mike.testnet",
+      methodName: "increment",
+      args: {},
+    });
+
+    expect(provider.sendTransaction).toHaveBeenCalledWith({
+      signerId: "alice.testnet",
+      receiverId: "count.mike.testnet",
+      network: "testnet",
+      actions: [
+        {
+          type: "FunctionCall",
+          methodName: "increment",
+          args: {},
+          argsBase64: undefined,
+          gas: undefined,
+          deposit: undefined,
+        },
+      ],
+    });
+  });
+
+  it("signMessage(msg, { network: 'testnet' }) threads network to the provider", async () => {
+    state.updateAccountState({ accountId: "alice.testnet" }, "testnet");
+    state.setActiveNetwork("testnet");
+
+    const provider = createWalletProvider({
+      isConnected: vi.fn((opts: any) => opts?.network === "testnet"),
+    });
+    useWallet(provider as any);
+
+    const message = {
+      message: "Sign in to testnet",
+      recipient: "count.mike.testnet",
+      nonce: new Uint8Array(32),
+    };
+    await recipes.signMessage(message, { network: "testnet" });
+
+    expect(provider.signMessage).toHaveBeenCalledWith({ ...message, network: "testnet" });
+  });
+
+  it("config({ networkId }) switches active without clobbering per-network slots", async () => {
+    state.updateAccountState({ accountId: "main.near" }, "mainnet");
+    state.updateAccountState({ accountId: "alice.testnet" }, "testnet");
+    state.setActiveNetwork("testnet");
+
+    config({ networkId: "mainnet" });
+
+    expect(state.getActiveNetwork()).toBe("mainnet");
+    expect(accountId()).toBe("main.near");
+    // testnet slot survives the switch.
+    expect(accountId({ network: "testnet" })).toBe("alice.testnet");
+
+    config({ networkId: "testnet" });
+    expect(state.getActiveNetwork()).toBe("testnet");
+    expect(accountId()).toBe("alice.testnet");
+  });
+});
+
+describe("near per-network RPC routing", () => {
+  beforeEach(() => {
+    resetTestState();
+  });
+
+  afterEach(() => {
+    if (originalFetch) {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("routes view({ network: 'testnet' }) to the testnet RPC URL", async () => {
+    mockFetch({ result: { result: [123, 34, 121, 101, 115, 34, 125] } }); // bytes for {"yes"}
+    await view({ contractId: "guest-book.testnet", methodName: "ping", args: {}, network: "testnet" });
+    const { url } = getFetchCall();
+    expectUrl(url, "https://rpc.testnet.fastnear.com/", "/", {});
+  });
+
+  it("routes queryAccount({ network: 'testnet' }) to the testnet RPC URL", async () => {
+    mockFetch({ result: { amount: "0", block_height: 1 } });
+    await queryAccount({ accountId: "alice.testnet", network: "testnet" });
+    const { url } = getFetchCall();
+    expectUrl(url, "https://rpc.testnet.fastnear.com/", "/", {});
+  });
+
+  it("routes tx.transactions({ network: 'testnet' }) to the testnet tx service URL", async () => {
+    mockFetch({ transactions: [] });
+    await tx.transactions({ txHashes: ["abc"], network: "testnet" });
+    const { url, body } = getFetchCall();
+    expectUrl(url, "https://tx.test.fastnear.com", "/v0/transactions", {});
+    expect(body).toEqual({ tx_hashes: ["abc"] });
+  });
+
+  it("routes api.v1.accountFull({ network: 'testnet' }) to the testnet api service URL", async () => {
+    mockFetch({ account_id: "alice.testnet", state: { balance: "0" }, tokens: [], nfts: [], pools: [] });
+    await api.v1.accountFull({ accountId: "alice.testnet", network: "testnet" });
+    const { url } = getFetchCall();
+    expectUrl(url, "https://test.api.fastnear.com", "/v1/account/alice.testnet/full", {});
+  });
+
+  it("routes ft.balance({ network: 'testnet' }) to the testnet RPC URL", async () => {
+    mockFetch({ result: { result: [34, 49, 50, 51, 34] } }); // bytes for "123"
+    await ft.balance({ contractId: "wrap.testnet", accountId: "alice.testnet", network: "testnet" });
+    const { url } = getFetchCall();
+    expectUrl(url, "https://rpc.testnet.fastnear.com/", "/", {});
+  });
+
+  it("threads the active apiKey through cross-network bearer-auth calls", async () => {
+    config({ apiKey: "test-key" });
+    mockFetch({ account_id: "alice.testnet", state: { balance: "0" }, tokens: [], nfts: [], pools: [] });
+    await api.v1.accountFull({ accountId: "alice.testnet", network: "testnet" });
+    const { url, request } = getFetchCall();
+    expectUrl(url, "https://test.api.fastnear.com", "/v1/account/alice.testnet/full", {});
+    expect(request.headers?.Authorization).toBe("Bearer test-key");
   });
 });
 

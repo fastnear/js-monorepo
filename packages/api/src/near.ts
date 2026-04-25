@@ -18,10 +18,14 @@ import {
   _state,
   DEFAULT_NETWORK_ID,
   NETWORKS,
+  getAccountState,
+  getActiveNetwork,
   getWalletProvider,
+  setActiveNetwork,
   setWalletProvider,
   getTxHistory,
   update,
+  updateAccountState,
   updateTxHistory,
 } from "./state.js";
 
@@ -82,6 +86,7 @@ import {
   getConfig,
   setConfig,
   resetTxHistory,
+  resolveConfig,
 } from "./state.js";
 
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -181,6 +186,11 @@ interface ServiceRequestOptions {
   query?: Record<string, any>;
   body?: any;
   headers?: Record<string, string>;
+  // When set, routes the request through the override network's defaults
+  // (URLs from `NETWORKS[network].services.*`) instead of the active
+  // config. The active config's `apiKey` still flows through. Without
+  // it, the active config is used end-to-end.
+  network?: FastNearNetworkId;
 }
 
 const SERVICE_AUTH_STYLES: Record<ServiceFamily, ServiceAuthStyle> = {
@@ -262,6 +272,22 @@ function buildHttpError(service: ServiceFamily, response: Response, payload: any
   );
 }
 
+// Resolve the config to use for a per-call override. Without an
+// override, returns the active config. With one, returns a config built
+// from `NETWORKS[network].services` (so URLs hit the right hosts) but
+// inheriting the active `apiKey` (which is account-bound, not
+// network-bound). User-applied per-network URL overrides via
+// `near.config({ services: …, networkId: "testnet" })` are not currently
+// preserved across cross-network calls — callers who need that should
+// switch via `near.config({ networkId })` and back.
+function resolveConfigForCall(network?: FastNearNetworkId): NetworkConfig {
+  const active = getConfig();
+  if (!network || network === active.networkId) {
+    return active;
+  }
+  return resolveConfig({ apiKey: active.apiKey ?? null }, NETWORKS[network]);
+}
+
 function resolveServiceBaseUrl(family: Exclude<ServiceFamily, "rpc">, config: NetworkConfig): string {
   let baseUrl: string | null | undefined;
 
@@ -310,8 +336,13 @@ function resolveArchivalUrl(config: NetworkConfig): string {
   return config.services?.archival?.baseUrl || resolveRpcUrl(config);
 }
 
-function buildAuthedUrl(service: ServiceFamily, baseUrl: string, path = "", query?: Record<string, any>): string {
-  const config = getConfig();
+function buildAuthedUrl(
+  service: ServiceFamily,
+  baseUrl: string,
+  path = "",
+  query?: Record<string, any>,
+  config: NetworkConfig = getConfig(),
+): string {
   const authStyle = SERVICE_AUTH_STYLES[service];
   const authQuery =
     authStyle === "query" && config.apiKey
@@ -328,10 +359,11 @@ async function sendServiceRequest<T = any>({
   query,
   body,
   headers = {},
+  network,
 }: ServiceRequestOptions): Promise<T> {
-  const config = getConfig();
+  const config = resolveConfigForCall(network);
   const authStyle = SERVICE_AUTH_STYLES[family];
-  const url = buildAuthedUrl(family, resolveServiceBaseUrl(family, config), path, query);
+  const url = buildAuthedUrl(family, resolveServiceBaseUrl(family, config), path, query, config);
   const requestHeaders: Record<string, string> = { ...headers };
 
   if (authStyle === "bearer" && config.apiKey) {
@@ -365,6 +397,13 @@ export interface RpcRouteOptions {
    * `blockId`. Falls back to the regular RPC if archival isn't configured.
    */
   useArchival?: boolean;
+  /**
+   * Route this call to the override network's RPC instead of the active
+   * `near.config().networkId`. Useful when a page holds parallel
+   * mainnet+testnet sessions and a single read or write needs to target
+   * the non-active network without flipping config back and forth.
+   */
+  network?: FastNearNetworkId;
 }
 
 export async function sendRpc<T = any>(
@@ -372,9 +411,9 @@ export async function sendRpc<T = any>(
   params: Record<string, any> | any[],
   options?: RpcRouteOptions,
 ): Promise<T> {
-  const config = getConfig();
+  const config = resolveConfigForCall(options?.network);
   const baseUrl = options?.useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
-  const response = await fetch(buildAuthedUrl("rpc", baseUrl), {
+  const response = await fetch(buildAuthedUrl("rpc", baseUrl, "", undefined, config), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -394,13 +433,13 @@ export async function sendRpc<T = any>(
   return result as T;
 }
 
-export function afterTxSent(txId: string) {
+export function afterTxSent(txId: string, network?: FastNearNetworkId) {
   const txHistory = getTxHistory();
   sendRpc("tx", {
     tx_hash: txHistory[txId]?.txHash,
     sender_account_id: txHistory[txId]?.tx?.signerId,
     wait_until: "EXECUTED_OPTIMISTIC",
-  })
+  }, { network })
     .then( result => {
       const successValue = result?.result?.status?.SuccessValue;
       updateTxHistory({
@@ -421,7 +460,12 @@ export function afterTxSent(txId: string) {
     });
 }
 
-export async function sendTxToRpc(signedTxBase64: string, waitUntil: string | undefined, txId: string) {
+export async function sendTxToRpc(
+  signedTxBase64: string,
+  waitUntil: string | undefined,
+  txId: string,
+  network?: FastNearNetworkId,
+) {
   // default to "INCLUDED"
   // see options: https://docs.near.org/api/rpc/transactions#tx-status-result
   waitUntil = waitUntil || "INCLUDED";
@@ -430,10 +474,10 @@ export async function sendTxToRpc(signedTxBase64: string, waitUntil: string | un
     const sendTxRes = await sendRpc("send_tx", {
       signed_tx_base64: signedTxBase64,
       wait_until: waitUntil,
-    });
+    }, { network });
 
     updateTxHistory({ txId, status: "Included", finalState: false });
-    afterTxSent(txId);
+    afterTxSent(txId, network);
 
     return sendTxRes;
   } catch (error) {
@@ -456,55 +500,60 @@ export function generateTxId(): string {
   return `tx-${Date.now()}-${parseInt(randomPart, 10).toString(36)}`;
 }
 
-export const accountId = () => _state.accountId;
-export const publicKey = () => _state.publicKey;
+export const accountId = (options: { network?: FastNearNetworkId } = {}) =>
+  getAccountState(options.network).accountId;
+
+export const publicKey = (options: { network?: FastNearNetworkId } = {}) =>
+  getAccountState(options.network).publicKey;
 
 export const config = (newConfig?: Partial<NetworkConfig>) => {
   const current = getConfig();
   if (newConfig) {
-    if (newConfig.networkId && current.networkId !== newConfig.networkId) {
-      setConfig(newConfig);
-      update({ accountId: null, privateKey: null, lastWalletId: null });
-      lsSet("block", null);
+    const networkChanging =
+      !!newConfig.networkId && current.networkId !== newConfig.networkId;
+    setConfig(newConfig);
+    if (networkChanging) {
+      // Per-network state and per-network block cache are preserved
+      // across config switches — each network's slot survives. tx
+      // history is still cleared because it's keyed by local txId, not
+      // network, and a switch is the natural boundary for "I'm done
+      // with the previous network's recent activity."
       resetTxHistory();
-    } else {
-      setConfig(newConfig);
+    }
+    // Whenever a `networkId` is explicitly specified, pin the active
+    // cursor to it — even when config.networkId was already that value.
+    // Callers use `config({ networkId })` as the canonical "switch
+    // default network" idiom, so it should also flip active.
+    if (newConfig.networkId) {
+      setActiveNetwork(getConfig().networkId);
     }
   }
   return getConfig();
 };
 
-export const authStatus = (): string | Record<string, any> => {
-  if (!_state.accountId) {
-    return "SignedOut";
-  }
-  return "SignedIn";
+export const authStatus = (
+  options: { network?: FastNearNetworkId } = {},
+): string | Record<string, any> => {
+  return getAccountState(options.network).accountId ? "SignedIn" : "SignedOut";
 };
 
-export const getPublicKeyForContract = () => {
-  return publicKey();
+export const getPublicKeyForContract = (options: { network?: FastNearNetworkId } = {}) => {
+  return publicKey(options);
 }
 
-export const selected = () => {
-  const network = getConfig().networkId;
-  const nodeUrl = getConfig().nodeUrl;
-  const walletUrl = getConfig().walletUrl;
-  const helperUrl = getConfig().helperUrl;
-  const explorerUrl = getConfig().explorerUrl;
-
-  const account = accountId();
-  const contract = _state.accessKeyContractId;
-  const publicKey = getPublicKeyForContract();
+export const selected = (options: { network?: FastNearNetworkId } = {}) => {
+  const network = options.network ?? getConfig().networkId;
+  const slot = getAccountState(network);
 
   return {
     network,
-    nodeUrl,
-    walletUrl,
-    helperUrl,
-    explorerUrl,
-    account,
-    contract,
-    publicKey
+    nodeUrl: getConfig().nodeUrl,
+    walletUrl: getConfig().walletUrl,
+    helperUrl: getConfig().helperUrl,
+    explorerUrl: getConfig().explorerUrl,
+    account: slot.accountId,
+    contract: slot.accessKeyContractId,
+    publicKey: slot.publicKey,
   }
 }
 
@@ -547,7 +596,12 @@ export const requestSignIn = async ({
     return undefined;
   }
 
-  update({ accountId: result.accountId });
+  // Write the connected account into the *target network*'s slot rather
+  // than the legacy global, and promote that network to active so that
+  // back-compat callers (`near.accountId()` without args, etc.) resolve
+  // to the just-connected session.
+  updateAccountState({ accountId: result.accountId }, targetNetwork);
+  setActiveNetwork(targetNetwork);
   return result;
 };
 
@@ -558,6 +612,7 @@ export const view = async ({
                              argsBase64,
                              blockId,
                              useArchival,
+                             network,
                            }: {
   contractId: string;
   methodName: string;
@@ -565,6 +620,7 @@ export const view = async ({
   argsBase64?: string;
   blockId?: string;
   useArchival?: boolean;
+  network?: FastNearNetworkId;
 }) => {
   const encodedArgs = argsBase64 || (args ? toBase64(JSON.stringify(args)) : "");
   const queryResult = await sendRpc(
@@ -578,7 +634,7 @@ export const view = async ({
       },
       blockId
     ),
-    { useArchival },
+    { useArchival, network },
   );
 
   return parseJsonFromBytes(queryResult.result.result);
@@ -588,20 +644,22 @@ export const queryAccount = async ({
                                 accountId,
                                 blockId,
                                 useArchival,
+                                network,
                               }: {
   accountId: string;
   blockId?: string;
   useArchival?: boolean;
+  network?: FastNearNetworkId;
 }): Promise<FastNearRpcQueryAccountResponse> => {
   return sendRpc(
     "query",
     withBlockId({ request_type: "view_account", account_id: accountId }, blockId),
-    { useArchival },
+    { useArchival, network },
   );
 };
 
-export const queryBlock = async ({ blockId, useArchival }: { blockId?: string; useArchival?: boolean }): Promise<BlockView> => {
-  return sendRpc("block", withBlockId({}, blockId), { useArchival });
+export const queryBlock = async ({ blockId, useArchival, network }: { blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }): Promise<BlockView> => {
+  return sendRpc("block", withBlockId({}, blockId), { useArchival, network });
 };
 
 export const queryAccessKey = async ({
@@ -609,11 +667,13 @@ export const queryAccessKey = async ({
                                   publicKey,
                                   blockId,
                                   useArchival,
+                                  network,
                                 }: {
   accountId: string;
   publicKey: string;
   blockId?: string;
   useArchival?: boolean;
+  network?: FastNearNetworkId;
 }): Promise<AccessKeyWithError> => {
   return sendRpc(
     "query",
@@ -621,12 +681,12 @@ export const queryAccessKey = async ({
       { request_type: "view_access_key", account_id: accountId, public_key: publicKey },
       blockId
     ),
-    { useArchival },
+    { useArchival, network },
   );
 };
 
-export const queryTx = async ({ txHash, accountId, useArchival }: { txHash: string; accountId: string; useArchival?: boolean }) => {
-  return sendRpc("tx", [txHash, accountId], { useArchival });
+export const queryTx = async ({ txHash, accountId, useArchival, network }: { txHash: string; accountId: string; useArchival?: boolean; network?: FastNearNetworkId }) => {
+  return sendRpc("tx", [txHash, accountId], { useArchival, network });
 };
 
 function shouldPrintInteractiveSeparator(): boolean {
@@ -687,115 +747,128 @@ function withAliases(
 }
 
 export const tx = {
-  transactions: ({ txHashes, ...filters }: { txHashes: string[]; [key: string]: any }) =>
+  transactions: ({ txHashes, network, ...filters }: { txHashes: string[]; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearTxTransactionsResponse>({
       family: "tx",
       path: "/v0/transactions",
       method: "POST",
+      network,
       body: omitUndefinedEntries({
         ...filters,
         tx_hashes: requiredParam(txHashes, "txHashes"),
       }),
     }),
 
-  receipt: ({ receiptId, ...filters }: { receiptId: string; [key: string]: any }) =>
+  receipt: ({ receiptId, network, ...filters }: { receiptId: string; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearTxReceiptResponse>({
       family: "tx",
       path: "/v0/receipt",
       method: "POST",
+      network,
       body: omitUndefinedEntries({
         ...filters,
         receipt_id: requiredParam(receiptId, "receiptId"),
       }),
     }),
 
-  account: ({ accountId, ...filters }: { accountId: string; [key: string]: any }) =>
+  account: ({ accountId, network, ...filters }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearTxAccountResponse>({
       family: "tx",
       path: "/v0/account",
       method: "POST",
+      network,
       body: omitUndefinedEntries({
         ...filters,
         account_id: requiredParam(accountId, "accountId"),
       }),
     }),
 
-  block: (params: Record<string, any> = {}) =>
+  block: ({ network, ...params }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearTxBlockResponse>({
       family: "tx",
       path: "/v0/block",
       method: "POST",
+      network,
       body: omitUndefinedEntries(params),
     }),
 
-  blocks: (params: Record<string, any> = {}) =>
+  blocks: ({ network, ...params }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearTxBlocksResponse>({
       family: "tx",
       path: "/v0/blocks",
       method: "POST",
+      network,
       body: omitUndefinedEntries(params),
     }),
 };
 
 export const api = {
   v1: {
-    accountFull: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    accountFull: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1AccountFullResponse>({
         family: "api",
         path: `/v1/account/${encodePathParam(accountId, "accountId")}/full`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    accountFt: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    accountFt: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1AccountFtResponse>({
         family: "api",
         path: `/v1/account/${encodePathParam(accountId, "accountId")}/ft`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    accountNft: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    accountNft: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1AccountNftResponse>({
         family: "api",
         path: `/v1/account/${encodePathParam(accountId, "accountId")}/nft`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    accountStaking: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    accountStaking: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1AccountStakingResponse>({
         family: "api",
         path: `/v1/account/${encodePathParam(accountId, "accountId")}/staking`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    publicKey: ({ publicKey, ...query }: { publicKey: string; [key: string]: any }) =>
+    publicKey: ({ publicKey, network, ...query }: { publicKey: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1PublicKeyResponse>({
         family: "api",
         path: `/v1/public_key/${encodePathParam(publicKey, "publicKey")}`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    publicKeyAll: ({ publicKey, ...query }: { publicKey: string; [key: string]: any }) =>
+    publicKeyAll: ({ publicKey, network, ...query }: { publicKey: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1PublicKeyAllResponse>({
         family: "api",
         path: `/v1/public_key/${encodePathParam(publicKey, "publicKey")}/all`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    ftTop: ({ tokenId, ...query }: { tokenId: string; [key: string]: any }) =>
+    ftTop: ({ tokenId, network, ...query }: { tokenId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearApiV1FtTopResponse>({
         family: "api",
         path: `/v1/ft/${encodePathParam(tokenId, "tokenId")}/top`,
+        network,
         query: omitUndefinedEntries(query),
       }),
   },
 };
 
 export const transfers = {
-  query: (params: Record<string, any> = {}) =>
+  query: ({ network, ...params }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearTransfersQueryResponse>({
       family: "transfers",
       path: "/v0/transfers",
       method: "POST",
+      network,
       body: omitUndefinedEntries(withAliases(params, { accountId: "account_id", resumeToken: "resume_token" })),
     }),
 };
@@ -805,198 +878,219 @@ export const transfers = {
 // method name pre-filled — agents prompt with the spec's verb instead
 // of pasting the underlying methodName recipe each time.
 export const ft = {
-  balance: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "ft_balance_of", args: { account_id: accountId }, blockId, useArchival }),
+  balance: ({ contractId, accountId, blockId, useArchival, network }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "ft_balance_of", args: { account_id: accountId }, blockId, useArchival, network }),
 
-  metadata: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "ft_metadata", args: {}, blockId, useArchival }),
+  metadata: ({ contractId, blockId, useArchival, network }: { contractId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "ft_metadata", args: {}, blockId, useArchival, network }),
 
-  totalSupply: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "ft_total_supply", args: {}, blockId, useArchival }),
+  totalSupply: ({ contractId, blockId, useArchival, network }: { contractId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "ft_total_supply", args: {}, blockId, useArchival, network }),
 
   // NEP-145 storage-management read; many wallet/dApp flows need to know
   // whether an account is registered with the FT contract before transferring.
-  storageBalance: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "storage_balance_of", args: { account_id: accountId }, blockId, useArchival }),
+  storageBalance: ({ contractId, accountId, blockId, useArchival, network }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "storage_balance_of", args: { account_id: accountId }, blockId, useArchival, network }),
 
   // Cross-contract: list every FT contract this account holds, served by
   // the FastNear indexer. Layer-mixed but the natural name from the
   // agent's perspective.
-  inventory: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+  inventory: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearApiV1AccountFtResponse>({
       family: "api",
       path: `/v1/account/${encodePathParam(accountId, "accountId")}/ft`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 };
 
 // NEP-171 (non-fungible token) view-call shorthand. Same pattern as `ft`.
 export const nft = {
-  metadata: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "nft_metadata", args: {}, blockId, useArchival }),
+  metadata: ({ contractId, blockId, useArchival, network }: { contractId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "nft_metadata", args: {}, blockId, useArchival, network }),
 
-  token: ({ contractId, tokenId, blockId, useArchival }: { contractId: string; tokenId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "nft_token", args: { token_id: tokenId }, blockId, useArchival }),
+  token: ({ contractId, tokenId, blockId, useArchival, network }: { contractId: string; tokenId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "nft_token", args: { token_id: tokenId }, blockId, useArchival, network }),
 
-  forOwner: ({ contractId, accountId, fromIndex, limit, blockId, useArchival }: { contractId: string; accountId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean }) =>
+  forOwner: ({ contractId, accountId, fromIndex, limit, blockId, useArchival, network }: { contractId: string; accountId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
     view({
       contractId,
       methodName: "nft_tokens_for_owner",
       args: omitUndefinedEntries({ account_id: accountId, from_index: fromIndex, limit }),
       blockId,
       useArchival,
+      network,
     }),
 
-  supplyForOwner: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "nft_supply_for_owner", args: { account_id: accountId }, blockId, useArchival }),
+  supplyForOwner: ({ contractId, accountId, blockId, useArchival, network }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "nft_supply_for_owner", args: { account_id: accountId }, blockId, useArchival, network }),
 
-  totalSupply: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
-    view({ contractId, methodName: "nft_total_supply", args: {}, blockId, useArchival }),
+  totalSupply: ({ contractId, blockId, useArchival, network }: { contractId: string; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
+    view({ contractId, methodName: "nft_total_supply", args: {}, blockId, useArchival, network }),
 
-  tokens: ({ contractId, fromIndex, limit, blockId, useArchival }: { contractId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean }) =>
+  tokens: ({ contractId, fromIndex, limit, blockId, useArchival, network }: { contractId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean; network?: FastNearNetworkId }) =>
     view({
       contractId,
       methodName: "nft_tokens",
       args: omitUndefinedEntries({ from_index: fromIndex, limit }),
       blockId,
       useArchival,
+      network,
     }),
 
   // List every NFT contract this account holds, served by the FastNear indexer.
-  inventory: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+  inventory: ({ accountId, network, ...query }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearApiV1AccountNftResponse>({
       family: "api",
       path: `/v1/account/${encodePathParam(accountId, "accountId")}/nft`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 };
 
 export const neardata = {
-  lastBlockFinal: (query?: Record<string, any>) =>
+  lastBlockFinal: ({ network, ...query }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearNeardataLastBlockFinalResponse>({
       family: "neardata",
       path: "/v0/last_block/final",
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  lastBlockOptimistic: (query?: Record<string, any>) =>
+  lastBlockOptimistic: ({ network, ...query }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearNeardataLastBlockOptimisticResponse>({
       family: "neardata",
       path: "/v0/last_block/optimistic",
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  block: ({ blockHeight, ...query }: { blockHeight: string | number; [key: string]: any }) =>
+  block: ({ blockHeight, network, ...query }: { blockHeight: string | number; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearNeardataBlockResponse>({
       family: "neardata",
       path: `/v0/block/${encodePathParam(blockHeight, "blockHeight")}`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  blockHeaders: ({ blockHeight, ...query }: { blockHeight: string | number; [key: string]: any }) =>
+  blockHeaders: ({ blockHeight, network, ...query }: { blockHeight: string | number; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearNeardataBlockHeadersResponse>({
       family: "neardata",
       path: `/v0/block/${encodePathParam(blockHeight, "blockHeight")}/headers`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  blockShard: ({ blockHeight, shardId, ...query }: { blockHeight: string | number; shardId: string | number; [key: string]: any }) =>
+  blockShard: ({ blockHeight, shardId, network, ...query }: { blockHeight: string | number; shardId: string | number; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearNeardataBlockShardResponse>({
       family: "neardata",
       path: `/v0/block/${encodePathParam(blockHeight, "blockHeight")}/shard/${encodePathParam(shardId, "shardId")}`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  blockChunk: ({ blockHeight, shardId, ...query }: { blockHeight: string | number; shardId: string | number; [key: string]: any }) =>
+  blockChunk: ({ blockHeight, shardId, network, ...query }: { blockHeight: string | number; shardId: string | number; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearNeardataBlockChunkResponse>({
       family: "neardata",
       path: `/v0/block/${encodePathParam(blockHeight, "blockHeight")}/chunk/${encodePathParam(shardId, "shardId")}`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  blockOptimistic: ({ blockHeight, ...query }: { blockHeight: string | number; [key: string]: any }) =>
+  blockOptimistic: ({ blockHeight, network, ...query }: { blockHeight: string | number; network?: FastNearNetworkId; [key: string]: any }) =>
     sendServiceRequest<FastNearNeardataBlockOptimisticResponse>({
       family: "neardata",
       path: `/v0/block_opt/${encodePathParam(blockHeight, "blockHeight")}`,
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  firstBlock: (query?: Record<string, any>) =>
+  firstBlock: ({ network, ...query }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearNeardataFirstBlockResponse>({
       family: "neardata",
       path: "/v0/first_block",
+      network,
       query: omitUndefinedEntries(query),
     }),
 
-  health: (query?: Record<string, any>) =>
+  health: ({ network, ...query }: { network?: FastNearNetworkId; [key: string]: any } = {}) =>
     sendServiceRequest<FastNearNeardataHealthResponse>({
       family: "neardata",
       path: "/health",
+      network,
       query: omitUndefinedEntries(query),
     }),
 };
 
 export const fastdata = {
   kv: {
-    getLatestKey: ({ currentAccountId, predecessorId, key, ...query }: { currentAccountId: string; predecessorId: string; key: string; [key: string]: any }) =>
+    getLatestKey: ({ currentAccountId, predecessorId, key, network, ...query }: { currentAccountId: string; predecessorId: string; key: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvGetLatestKeyResponse>({
         family: "fastdata.kv",
         path: `/v0/latest/${encodePathParam(currentAccountId, "currentAccountId")}/${encodePathParam(predecessorId, "predecessorId")}/${encodePathParam(key, "key")}`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    getHistoryKey: ({ currentAccountId, predecessorId, key, ...query }: { currentAccountId: string; predecessorId: string; key: string; [key: string]: any }) =>
+    getHistoryKey: ({ currentAccountId, predecessorId, key, network, ...query }: { currentAccountId: string; predecessorId: string; key: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvGetHistoryKeyResponse>({
         family: "fastdata.kv",
         path: `/v0/history/${encodePathParam(currentAccountId, "currentAccountId")}/${encodePathParam(predecessorId, "predecessorId")}/${encodePathParam(key, "key")}`,
+        network,
         query: omitUndefinedEntries(query),
       }),
 
-    latestByAccount: ({ accountId, ...body }: { accountId: string; [key: string]: any }) =>
+    latestByAccount: ({ accountId, network, ...body }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvLatestByAccountResponse>({
         family: "fastdata.kv",
         path: `/v0/latest/${encodePathParam(accountId, "accountId")}`,
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
 
-    historyByAccount: ({ accountId, ...body }: { accountId: string; [key: string]: any }) =>
+    historyByAccount: ({ accountId, network, ...body }: { accountId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvHistoryByAccountResponse>({
         family: "fastdata.kv",
         path: `/v0/history/${encodePathParam(accountId, "accountId")}`,
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
 
-    latestByPredecessor: ({ currentAccountId, predecessorId, ...body }: { currentAccountId: string; predecessorId: string; [key: string]: any }) =>
+    latestByPredecessor: ({ currentAccountId, predecessorId, network, ...body }: { currentAccountId: string; predecessorId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvLatestByPredecessorResponse>({
         family: "fastdata.kv",
         path: `/v0/latest/${encodePathParam(currentAccountId, "currentAccountId")}/${encodePathParam(predecessorId, "predecessorId")}`,
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
 
-    historyByPredecessor: ({ currentAccountId, predecessorId, ...body }: { currentAccountId: string; predecessorId: string; [key: string]: any }) =>
+    historyByPredecessor: ({ currentAccountId, predecessorId, network, ...body }: { currentAccountId: string; predecessorId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvHistoryByPredecessorResponse>({
         family: "fastdata.kv",
         path: `/v0/history/${encodePathParam(currentAccountId, "currentAccountId")}/${encodePathParam(predecessorId, "predecessorId")}`,
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
 
-    allByPredecessor: ({ predecessorId, ...body }: { predecessorId: string; [key: string]: any }) =>
+    allByPredecessor: ({ predecessorId, network, ...body }: { predecessorId: string; network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvAllByPredecessorResponse>({
         family: "fastdata.kv",
         path: `/v0/all/${encodePathParam(predecessorId, "predecessorId")}`,
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
 
-    multi: (body: Record<string, any>) =>
+    multi: ({ network, ...body }: { network?: FastNearNetworkId; [key: string]: any }) =>
       sendServiceRequest<FastNearKvMultiResponse>({
         family: "fastdata.kv",
         path: "/v0/multi",
         method: "POST",
+        network,
         body: omitUndefinedEntries(body),
       }),
   },
@@ -1016,14 +1110,27 @@ export const signOut = async ({
     await provider.disconnect({ network: targetNetwork });
   }
 
-  // Only reset the api-level global state when signing out the *active*
-  // network. Signing out a non-active network (e.g. testnet while the
-  // active config is mainnet) leaves `_state.accountId` and the active
-  // config untouched so the active session survives. Once api gains a
-  // per-network state map, this clear can move to per-network too.
-  if (targetNetwork === getConfig().networkId) {
-    update({ accountId: null, privateKey: null, contractId: null });
+  // Per-network state means we always clear the target network's slot
+  // — parallel sessions on other networks survive untouched. (Pre-1.1.1
+  // state was global; this used to be guarded so a non-active sign-out
+  // wouldn't clobber the active session. The per-network split moots
+  // that guard.)
+  updateAccountState(
+    {
+      accountId: null,
+      privateKey: null,
+      accessKeyContractId: null,
+      lastWalletId: null,
+    },
+    targetNetwork,
+  );
+
+  // Implicit `signOut()` (no arg) preserves the legacy reset-to-default
+  // shape: callers using single-session signOut expect the active config
+  // to flip back to mainnet defaults afterwards.
+  if (network === undefined) {
     setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
+    setActiveNetwork(DEFAULT_NETWORK_ID);
   }
 };
 
@@ -1031,31 +1138,35 @@ export const sendTx = async ({
                                receiverId,
                                actions,
                                waitUntil,
+                               network,
                              }: {
   receiverId: string;
   actions: any[];
   waitUntil?: string;
+  network?: FastNearNetworkId;
 }) => {
-  const signerId = _state.accountId;
+  const targetNetwork = network ?? getConfig().networkId;
+  const slot = getAccountState(targetNetwork);
+  const signerId = slot.accountId;
   if (!signerId) throw new Error("Must sign in");
 
-  const pubKey = _state.publicKey ?? "";
-  const privKey = _state.privateKey;
+  const pubKey = slot.publicKey ?? "";
+  const privKey = slot.privateKey;
   const txId = generateTxId();
 
   // If no local private key, or the receiver doesn't match the access key contract,
   // or the actions aren't signable with a limited access key, delegate to the wallet
-  if (!privKey || receiverId !== _state.accessKeyContractId || !canSignWithLAK(actions)) {
+  if (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions)) {
     const jsonTx = { signerId, receiverId, actions };
     updateTxHistory({ status: "Pending", txId, tx: jsonTx, finalState: false });
 
     try {
       const provider = getWalletProvider();
-      if (!provider?.isConnected()) {
+      if (!provider?.isConnected({ network: targetNetwork })) {
         throw new Error("Must sign in");
       }
 
-      const result = await provider.sendTransaction(jsonTx);
+      const result = await provider.sendTransaction({ ...jsonTx, network: targetNetwork });
 
       if (!result) {
         // User rejected
@@ -1089,34 +1200,40 @@ export const sendTx = async ({
     }
   }
 
-  // Local signing path (limited access key)
-  let nonce = lsGet("nonce") as number | null;
+  // Local signing path (limited access key). The RPC helpers and the
+  // `nonce`/`block` caches are now per-network too, so a sendTx on a
+  // non-active network signs against that network's RPC and caches the
+  // nonce/block under the right key.
+  const nonceKey = `nonce.${targetNetwork}`;
+  const blockKey = `block.${targetNetwork}`;
+
+  let nonce = lsGet(nonceKey) as number | null;
   if (nonce == null) {
-    const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey });
+    const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
     if (accessKey.result.error) {
       throw new Error(`Access key error: ${accessKey.result.error} when attempting to get nonce for ${signerId} for public key ${pubKey}`);
     }
     nonce = accessKey.result.nonce;
-    lsSet("nonce", nonce);
+    lsSet(nonceKey, nonce);
   }
 
-  let lastKnownBlock = lsGet("block") as LastKnownBlock | null;
+  let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
   if (
     !lastKnownBlock ||
     parseFloat(lastKnownBlock.header.timestamp_nanosec) / 1e6 + MaxBlockDelayMs < Date.now()
   ) {
-    const latestBlock = await queryBlock({ blockId: "final" });
+    const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
     lastKnownBlock = {
       header: {
         hash: latestBlock.result.header.hash,
         timestamp_nanosec: latestBlock.result.header.timestamp_nanosec,
       },
     };
-    lsSet("block", lastKnownBlock);
+    lsSet(blockKey, lastKnownBlock);
   }
 
   nonce += 1;
-  lsSet("nonce", nonce);
+  lsSet(nonceKey, nonce);
 
   const blockHash = lastKnownBlock.header.hash;
 
@@ -1147,21 +1264,28 @@ export const sendTx = async ({
     finalState: false,
   });
 
-  return await sendTxToRpc(signedTxBase64, waitUntil, txId);
+  return await sendTxToRpc(signedTxBase64, waitUntil, txId, targetNetwork);
 };
 
 /**
- * Signs a NEP-413 message using the connected wallet.
+ * Signs a NEP-413 message using the connected wallet. Pass an explicit
+ * `{ network }` to route the signature through that network's wallet
+ * session — useful when a page holds parallel mainnet+testnet sessions.
+ * Without it, the active network's session is used.
  */
-export const signMessage = async (message: NEP413Message) => {
+export const signMessage = async (
+  message: NEP413Message,
+  options: { network?: FastNearNetworkId } = {},
+) => {
   const provider = getWalletProvider();
-  if (!provider?.isConnected()) {
+  const targetNetwork = options.network ?? getConfig().networkId;
+  if (!provider?.isConnected({ network: targetNetwork })) {
     throw new Error("Must sign in");
   }
   if (!provider.signMessage) {
     throw new Error("Connected wallet does not support signMessage");
   }
-  return provider.signMessage(message);
+  return provider.signMessage({ ...message, network: targetNetwork });
 };
 
 /**
@@ -1177,22 +1301,37 @@ export const utils = reExportAllUtils;
 
 export const event = stateExports.events;
 
-export const state = {
-  DEFAULT_NETWORK_ID: stateExports.DEFAULT_NETWORK_ID,
-  NETWORKS: stateExports.NETWORKS,
-  _config: stateExports._config,
-  _state: stateExports._state,
-  _txHistory: stateExports._txHistory,
-  _unbroadcastedEvents: stateExports._unbroadcastedEvents,
-  setWalletProvider: stateExports.setWalletProvider,
-  getWalletProvider: stateExports.getWalletProvider,
-  update: stateExports.update,
-  updateTxHistory: stateExports.updateTxHistory,
-  getConfig: stateExports.getConfig,
-  getTxHistory: stateExports.getTxHistory,
-  setConfig: stateExports.setConfig,
-  resetTxHistory: stateExports.resetTxHistory,
-};
+// `_state` is a live binding in state.ts (reassigned on
+// setActiveNetwork / updateAccountState). The literal-object form of
+// this namespace would freeze a value-copy at module load and go stale
+// as soon as the active network changed, so we expose `_state` as a
+// getter that always resolves to the current active slot.
+export const state = (() => {
+  const ns: Record<string, any> = {
+    DEFAULT_NETWORK_ID: stateExports.DEFAULT_NETWORK_ID,
+    NETWORKS: stateExports.NETWORKS,
+    _config: stateExports._config,
+    _txHistory: stateExports._txHistory,
+    _unbroadcastedEvents: stateExports._unbroadcastedEvents,
+    setWalletProvider: stateExports.setWalletProvider,
+    getWalletProvider: stateExports.getWalletProvider,
+    update: stateExports.update,
+    updateAccountState: stateExports.updateAccountState,
+    getAccountState: stateExports.getAccountState,
+    getActiveNetwork: stateExports.getActiveNetwork,
+    setActiveNetwork: stateExports.setActiveNetwork,
+    updateTxHistory: stateExports.updateTxHistory,
+    getConfig: stateExports.getConfig,
+    getTxHistory: stateExports.getTxHistory,
+    setConfig: stateExports.setConfig,
+    resetTxHistory: stateExports.resetTxHistory,
+  };
+  Object.defineProperty(ns, "_state", {
+    get: () => stateExports._state,
+    enumerable: true,
+  });
+  return ns;
+})();
 
 export const exp = {
   utils,
@@ -1446,6 +1585,46 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     api: "near.recipes.signMessage",
     title: "How do I sign a message?",
   },
+  {
+    id: "ft-balance",
+    api: "near.ft.balance",
+    title: "What is this account's FT balance?",
+  },
+  {
+    id: "ft-metadata",
+    api: "near.ft.metadata",
+    title: "What does this NEP-141 token call itself?",
+  },
+  {
+    id: "ft-inventory",
+    api: "near.ft.inventory",
+    title: "Which fungible tokens does this account hold?",
+  },
+  {
+    id: "nft-for-owner",
+    api: "near.nft.forOwner",
+    title: "Which NFTs does this account own on this contract?",
+  },
+  {
+    id: "nft-inventory",
+    api: "near.nft.inventory",
+    title: "Which NFT contracts does this account hold tokens on?",
+  },
+  {
+    id: "archival-snapshot",
+    api: "near.queryAccount",
+    title: "What did this account look like at a specific block?",
+  },
+  {
+    id: "connect-testnet",
+    api: "near.recipes.connect",
+    title: "How do I open a testnet wallet session alongside mainnet?",
+  },
+  {
+    id: "function-call-testnet",
+    api: "near.recipes.functionCall",
+    title: "How do I send a function call on testnet without losing my mainnet session?",
+  },
 ];
 
 function listRecipes(): FastNearRecipeDiscoveryEntry[] {
@@ -1494,10 +1673,12 @@ export const recipes = {
     gas,
     deposit,
     waitUntil,
+    network,
   }: RecipeFunctionCallParams) =>
     sendTx({
       receiverId,
       waitUntil,
+      network,
       actions: [
         actions.functionCall({
           methodName,
@@ -1513,16 +1694,21 @@ export const recipes = {
     receiverId,
     amount,
     waitUntil,
+    network,
   }: RecipeTransferParams) =>
     sendTx({
       receiverId,
       waitUntil,
+      network,
       actions: [actions.transfer(amount)],
     }),
 
   connect: (params: RecipeConnectParams = {}) => requestSignIn(params),
 
-  signMessage: (message: NEP413Message) => signMessage(message),
+  signMessage: (
+    message: NEP413Message,
+    options?: { network?: FastNearNetworkId },
+  ) => signMessage(message, options),
 
   list: listRecipes,
 

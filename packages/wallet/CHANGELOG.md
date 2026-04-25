@@ -1,3 +1,26 @@
+# 1.1.2
+
+- Metadata-only release for `@fastnear/wallet` itself — no source
+  changes. The bundle is byte-identical to 1.1.0/1.1.1.
+- Pairs with `@fastnear/api@1.1.2`, which closes both seams left
+  documented in 1.1.1: api now keeps a per-network account map and
+  threads `network` through `sendTx`, `signMessage`, `accountId`,
+  `publicKey`, `authStatus`, `selected`, and the recipe wrappers
+  (`functionCall`, `transfer`, `signMessage`). The transport layer
+  (`sendRpc`, `sendServiceRequest`) and every helper built on top of it
+  (`view`, `queryAccount`, `queryBlock`, `queryAccessKey`, `queryTx`,
+  `tx.*`, `api.v1.*`, `transfers.*`, `neardata.*`, `fastdata.kv.*`,
+  `ft.*`, `nft.*`) accept the same `network` override. All of those
+  calls resolve through the wallet's per-network slot — and the per-
+  network RPC URL — the same way direct
+  `nearWallet.sendTransaction({ network })` /
+  `nearWallet.signMessage({ network })` calls do today.
+- Recipe catalog (hosted at `js.fastnear.com/recipes.json`) gains a
+  `function-call-testnet` recipe that demonstrates the closed loop:
+  `near.recipes.connect({ network: "testnet" })` followed by
+  `near.recipes.functionCall({ network: "testnet" })` without
+  disturbing an active mainnet session.
+
 # 1.1.1
 
 - Metadata-only release for `@fastnear/wallet` itself — no source
