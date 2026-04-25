@@ -12,6 +12,10 @@ export interface FastNearServiceConfig {
 
 export interface FastNearServicesConfig {
   rpc?: FastNearServiceConfig;
+  // Optional archival RPC. Used when callers pass `useArchival: true` to
+  // `view`/`queryAccount`/etc. Falls back to `rpc` when not configured so
+  // callers don't error on misconfiguration — they just see fresh-only state.
+  archival?: FastNearServiceConfig;
   api?: FastNearServiceConfig;
   tx?: FastNearServiceConfig;
   transfers?: FastNearServiceConfig;
@@ -49,6 +53,7 @@ function mergeServices(
 ): FastNearServicesConfig {
   return {
     rpc: mergeServiceConfig(base?.rpc, override?.rpc),
+    archival: mergeServiceConfig(base?.archival, override?.archival),
     api: mergeServiceConfig(base?.api, override?.api),
     tx: mergeServiceConfig(base?.tx, override?.tx),
     transfers: mergeServiceConfig(base?.transfers, override?.transfers),
@@ -79,6 +84,7 @@ export const NETWORKS: Record<FastNearNetworkId, NetworkConfig> = {
     nodeUrl: "https://rpc.testnet.fastnear.com/",
     services: {
       rpc: { baseUrl: "https://rpc.testnet.fastnear.com/" },
+      archival: { baseUrl: "https://archival-rpc.testnet.near.org/" },
       api: { baseUrl: "https://test.api.fastnear.com" },
       tx: { baseUrl: "https://tx.test.fastnear.com" },
       transfers: { baseUrl: null },
@@ -91,6 +97,7 @@ export const NETWORKS: Record<FastNearNetworkId, NetworkConfig> = {
     nodeUrl: "https://rpc.mainnet.fastnear.com/",
     services: {
       rpc: { baseUrl: "https://rpc.mainnet.fastnear.com/" },
+      archival: { baseUrl: "https://archival-rpc.mainnet.near.org/" },
       api: { baseUrl: "https://api.fastnear.com" },
       tx: { baseUrl: "https://tx.main.fastnear.com" },
       transfers: { baseUrl: "https://transfers.main.fastnear.com" },

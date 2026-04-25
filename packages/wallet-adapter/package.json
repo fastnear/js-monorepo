@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/wallet-adapter",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Wallet adapter implementations for Meteor Wallet and Near Mobile",
   "license": "MIT",
   "type": "module",

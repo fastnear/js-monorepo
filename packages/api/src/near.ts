@@ -303,6 +303,13 @@ function resolveRpcUrl(config: NetworkConfig): string {
   return rpcUrl;
 }
 
+// Pick the archival RPC if configured; fall back to the regular RPC so
+// callers that opt into `useArchival` against a network without archival
+// configured still get an answer (just from the non-archival node).
+function resolveArchivalUrl(config: NetworkConfig): string {
+  return config.services?.archival?.baseUrl || resolveRpcUrl(config);
+}
+
 function buildAuthedUrl(service: ServiceFamily, baseUrl: string, path = "", query?: Record<string, any>): string {
   const config = getConfig();
   const authStyle = SERVICE_AUTH_STYLES[service];
@@ -351,9 +358,23 @@ async function sendServiceRequest<T = any>({
   return payload as T;
 }
 
-export async function sendRpc<T = any>(method: string, params: Record<string, any> | any[]): Promise<T> {
+export interface RpcRouteOptions {
+  /**
+   * Route this call to the archival RPC (`services.archival.baseUrl`)
+   * instead of the default. Useful for queries with a historical
+   * `blockId`. Falls back to the regular RPC if archival isn't configured.
+   */
+  useArchival?: boolean;
+}
+
+export async function sendRpc<T = any>(
+  method: string,
+  params: Record<string, any> | any[],
+  options?: RpcRouteOptions,
+): Promise<T> {
   const config = getConfig();
-  const response = await fetch(buildAuthedUrl("rpc", resolveRpcUrl(config)), {
+  const baseUrl = options?.useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
+  const response = await fetch(buildAuthedUrl("rpc", baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -527,12 +548,14 @@ export const view = async ({
                              args,
                              argsBase64,
                              blockId,
+                             useArchival,
                            }: {
   contractId: string;
   methodName: string;
   args?: any;
   argsBase64?: string;
   blockId?: string;
+  useArchival?: boolean;
 }) => {
   const encodedArgs = argsBase64 || (args ? toBase64(JSON.stringify(args)) : "");
   const queryResult = await sendRpc(
@@ -545,7 +568,8 @@ export const view = async ({
         args_base64: encodedArgs,
       },
       blockId
-    )
+    ),
+    { useArchival },
   );
 
   return parseJsonFromBytes(queryResult.result.result);
@@ -554,40 +578,46 @@ export const view = async ({
 export const queryAccount = async ({
                                 accountId,
                                 blockId,
+                                useArchival,
                               }: {
   accountId: string;
   blockId?: string;
+  useArchival?: boolean;
 }): Promise<FastNearRpcQueryAccountResponse> => {
   return sendRpc(
     "query",
-    withBlockId({ request_type: "view_account", account_id: accountId }, blockId)
+    withBlockId({ request_type: "view_account", account_id: accountId }, blockId),
+    { useArchival },
   );
 };
 
-export const queryBlock = async ({ blockId }: { blockId?: string }): Promise<BlockView> => {
-  return sendRpc("block", withBlockId({}, blockId));
+export const queryBlock = async ({ blockId, useArchival }: { blockId?: string; useArchival?: boolean }): Promise<BlockView> => {
+  return sendRpc("block", withBlockId({}, blockId), { useArchival });
 };
 
 export const queryAccessKey = async ({
                                   accountId,
                                   publicKey,
                                   blockId,
+                                  useArchival,
                                 }: {
   accountId: string;
   publicKey: string;
   blockId?: string;
+  useArchival?: boolean;
 }): Promise<AccessKeyWithError> => {
   return sendRpc(
     "query",
     withBlockId(
       { request_type: "view_access_key", account_id: accountId, public_key: publicKey },
       blockId
-    )
+    ),
+    { useArchival },
   );
 };
 
-export const queryTx = async ({ txHash, accountId }: { txHash: string; accountId: string }) => {
-  return sendRpc("tx", [txHash, accountId]);
+export const queryTx = async ({ txHash, accountId, useArchival }: { txHash: string; accountId: string; useArchival?: boolean }) => {
+  return sendRpc("tx", [txHash, accountId], { useArchival });
 };
 
 function shouldPrintInteractiveSeparator(): boolean {
@@ -758,6 +788,77 @@ export const transfers = {
       path: "/v0/transfers",
       method: "POST",
       body: omitUndefinedEntries(withAliases(params, { accountId: "account_id", resumeToken: "resume_token" })),
+    }),
+};
+
+// NEP-141 (fungible token) view-call shorthand.
+// Each helper is a one-line wrapper around `view` with the standard
+// method name pre-filled — agents prompt with the spec's verb instead
+// of pasting the underlying methodName recipe each time.
+export const ft = {
+  balance: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "ft_balance_of", args: { account_id: accountId }, blockId, useArchival }),
+
+  metadata: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "ft_metadata", args: {}, blockId, useArchival }),
+
+  totalSupply: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "ft_total_supply", args: {}, blockId, useArchival }),
+
+  // NEP-145 storage-management read; many wallet/dApp flows need to know
+  // whether an account is registered with the FT contract before transferring.
+  storageBalance: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "storage_balance_of", args: { account_id: accountId }, blockId, useArchival }),
+
+  // Cross-contract: list every FT contract this account holds, served by
+  // the FastNear indexer. Layer-mixed but the natural name from the
+  // agent's perspective.
+  inventory: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    sendServiceRequest<FastNearApiV1AccountFtResponse>({
+      family: "api",
+      path: `/v1/account/${encodePathParam(accountId, "accountId")}/ft`,
+      query: omitUndefinedEntries(query),
+    }),
+};
+
+// NEP-171 (non-fungible token) view-call shorthand. Same pattern as `ft`.
+export const nft = {
+  metadata: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "nft_metadata", args: {}, blockId, useArchival }),
+
+  token: ({ contractId, tokenId, blockId, useArchival }: { contractId: string; tokenId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "nft_token", args: { token_id: tokenId }, blockId, useArchival }),
+
+  forOwner: ({ contractId, accountId, fromIndex, limit, blockId, useArchival }: { contractId: string; accountId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean }) =>
+    view({
+      contractId,
+      methodName: "nft_tokens_for_owner",
+      args: omitUndefinedEntries({ account_id: accountId, from_index: fromIndex, limit }),
+      blockId,
+      useArchival,
+    }),
+
+  supplyForOwner: ({ contractId, accountId, blockId, useArchival }: { contractId: string; accountId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "nft_supply_for_owner", args: { account_id: accountId }, blockId, useArchival }),
+
+  totalSupply: ({ contractId, blockId, useArchival }: { contractId: string; blockId?: string; useArchival?: boolean }) =>
+    view({ contractId, methodName: "nft_total_supply", args: {}, blockId, useArchival }),
+
+  tokens: ({ contractId, fromIndex, limit, blockId, useArchival }: { contractId: string; fromIndex?: string; limit?: number; blockId?: string; useArchival?: boolean }) =>
+    view({
+      contractId,
+      methodName: "nft_tokens",
+      args: omitUndefinedEntries({ from_index: fromIndex, limit }),
+      blockId,
+      useArchival,
+    }),
+
+  // List every NFT contract this account holds, served by the FastNear indexer.
+  inventory: ({ accountId, ...query }: { accountId: string; [key: string]: any }) =>
+    sendServiceRequest<FastNearApiV1AccountNftResponse>({
+      family: "api",
+      path: `/v1/account/${encodePathParam(accountId, "accountId")}/nft`,
+      query: omitUndefinedEntries(query),
     }),
 };
 

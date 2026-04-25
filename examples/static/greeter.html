@@ -3,20 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d102d" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/fastnear_logo_black.png">
   <title>Greeter — @fastnear example</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Greeter — @fastnear example">
+  <meta property="og:description" content="Read + write on NEAR testnet with wallet sign-in, plus NEP-413 message signing.">
+  <meta property="og:image" content="assets/fastnear_logo_black.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Load @fastnear/api — the core `near` global
-       CDN: https://cdn.jsdelivr.net/npm/@fastnear/api@0.10/dist/umd/browser.global.js -->
-  <script src="../../packages/api/dist/umd/browser.global.js"></script>
+  <!-- @fastnear/api — the core `near` global -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/api@1.0/dist/umd/browser.global.js"></script>
 
-  <!-- Load @fastnear/wallet — adds wallet UI (iframe selector, popup, etc.)
-       Auto-wires with `near` regardless of script load order.
-       CDN: https://cdn.jsdelivr.net/npm/@fastnear/wallet@0.10/dist/umd/browser.global.js -->
-  <script src="../../packages/wallet/dist/umd/browser.global.js"></script>
+  <!-- @fastnear/wallet — wallet UI (iframe selector, popup, etc.).
+       Auto-wires with `near` regardless of script load order. -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.0/dist/umd/browser.global.js"></script>
 </head>
 <body>
 <div class="container">
+  <header class="brand-header">
+    <a class="brand-wordmark" href="index.html">FastNear</a>
+    <hr class="brand-divider">
+  </header>
+
   <h1>Greeter</h1>
   <p class="subtitle">
     Read + write on testnet with wallet sign-in
@@ -234,5 +249,6 @@
   updateUI();
   fetchGreeting();
 </script>
+<footer class="brand-footer">&copy; 2026 FastNear · <a href="https://github.com/fastnear/js-monorepo" target="_blank" rel="noopener">GitHub</a></footer>
 </body>
 </html>

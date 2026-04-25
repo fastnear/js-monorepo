@@ -3,16 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d102d" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/fastnear_logo_black.png">
   <title>View Only — @fastnear example</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="View Only — @fastnear example">
+  <meta property="og:description" content="Read on-chain data with near.view() — no wallet needed. Fetches wNEAR token metadata from mainnet.">
+  <meta property="og:image" content="assets/fastnear_logo_black.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Load @fastnear/api — gives us the global `near` object.
-       No wallet needed for read-only view calls.
-       CDN: https://cdn.jsdelivr.net/npm/@fastnear/api@0.10/dist/umd/browser.global.js -->
-  <script src="../../packages/api/dist/umd/browser.global.js"></script>
+  <!-- @fastnear/api — gives us the global `near` object.
+       No wallet needed for read-only view calls. -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/api@1.0/dist/umd/browser.global.js"></script>
 </head>
 <body>
 <div class="container">
+  <header class="brand-header">
+    <a class="brand-wordmark" href="index.html">FastNear</a>
+    <hr class="brand-divider">
+  </header>
+
   <h1>View Only</h1>
   <p class="subtitle">
     Read on-chain data with <code>near.view()</code> — no wallet, no sign-in
@@ -61,5 +77,6 @@ const metadata = await near.view({
     }
   })();
 </script>
+<footer class="brand-footer">&copy; 2026 FastNear · <a href="https://github.com/fastnear/js-monorepo" target="_blank" rel="noopener">GitHub</a></footer>
 </body>
 </html>

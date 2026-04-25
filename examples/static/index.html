@@ -3,38 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d102d" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/fastnear_logo_black.png">
   <title>@fastnear examples</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="@fastnear examples">
+  <meta property="og:description" content="Static HTML demos for the @fastnear NEAR Protocol JS library — no build step, just script tags.">
+  <meta property="og:image" content="assets/fastnear_logo_black.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="container">
+  <header class="brand-header">
+    <a class="brand-wordmark" href="index.html">FastNear</a>
+    <hr class="brand-divider">
+  </header>
+
   <h1>@fastnear examples</h1>
   <p class="subtitle">Static HTML demos — no build tools, just &lt;script&gt; tags</p>
 
   <a class="card" href="view-only.html">
     <h2>View Only</h2>
     <p>Read on-chain data with <code>near.view()</code> — no wallet needed. Fetches wNEAR token metadata from mainnet.</p>
-    <span class="tag">mainnet</span>
+    <span class="tag tag-mainnet">mainnet</span>
   </a>
 
   <a class="card" href="greeter.html">
     <h2>Greeter</h2>
     <p>Read + write with wallet sign-in. Calls <code>greeter.testnet</code> to get/set a greeting, plus NEP-413 message signing.</p>
-    <span class="tag">testnet</span> <span class="tag">wallet</span>
+    <span class="tag tag-testnet">testnet</span> <span class="tag tag-wallet">wallet</span>
   </a>
 
   <a class="card" href="berryclub.html">
     <h2>Berry Club</h2>
     <p>Session keys, full-access transactions, and a live pixel board. Draws on <code>berryclub.ek.near</code> on mainnet.</p>
-    <span class="tag">mainnet</span> <span class="tag">wallet</span> <span class="tag">session keys</span>
+    <span class="tag tag-mainnet">mainnet</span> <span class="tag tag-wallet">wallet</span> <span class="tag tag-session-keys">session keys</span>
   </a>
 
-  <section style="margin-top: 32px">
-    <h2>How to run</h2>
-    <pre><code>cd examples/static
-python3 -m http.server</code></pre>
-    <p class="note">Then open <a href="http://localhost:8000">http://localhost:8000</a></p>
-  </section>
 </div>
+<footer class="brand-footer">&copy; 2026 FastNear · <a href="https://github.com/fastnear/js-monorepo" target="_blank" rel="noopener">GitHub</a></footer>
 </body>
 </html>

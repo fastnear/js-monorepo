@@ -79,25 +79,48 @@ function isFastnearAction(action: any): boolean {
 export interface ConnectResult {
   accountId: string;
   publicKey?: string;
+  network?: Network;
 }
 
 type ConnectCallback = (result: ConnectResult) => void;
-type DisconnectCallback = () => void;
+type DisconnectCallback = (info?: { network: Network }) => void;
 
-// Module-level state
-let connector: NearConnector | null = null;
-let connectedWallet: NearWalletBase | null = null;
-let currentAccountId: string | null = null;
-let currentNetwork: Network = "mainnet";
+const NETWORKS: ReadonlyArray<Network> = ["mainnet", "testnet"];
+
+interface NetworkState {
+  connector: NearConnector | null;
+  connectedWallet: NearWalletBase | null;
+  currentAccountId: string | null;
+}
+
+// Per-network state. Each network can hold its own active session, so signing
+// into mainnet and testnet on the same page no longer collide. Backwards-
+// compatible callers (no `network` argument) are routed to `activeNetwork`,
+// which tracks the most recent successful connect/restore.
+const networkStates: Record<Network, NetworkState> = {
+  mainnet: { connector: null, connectedWallet: null, currentAccountId: null },
+  testnet: { connector: null, connectedWallet: null, currentAccountId: null },
+};
+let activeNetwork: Network = "mainnet";
 
 const connectListeners: ConnectCallback[] = [];
 const disconnectListeners: DisconnectCallback[] = [];
 
+function stateFor(network?: Network): NetworkState {
+  return networkStates[network ?? activeNetwork];
+}
+
+function resolveNetwork(options?: ConnectOptions): Network {
+  return options?.network ?? activeNetwork;
+}
+
 function getOrCreateConnector(options?: ConnectOptions): NearConnector {
-  if (connector) return connector;
+  const network = resolveNetwork(options);
+  const state = networkStates[network];
+  if (state.connector) return state.connector;
 
   const opts: Record<string, any> = {
-    network: options?.network ?? currentNetwork,
+    network,
     footerBranding: options?.footerBranding ?? null,
   };
 
@@ -133,47 +156,56 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
     };
   }
 
-  connector = new NearConnector(opts);
+  state.connector = new NearConnector(opts);
 
-  connector.on("wallet:signIn", (event: any) => {
+  state.connector.on("wallet:signIn", (event: any) => {
     const acct = event?.accounts?.[0];
-    if (acct) {
-      currentAccountId = acct.accountId;
-      const result: ConnectResult = {
-        accountId: acct.accountId,
-        publicKey: acct.publicKey,
-      };
-      for (const cb of connectListeners) {
-        try { cb(result); } catch (_) { /* listener error */ }
-      }
+    if (!acct) return;
+    state.currentAccountId = acct.accountId;
+    activeNetwork = network;
+    const result: ConnectResult = {
+      accountId: acct.accountId,
+      publicKey: acct.publicKey,
+      network,
+    };
+    for (const cb of connectListeners) {
+      try { cb(result); } catch (_) { /* listener error */ }
     }
   });
 
-  connector.on("wallet:signOut", () => {
-    connectedWallet = null;
-    currentAccountId = null;
+  state.connector.on("wallet:signOut", () => {
+    state.connectedWallet = null;
+    state.currentAccountId = null;
     for (const cb of disconnectListeners) {
-      try { cb(); } catch (_) { /* listener error */ }
+      try { cb({ network }); } catch (_) { /* listener error */ }
     }
   });
 
-  return connector;
+  return state.connector;
 }
 
 /**
  * Restore a previously connected wallet session.
  * Call this on page load to re-hydrate state from storage.
+ *
+ * Pass `{ network }` to restore a specific network's session — useful for
+ * pages that want to attempt parallel mainnet+testnet restores. Without it,
+ * the active network (default `mainnet`) is used.
  */
 export async function restore(options?: ConnectOptions): Promise<ConnectResult | null> {
+  const network = resolveNetwork(options);
+  const state = networkStates[network];
   const c = getOrCreateConnector(options);
   try {
     const result = await c.getConnectedWallet();
     if (result?.wallet && result?.accounts?.length) {
-      connectedWallet = result.wallet;
-      currentAccountId = result.accounts[0].accountId;
+      state.connectedWallet = result.wallet;
+      state.currentAccountId = result.accounts[0].accountId;
+      activeNetwork = network;
       const connectResult: ConnectResult = {
-        accountId: currentAccountId || '',
+        accountId: state.currentAccountId || '',
         publicKey: result.accounts[0].publicKey,
+        network,
       };
       for (const cb of connectListeners) {
         try { cb(connectResult); } catch (_) { /* listener error */ }
@@ -230,24 +262,34 @@ export async function removeDebugWallet(
 
 /**
  * Switch the connector to a different network.
- * Requires an existing connector (call connect() or restore() first).
+ *
+ * Note: with per-network state this is no longer required for typical use —
+ * just call `connect({ network })` / `restore({ network })` / `accountId({ network })`
+ * directly. Kept for backwards compatibility; uses the connector for the
+ * active network (or the network in `signInData.network` if provided).
  */
 export async function switchNetwork(
   network: Network,
   signInData?: { contractId?: string; methodNames?: string[] }
 ): Promise<void> {
-  if (!connector) throw new Error("No connector initialized. Call connect() or restore() first.");
-  return connector.switchNetwork(network, signInData);
+  const state = networkStates[activeNetwork];
+  if (!state.connector) throw new Error("No connector initialized. Call connect() or restore() first.");
+  return state.connector.switchNetwork(network, signInData);
 }
 
 /**
  * Show the wallet picker popup and connect.
  * Returns the connected account info.
  * If walletId is provided, connects directly to that wallet without showing the picker.
+ *
+ * Pass `{ network: "testnet" }` to connect on testnet without affecting an
+ * existing mainnet session.
  */
 export async function connect(
   options?: ConnectOptions & { walletId?: string }
 ): Promise<ConnectResult | null> {
+  const network = resolveNetwork(options);
+  const state = networkStates[network];
   const c = getOrCreateConnector(options);
   let wallet;
   try {
@@ -256,15 +298,16 @@ export async function connect(
     // User closed the modal or wallet rejected
     return null;
   }
-  connectedWallet = wallet;
+  state.connectedWallet = wallet;
+  activeNetwork = network;
 
   // Account info is set by the wallet:signIn event handler,
   // but if it hasn't fired yet, try to get it from the connector.
-  if (!currentAccountId) {
+  if (!state.currentAccountId) {
     try {
       const info = await c.getConnectedWallet();
       if (info?.accounts?.length) {
-        currentAccountId = info.accounts[0].accountId;
+        state.currentAccountId = info.accounts[0].accountId;
       }
     } catch (_) {
       // ignore
@@ -272,37 +315,49 @@ export async function connect(
   }
 
   return {
-    accountId: currentAccountId ?? "",
+    accountId: state.currentAccountId ?? "",
     publicKey: undefined,
+    network,
   };
 }
 
 /**
- * Disconnect the current wallet session.
+ * Disconnect a wallet session. Without arguments, disconnects the active
+ * network's session. Pass `{ network }` to disconnect a specific network.
  */
-export async function disconnect(): Promise<void> {
-  if (connector) {
-    await connector.disconnect(connectedWallet ?? undefined);
+export async function disconnect(options?: { network?: Network }): Promise<void> {
+  const network = options?.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (state.connector) {
+    await state.connector.disconnect(state.connectedWallet ?? undefined);
   }
-  connectedWallet = null;
-  currentAccountId = null;
+  state.connectedWallet = null;
+  state.currentAccountId = null;
 }
 
 /**
  * Sign and send a single transaction via the connected wallet.
  * Accepts both fastnear-style flat actions and @hot-labs/near-connect ConnectorActions.
+ *
+ * Routes to the per-network session matching `params.network` if specified
+ * (or `activeNetwork` otherwise).
  */
-export async function sendTransaction(params: SignAndSendTransactionParams | { receiverId: string; actions: any[]; signerId?: string }): Promise<any> {
-  if (!connectedWallet) {
-    throw new Error("No wallet connected. Call connect() first.");
+export async function sendTransaction(
+  params: (SignAndSendTransactionParams | { receiverId: string; actions: any[]; signerId?: string }) & { network?: Network }
+): Promise<any> {
+  const network = params.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (!state.connectedWallet) {
+    throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
   const actions = params.actions.some(isFastnearAction)
     ? toConnectorActions(params.actions)
     : params.actions;
-  return connectedWallet.signAndSendTransaction({
+  return state.connectedWallet.signAndSendTransaction({
     receiverId: params.receiverId,
     actions,
-    signerId: params.signerId ?? currentAccountId ?? undefined,
+    signerId: params.signerId ?? state.currentAccountId ?? undefined,
+    network,
   });
 }
 
@@ -310,9 +365,13 @@ export async function sendTransaction(params: SignAndSendTransactionParams | { r
  * Sign and send multiple transactions via the connected wallet.
  * Accepts both fastnear-style flat actions and @hot-labs/near-connect ConnectorActions.
  */
-export async function sendTransactions(params: SignAndSendTransactionsParams | { transactions: Array<{ receiverId: string; actions: any[] }>; signerId?: string }): Promise<any> {
-  if (!connectedWallet) {
-    throw new Error("No wallet connected. Call connect() first.");
+export async function sendTransactions(
+  params: (SignAndSendTransactionsParams | { transactions: Array<{ receiverId: string; actions: any[] }>; signerId?: string }) & { network?: Network }
+): Promise<any> {
+  const network = params.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (!state.connectedWallet) {
+    throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
   const transactions = ('transactions' in params ? params.transactions : []).map((tx: any) => ({
     receiverId: tx.receiverId,
@@ -320,52 +379,78 @@ export async function sendTransactions(params: SignAndSendTransactionsParams | {
       ? toConnectorActions(tx.actions)
       : tx.actions,
   }));
-  return connectedWallet.signAndSendTransactions({
+  return state.connectedWallet.signAndSendTransactions({
     transactions,
-    signerId: params.signerId ?? currentAccountId ?? undefined,
+    signerId: params.signerId ?? state.currentAccountId ?? undefined,
+    network,
   });
 }
 
 /**
  * Sign a message (NEP-413) via the connected wallet.
  */
-export async function signMessage(params: SignMessageParams): Promise<any> {
-  if (!connectedWallet) {
-    throw new Error("No wallet connected. Call connect() first.");
+export async function signMessage(params: SignMessageParams & { network?: Network }): Promise<any> {
+  const network = params.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (!state.connectedWallet) {
+    throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
-  return connectedWallet.signMessage(params);
+  return state.connectedWallet.signMessage({ ...params, network });
 }
 
 /**
- * Get the current connected account ID, or null if not connected.
+ * Get the connected account id for a specific network (or the active one).
  */
-export function accountId(): string | null {
-  return currentAccountId;
+export function accountId(opts?: { network?: Network }): string | null {
+  return stateFor(opts?.network).currentAccountId;
 }
 
 /**
- * Check whether a wallet is currently connected.
+ * Check whether a wallet is currently connected for a specific network
+ * (or the active one).
  */
-export function isConnected(): boolean {
-  return currentAccountId !== null && connectedWallet !== null;
+export function isConnected(opts?: { network?: Network }): boolean {
+  const s = stateFor(opts?.network);
+  return s.currentAccountId !== null && s.connectedWallet !== null;
 }
 
 /**
- * Get the name of the connected wallet (e.g. "MyNearWallet").
+ * Return whichever networks currently have an active session. Useful for UIs
+ * that want to surface "signed in to mainnet AND testnet".
  */
-export function walletName(): string | null {
-  if (!connectedWallet) return null;
-  return (connectedWallet as NearWalletBase & { metadata?: { name?: string } }).metadata?.name ?? null;
+export function connectedNetworks(): Network[] {
+  return NETWORKS.filter((n) => isConnected({ network: n }));
 }
 
 /**
- * Destroy the current connector so the next connect() or restore() creates a new one
- * with fresh options (e.g. different excludedWallets or features).
+ * Network of the most recent connect/restore. Single-session callers can
+ * treat this as "the network".
  */
-export function reset(): void {
-  connector = null;
-  connectedWallet = null;
-  currentAccountId = null;
+export function getActiveNetwork(): Network {
+  return activeNetwork;
+}
+
+/**
+ * Get the name of the connected wallet (e.g. "MyNearWallet") for a given
+ * network or the active one.
+ */
+export function walletName(opts?: { network?: Network }): string | null {
+  const s = stateFor(opts?.network);
+  if (!s.connectedWallet) return null;
+  return (s.connectedWallet as NearWalletBase & { metadata?: { name?: string } }).metadata?.name ?? null;
+}
+
+/**
+ * Destroy the connector(s) so the next connect()/restore() creates fresh ones
+ * with fresh options. Pass `{ network }` to reset only one network's state;
+ * without arguments, both networks are reset.
+ */
+export function reset(opts?: { network?: Network }): void {
+  const targets: Network[] = opts?.network ? [opts.network] : Array.from(NETWORKS);
+  for (const n of targets) {
+    networkStates[n] = { connector: null, connectedWallet: null, currentAccountId: null };
+  }
+  if (!opts?.network) activeNetwork = "mainnet";
 }
 
 /**
