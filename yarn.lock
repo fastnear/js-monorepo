@@ -427,14 +427,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/near-connect@npm:*":
-  version: 0.11.2
-  resolution: "@fastnear/near-connect@npm:0.11.2"
-  checksum: 10c0/3df38dc0a8f841f3338f4d906ad075789847462f0ac3b146770e79aaf06d31033e6a3d33e223b11cbfb109f592e7d5910b950f8b903d9aee289fb33633a41793
-  languageName: node
-  linkType: hard
-
-"@fastnear/near-connect@npm:^0.12.0":
+"@fastnear/near-connect@npm:*, @fastnear/near-connect@npm:^0.12.0":
   version: 0.12.0
   resolution: "@fastnear/near-connect@npm:0.12.0"
   checksum: 10c0/94d724c407b13ba13bd1626da81467a4c78d2fb2974b1ebe7b35dd89ef7518bfe56aaf3b97cb4883c8340f7dafb0f78ed6dc0f8c862e44e0f48d9f580d6c5348

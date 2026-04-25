@@ -1,3 +1,12 @@
+# 1.1.3
+
+- Metadata-only release for `@fastnear/api` itself — no source changes.
+  The bundle is byte-identical to 1.1.2.
+- Released alongside `@fastnear/wallet@1.1.3`, which ships a fixed
+  IIFE bundle that pins `@fastnear/near-connect@^0.12.0` (was `*` and
+  was resolving to 0.11.2, missing the 1.1.x legacy localStorage
+  migration). Versions across the monorepo are kept in lockstep.
+
 # 1.1.2
 
 ## Per-network account state

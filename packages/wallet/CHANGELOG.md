@@ -1,3 +1,28 @@
+# 1.1.3
+
+- **Bundle fix:** the published 1.1.2 IIFE/UMD bundle inadvertently
+  included `@fastnear/near-connect@0.11.2` instead of 0.12.0. The
+  workspace lockfile had a stale `@fastnear/near-connect@npm:*`
+  resolution pointing at 0.11.2 (recorded before 0.12.0 was published),
+  and `yarn install` left it pinned there even after the monorepo's
+  root `^0.12.0` resolution was added. Refreshing the lockfile so the
+  wildcard collapses onto the same 0.12.0 entry as the root pin makes
+  the bundle ship the correct near-connect. The wallet's own
+  `package.json` keeps `"@fastnear/near-connect": "*"`; the root
+  monorepo `package.json` is the source of truth for the pin.
+- Consequence of the 1.1.2 bug: the per-network storage migration
+  shipped in near-connect 0.12.0
+  (`<walletId>:<key>` → `<walletId>:mainnet:<key>`) was missing from
+  the bundle, so existing users with pre-1.1.x localStorage state were
+  silently logged out on upgrade. The 1.1.3 bundle restores that
+  migration; it runs on first load.
+- npm consumers were unaffected (they resolve `*` to the latest
+  near-connect at install time, which is 0.12.0 today). This release
+  matters specifically for callers loading the IIFE from
+  `js.fastnear.com/wallet.js`.
+- No API surface changes. Pairs with `@fastnear/api@1.1.3`, also
+  metadata-only.
+
 # 1.1.2
 
 - Metadata-only release for `@fastnear/wallet` itself — no source
