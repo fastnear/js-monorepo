@@ -67,6 +67,10 @@ Mental model:
 - Use near.recipes.* as compact task helpers layered on top of those lower-level APIs.
 - Use near.recipes.list() or near.recipes.toJSON() when you want to discover the task helpers at runtime.
 
+Result shapes:
+- near.query* (queryAccount, queryBlock, queryAccessKey, queryTx) return the raw JSON-RPC envelope { jsonrpc, result, id } — read your data from the .result field.
+- near.view, near.recipes.*, near.ft.*, near.nft.*, near.tx.*, near.api.v1.*, near.transfers.*, near.neardata.*, and near.fastdata.kv.* return the data shape directly (no envelope).
+
 Trial credits / API keys:
 - https://dashboard.fastnear.com
 

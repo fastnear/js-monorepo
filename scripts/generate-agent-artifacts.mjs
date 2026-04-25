@@ -463,6 +463,10 @@ Mental model:
 - Use near.recipes.* as compact task helpers layered on top of those lower-level APIs.
 - Use near.recipes.list() or near.recipes.toJSON() when you want to discover the task helpers at runtime.
 
+Result shapes:
+- near.query* (queryAccount, queryBlock, queryAccessKey, queryTx) return the raw JSON-RPC envelope { jsonrpc, result, id } — read your data from the .result field.
+- near.view, near.recipes.*, near.ft.*, near.nft.*, near.tx.*, near.api.v1.*, near.transfers.*, near.neardata.*, and near.fastdata.kv.* return the data shape directly (no envelope).
+
 Trial credits / API keys:
 - ${supportSurface.trialCreditsUrl}
 
@@ -520,6 +524,11 @@ ${renderList(family.bestFor)}
 - Entrypoints:
 ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 `).join("\n\n")}
+
+## Result shapes
+
+- ` + "`near.query*`" + ` (` + "`queryAccount`" + `, ` + "`queryBlock`" + `, ` + "`queryAccessKey`" + `, ` + "`queryTx`" + `) are JSON-RPC passthroughs and return the raw envelope ` + "`{ jsonrpc, result, id }`" + ` — read your data from the ` + "`.result`" + ` field.
+- ` + "`near.view`" + `, ` + "`near.recipes.*`" + `, ` + "`near.ft.*`" + `, ` + "`near.nft.*`" + ` and the indexed REST families (` + "`near.tx.*`" + `, ` + "`near.api.v1.*`" + `, ` + "`near.transfers.*`" + `, ` + "`near.neardata.*`" + `, ` + "`near.fastdata.kv.*`" + `) return the flat data shape directly. The recipes layer in particular is what flattens ` + "`near.queryAccount`" + ` results into ` + "`{ amount, block_height, storage_usage, ... }`" + ` for ` + "`near.recipes.viewAccount`" + `.
 
 ## Low-level API entrypoints
 

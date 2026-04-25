@@ -188,6 +188,11 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - `near.fastdata.kv.multi`
 
 
+## Result shapes
+
+- `near.query*` (`queryAccount`, `queryBlock`, `queryAccessKey`, `queryTx`) are JSON-RPC passthroughs and return the raw envelope `{ jsonrpc, result, id }` — read your data from the `.result` field.
+- `near.view`, `near.recipes.*`, `near.ft.*`, `near.nft.*` and the indexed REST families (`near.tx.*`, `near.api.v1.*`, `near.transfers.*`, `near.neardata.*`, `near.fastdata.kv.*`) return the flat data shape directly. The recipes layer in particular is what flattens `near.queryAccount` results into `{ amount, block_height, storage_usage, ... }` for `near.recipes.viewAccount`.
+
 ## Low-level API entrypoints
 
 - `near.view`
