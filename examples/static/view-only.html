@@ -44,10 +44,7 @@
     <h2>Code</h2>
     <pre><code>near.config({ networkId: 'mainnet' });
 
-const metadata = await near.view({
-  contractId: 'wrap.near',
-  methodName: 'ft_metadata',
-});</code></pre>
+const metadata = await near.ft.metadata({ contractId: 'wrap.near' });</code></pre>
   </section>
 </div>
 
@@ -56,10 +53,7 @@ const metadata = await near.view({
 
   (async () => {
     try {
-      const meta = await near.view({
-        contractId: 'wrap.near',
-        methodName: 'ft_metadata',
-      });
+      const meta = await near.ft.metadata({ contractId: 'wrap.near' });
 
       document.getElementById('metadata').innerHTML = `
         <table class="metadata-table">

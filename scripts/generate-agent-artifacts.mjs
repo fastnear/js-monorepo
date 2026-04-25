@@ -37,8 +37,8 @@ function renderPagination(pagination) {
 }
 
 function assertCatalogContract() {
-  if (generatedArtifact.version !== 3) {
-    throw new Error(`Expected generated artifact version 3, received ${generatedArtifact.version}`);
+  if (generatedArtifact.version !== 4) {
+    throw new Error(`Expected generated artifact version 4, received ${generatedArtifact.version}`);
   }
 
   if (!Array.isArray(generatedArtifact.families) || generatedArtifact.families.length < 6) {

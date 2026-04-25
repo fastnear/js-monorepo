@@ -74,6 +74,16 @@ Canonical NEAR JSON-RPC defaults for direct contract views, account state, and t
 - `near.queryBlock`
 - `near.queryTx`
 - `near.sendTx`
+- `near.ft.balance`
+- `near.ft.metadata`
+- `near.ft.totalSupply`
+- `near.ft.storageBalance`
+- `near.nft.metadata`
+- `near.nft.token`
+- `near.nft.forOwner`
+- `near.nft.supplyForOwner`
+- `near.nft.totalSupply`
+- `near.nft.tokens`
 
 
 ### api
@@ -95,6 +105,8 @@ FastNear REST aggregations for account holdings, staking, and public-key oriente
 - `near.api.v1.publicKey`
 - `near.api.v1.publicKeyAll`
 - `near.api.v1.ftTop`
+- `near.ft.inventory`
+- `near.nft.inventory`
 
 
 ### tx
@@ -1428,6 +1440,812 @@ const result = await near.recipes.signMessage({
 });
 
 near.print(result);
+```
+
+## What is this account's FT balance?
+
+- ID: `ft-balance`
+- API: `near.ft.balance`
+- Service: `rpc`
+- Returns: `string`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: Read a NEP-141 token balance with a one-line wrapper that fills in the standard method name.
+- Output keys: `raw_balance`, `symbol`, `decimals`, `human_amount`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when you already know the FT contract and want one account's balance.
+- Use ft-inventory instead when you need every FT balance an account holds.
+
+Response notes:
+
+- near.ft.balance returns the raw integer balance string from ft_balance_of, scaled by the token's decimals.
+- Pair with near.ft.metadata to format the human-readable amount in one shot.
+
+Follow-ups:
+
+- If you need every token the account holds, switch to near.ft.inventory.
+- If you need a historical balance, add useArchival: true and a blockId — see archival-snapshot.
+
+Related recipes:
+
+- `ft-metadata`
+- `ft-inventory`
+- `archival-snapshot`
+
+Example inputs:
+
+```json
+{
+  "contractId": "berryclub.ek.near",
+  "accountId": "root.near"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+const balance = await near.ft.balance({
+  contractId: "berryclub.ek.near",
+  accountId: "root.near",
+});
+
+const meta = await near.ft.metadata({ contractId: "berryclub.ek.near" });
+
+near.print({
+  raw_balance: balance,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+ACCOUNT_ID=root.near
+ARGS_BASE64="$(jq -nc --arg account_id "$ACCOUNT_ID" '{account_id: $account_id}' | base64 | tr -d '\n')"
+
+curl -sS "https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY"   -H 'content-type: application/json'   --data "$(jq -nc --arg args "$ARGS_BASE64" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{
+      request_type:"call_function",
+      finality:"final",
+      account_id:"berryclub.ek.near",
+      method_name:"ft_balance_of",
+      args_base64:$args
+    }
+  }')"   | jq -r '.result.result | implode'
+```
+
+### Browser Global
+
+```js
+const balance = await near.ft.balance({
+  contractId: "berryclub.ek.near",
+  accountId: "root.near",
+});
+
+const meta = await near.ft.metadata({ contractId: "berryclub.ek.near" });
+
+near.print({
+  raw_balance: balance,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+const balance = await near.ft.balance({
+  contractId: "berryclub.ek.near",
+  accountId: "root.near",
+});
+
+const meta = await near.ft.metadata({ contractId: "berryclub.ek.near" });
+
+near.print({
+  raw_balance: balance,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+});
+```
+
+## What does this NEP-141 token call itself?
+
+- ID: `ft-metadata`
+- API: `near.ft.metadata`
+- Service: `rpc`
+- Returns: `{ name: string; symbol: string; decimals: number; icon?: string; reference?: string; reference_hash?: string }`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: Fetch name, symbol, decimals, and icon for a fungible token in one call.
+- Output keys: `name`, `symbol`, `decimals`, `icon`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when you need to format a balance, label a token, or display branding.
+- Pair with ft-balance whenever you also need a human-readable amount.
+
+Response notes:
+
+- Wraps the standard NEP-141 ft_metadata view call so the method name does not have to be remembered.
+- Decimals comes back as a number; multiply or divide raw balances accordingly.
+
+Follow-ups:
+
+- If you also need an account balance, continue with near.ft.balance.
+- If you want a portfolio view across all tokens, use near.ft.inventory.
+
+Related recipes:
+
+- `ft-balance`
+- `ft-inventory`
+
+Example inputs:
+
+```json
+{
+  "contractId": "berryclub.ek.near"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+const meta = await near.ft.metadata({
+  contractId: "berryclub.ek.near",
+});
+
+near.print({
+  name: meta.name,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  icon_present: !!meta.icon,
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+EMPTY_ARGS_BASE64="$(printf '{}' | base64)"
+
+curl -sS "https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY"   -H 'content-type: application/json'   --data "$(jq -nc --arg args "$EMPTY_ARGS_BASE64" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{
+      request_type:"call_function",
+      finality:"final",
+      account_id:"berryclub.ek.near",
+      method_name:"ft_metadata",
+      args_base64:$args
+    }
+  }')"   | jq '.result.result | implode | fromjson | {name, symbol, decimals}'
+```
+
+### Browser Global
+
+```js
+const meta = await near.ft.metadata({
+  contractId: "berryclub.ek.near",
+});
+
+near.print({
+  name: meta.name,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  icon_present: !!meta.icon,
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+const meta = await near.ft.metadata({
+  contractId: "berryclub.ek.near",
+});
+
+near.print({
+  name: meta.name,
+  symbol: meta.symbol,
+  decimals: meta.decimals,
+  icon_present: !!meta.icon,
+});
+```
+
+## Which fungible tokens does this account hold?
+
+- ID: `ft-inventory`
+- API: `near.ft.inventory`
+- Service: `api`
+- Returns: `{ tokens: Array<{ contract_id: string; balance: string; last_update_block_height?: number }> }`
+- Network: `mainnet`
+- Auth: `bearer`
+- Summary: List every NEP-141 contract the account holds via the FastNear indexer in one call.
+- Output keys: `ft_contract_count`, `preview[].contract_id`, `preview[].balance`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when the question is 'what tokens does this account own?' rather than one specific contract.
+- Use ft-balance instead when you already know the contract id.
+
+Response notes:
+
+- near.ft.inventory hits the FastNear indexer (api.fastnear.com) — set near.config({ apiKey }) to avoid the public rate limit.
+- Returns one row per FT contract the account currently holds; balances are raw integer strings.
+
+Follow-ups:
+
+- If you need NFTs as well, switch to near.nft.inventory.
+- If you need staking and aggregate state too, use near.api.v1.accountFull.
+
+Related recipes:
+
+- `ft-balance`
+- `nft-inventory`
+- `account-full`
+
+Example inputs:
+
+```json
+{
+  "accountId": "root.near"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.ft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  ft_contract_count: inventory.tokens.length,
+  preview: inventory.tokens.slice(0, 5).map((entry) => ({
+    contract_id: entry.contract_id,
+    balance: entry.balance,
+  })),
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+ACCOUNT_ID=root.near
+
+curl -sS "https://api.fastnear.com/v1/account/$ACCOUNT_ID/ft"   -H "Authorization: Bearer $FASTNEAR_API_KEY"   | jq '{
+      ft_contract_count: (.tokens | length),
+      preview: [.tokens[0:5][] | {contract_id, balance}]
+    }'
+```
+
+### Browser Global
+
+```js
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.ft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  ft_contract_count: inventory.tokens.length,
+  preview: inventory.tokens.slice(0, 5).map((entry) => ({
+    contract_id: entry.contract_id,
+    balance: entry.balance,
+  })),
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.ft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  ft_contract_count: inventory.tokens.length,
+  preview: inventory.tokens.slice(0, 5).map((entry) => ({
+    contract_id: entry.contract_id,
+    balance: entry.balance,
+  })),
+});
+```
+
+## Which NFTs does this account own on this contract?
+
+- ID: `nft-for-owner`
+- API: `near.nft.forOwner`
+- Service: `rpc`
+- Returns: `Array<{ token_id: string; owner_id: string; metadata?: { title?: string; media?: string; description?: string } }>`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: List the tokens an account owns under one NEP-171 contract with metadata included.
+- Output keys: `count`, `preview[].token_id`, `preview[].title`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when you already know the NFT contract and want one account's collection on it.
+- Use nft-inventory instead when you want NFTs across every contract for an account.
+
+Response notes:
+
+- Wraps NEP-171 nft_tokens_for_owner; the contract decides what metadata fields to embed.
+- Pass from_index and limit (numbers, sometimes strings depending on the contract) for pagination.
+
+Follow-ups:
+
+- If you need contract-level metadata, call near.nft.metadata.
+- If you need cross-contract NFT discovery, switch to near.nft.inventory.
+
+Related recipes:
+
+- `nft-inventory`
+
+Example inputs:
+
+```json
+{
+  "contractId": "x.paras.near",
+  "accountId": "root.near",
+  "limit": 5
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+const tokens = await near.nft.forOwner({
+  contractId: "x.paras.near",
+  accountId: "root.near",
+  limit: 5,
+});
+
+near.print({
+  count: tokens.length,
+  preview: tokens.map((token) => ({
+    token_id: token.token_id,
+    title: token.metadata?.title,
+  })),
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+ACCOUNT_ID=root.near
+ARGS_BASE64="$(jq -nc --arg account_id "$ACCOUNT_ID" '{account_id: $account_id, limit: 5}' | base64 | tr -d '\n')"
+
+curl -sS "https://rpc.mainnet.fastnear.com?apiKey=$FASTNEAR_API_KEY"   -H 'content-type: application/json'   --data "$(jq -nc --arg args "$ARGS_BASE64" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{
+      request_type:"call_function",
+      finality:"final",
+      account_id:"x.paras.near",
+      method_name:"nft_tokens_for_owner",
+      args_base64:$args
+    }
+  }')"   | jq '.result.result | implode | fromjson | [.[] | {token_id, title: .metadata.title}]'
+```
+
+### Browser Global
+
+```js
+const tokens = await near.nft.forOwner({
+  contractId: "x.paras.near",
+  accountId: "root.near",
+  limit: 5,
+});
+
+near.print({
+  count: tokens.length,
+  preview: tokens.map((token) => ({
+    token_id: token.token_id,
+    title: token.metadata?.title,
+  })),
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+const tokens = await near.nft.forOwner({
+  contractId: "x.paras.near",
+  accountId: "root.near",
+  limit: 5,
+});
+
+near.print({
+  count: tokens.length,
+  preview: tokens.map((token) => ({
+    token_id: token.token_id,
+    title: token.metadata?.title,
+  })),
+});
+```
+
+## Which NFT contracts does this account hold tokens on?
+
+- ID: `nft-inventory`
+- API: `near.nft.inventory`
+- Service: `api`
+- Returns: `{ tokens: Array<{ contract_id: string; tokens?: Array<{ token_id: string }> }> }`
+- Network: `mainnet`
+- Auth: `bearer`
+- Summary: Discover every NEP-171 contract the account holds tokens under via the FastNear indexer.
+- Output keys: `contract_count`, `total_tokens`, `preview[].contract_id`, `preview[].sample_token_ids`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when the question is 'what NFT contracts does this account hold tokens on?'.
+- Use nft-for-owner when you already know the specific contract id.
+
+Response notes:
+
+- near.nft.inventory hits the FastNear indexer — set near.config({ apiKey }) to avoid the public rate limit.
+- One row per NFT contract the account holds; the embedded token list is best-effort and may need follow-up calls for full metadata.
+
+Follow-ups:
+
+- Drill into one contract with near.nft.forOwner for the per-token details.
+- Pull holdings + staking + native NEAR with near.api.v1.accountFull.
+
+Related recipes:
+
+- `nft-for-owner`
+- `ft-inventory`
+- `account-full`
+
+Example inputs:
+
+```json
+{
+  "accountId": "root.near"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.nft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  contract_count: inventory.tokens.length,
+  total_tokens: inventory.tokens.reduce(
+    (sum, c) => sum + (c.tokens?.length ?? 0),
+    0
+  ),
+  preview: inventory.tokens.slice(0, 3).map((entry) => ({
+    contract_id: entry.contract_id,
+    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),
+  })),
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+ACCOUNT_ID=root.near
+
+curl -sS "https://api.fastnear.com/v1/account/$ACCOUNT_ID/nft"   -H "Authorization: Bearer $FASTNEAR_API_KEY"   | jq '{
+      contract_count: (.tokens | length),
+      preview: [.tokens[0:3][] | {contract_id, token_count: (.tokens // [] | length)}]
+    }'
+```
+
+### Browser Global
+
+```js
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.nft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  contract_count: inventory.tokens.length,
+  total_tokens: inventory.tokens.reduce(
+    (sum, c) => sum + (c.tokens?.length ?? 0),
+    0
+  ),
+  preview: inventory.tokens.slice(0, 3).map((entry) => ({
+    contract_id: entry.contract_id,
+    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),
+  })),
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Tip: `near.config({ apiKey: "<your_key>" })` raises rate limits.
+const inventory = await near.nft.inventory({
+  accountId: "root.near",
+});
+
+near.print({
+  contract_count: inventory.tokens.length,
+  total_tokens: inventory.tokens.reduce(
+    (sum, c) => sum + (c.tokens?.length ?? 0),
+    0
+  ),
+  preview: inventory.tokens.slice(0, 3).map((entry) => ({
+    contract_id: entry.contract_id,
+    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),
+  })),
+});
+```
+
+## What did this account look like at a specific block?
+
+- ID: `archival-snapshot`
+- API: `near.queryAccount`
+- Service: `rpc`
+- Returns: `RpcViewAccountResponse`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: Read canonical account state at a historical block by setting useArchival on the query.
+- Output keys: `amount`, `storage_usage`, `block_hash`, `block_height`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when blockId predates the regular RPC's retention window or you specifically want a historical snapshot.
+- Combine with the FT or NFT helpers (`useArchival: true` is forwarded) when you need a historical token balance.
+
+Response notes:
+
+- useArchival: true routes a single call to NEAR's archival RPC (archival-rpc.{mainnet,testnet}.near.org) which retains state past the regular RPC's ~5-epoch window.
+- The same flag works on near.view, near.queryAccount, near.queryBlock, near.queryAccessKey, near.queryTx, and the lower-level near.sendRpc — falls back to the regular RPC if archival isn't configured for the network.
+
+Follow-ups:
+
+- Pair with near.ft.balance({ blockId, useArchival: true }) for a historical token balance.
+- If you need a full holdings snapshot at a block, walk near.api.v1.accountFull with the blockId once it's supported on that surface.
+
+Related recipes:
+
+- `view-account`
+- `ft-balance`
+
+Example inputs:
+
+```json
+{
+  "accountId": "root.near",
+  "blockId": 100000000,
+  "useArchival": true
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Reads canonical account state at a specific historical block via the
+// archival RPC. Add useArchival to any view/query when blockId predates
+// the regular RPC's retention window (~5 epochs / a few days).
+const past = await near.queryAccount({
+  accountId: "root.near",
+  blockId: 100_000_000,
+  useArchival: true,
+});
+
+near.print({
+  amount: past.amount,
+  storage_usage: past.storage_usage,
+  block_hash: past.block_hash,
+  block_height: past.block_height,
+});
+EOF
+```
+
+### curl + jq
+
+```bash
+# NEAR's public archival RPC — no apiKey required.
+ACCOUNT_ID=root.near
+BLOCK_ID=100000000
+
+curl -sS "https://archival-rpc.mainnet.near.org"   -H 'content-type: application/json'   --data "$(jq -nc --arg account_id "$ACCOUNT_ID" --argjson block "$BLOCK_ID" '{
+    jsonrpc:"2.0",id:"fastnear",method:"query",
+    params:{request_type:"view_account",account_id:$account_id,block_id:$block}
+  }')"   | jq '.result | {amount, storage_usage, block_height, block_hash}'
+```
+
+### Browser Global
+
+```js
+// Reads canonical account state at a specific historical block via the
+// archival RPC. Add useArchival to any view/query when blockId predates
+// the regular RPC's retention window (~5 epochs / a few days).
+const past = await near.queryAccount({
+  accountId: "root.near",
+  blockId: 100_000_000,
+  useArchival: true,
+});
+
+near.print({
+  amount: past.amount,
+  storage_usage: past.storage_usage,
+  block_hash: past.block_hash,
+  block_height: past.block_height,
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Reads canonical account state at a specific historical block via the
+// archival RPC. Add useArchival to any view/query when blockId predates
+// the regular RPC's retention window (~5 epochs / a few days).
+const past = await near.queryAccount({
+  accountId: "root.near",
+  blockId: 100_000_000,
+  useArchival: true,
+});
+
+near.print({
+  amount: past.amount,
+  storage_usage: past.storage_usage,
+  block_hash: past.block_hash,
+  block_height: past.block_height,
+});
+```
+
+## How do I open a testnet wallet session alongside mainnet?
+
+- ID: `connect-testnet`
+- API: `nearWallet.connect`
+- Service: `wallet`
+- Returns: `{ accountId: string; network: "mainnet" | "testnet" } | undefined`
+- Network: `testnet`
+- Auth: `wallet`
+- Summary: Use the per-network connect parameter to keep mainnet and testnet sessions side by side.
+- Output keys: `connected.accountId`, `connected.network`, `active_networks`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when the task spans both networks in the same page (mainnet read + testnet write, or A/B testing).
+- Use connect-wallet when one network at a time is enough.
+
+Response notes:
+
+- @fastnear/wallet 1.1.0 keys session state per network, so signing in on testnet does not evict an active mainnet session.
+- near.recipes.connect uses the global config's network — call nearWallet.connect directly when you want an explicit per-network override.
+- nearWallet.connectedNetworks() returns the list of networks with an active session.
+
+Follow-ups:
+
+- Send a function call on the testnet contract with nearWallet.sendTransaction({ network: "testnet", … }).
+- Read the active session per network with nearWallet.accountId({ network: "testnet" }) and nearWallet.getActiveNetwork().
+
+Related recipes:
+
+- `connect-wallet`
+- `function-call`
+
+Example inputs:
+
+```json
+{
+  "network": "testnet",
+  "contractId": "guest-book.testnet"
+}
+```
+
+### Terminal
+
+```bash
+# Browser wallet required.
+# Opening the wallet picker needs a browser environment.
+# Use the browser-global or ESM snippet for this task.
+```
+
+### Browser Global
+
+```js
+// nearWallet.connect supports parallel mainnet+testnet sessions —
+// signing in on testnet here leaves any active mainnet session alone.
+// (near.recipes.connect uses the global config's network; for an explicit
+// per-network session, call nearWallet.connect directly.)
+const result = await nearWallet.connect({
+  network: "testnet",
+  contractId: "guest-book.testnet",
+});
+
+near.print({
+  connected: result,
+  active_networks: nearWallet.connectedNetworks(),
+});
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+import * as nearWallet from "@fastnear/wallet";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+near.useWallet(nearWallet);
+await nearWallet.restore({
+  network: "mainnet",
+  contractId: "berryclub.ek.near",
+  manifest: "./manifest.json",
+});
+
+// nearWallet.connect supports parallel mainnet+testnet sessions —
+// signing in on testnet here leaves any active mainnet session alone.
+// (near.recipes.connect uses the global config's network; for an explicit
+// per-network session, call nearWallet.connect directly.)
+const result = await nearWallet.connect({
+  network: "testnet",
+  contractId: "guest-book.testnet",
+});
+
+near.print({
+  connected: result,
+  active_networks: nearWallet.connectedNetworks(),
+});
 ```
 
 ## Explain surface

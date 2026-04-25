@@ -212,6 +212,16 @@ Canonical NEAR JSON-RPC defaults for direct contract views, account state, and t
 - `near.queryBlock`
 - `near.queryTx`
 - `near.sendTx`
+- `near.ft.balance`
+- `near.ft.metadata`
+- `near.ft.totalSupply`
+- `near.ft.storageBalance`
+- `near.nft.metadata`
+- `near.nft.token`
+- `near.nft.forOwner`
+- `near.nft.supplyForOwner`
+- `near.nft.totalSupply`
+- `near.nft.tokens`
 
 #### api
 
@@ -232,6 +242,8 @@ FastNear REST aggregations for account holdings, staking, and public-key oriente
 - `near.api.v1.publicKey`
 - `near.api.v1.publicKeyAll`
 - `near.api.v1.ftTop`
+- `near.ft.inventory`
+- `near.nft.inventory`
 
 #### tx
 

@@ -166,11 +166,7 @@
   // ============================================================
   async function loadBalances() {
     try {
-      const totalSupply = await near.view({
-        contractId: CONTRACT_ID,
-        methodName: 'ft_total_supply',
-        args: {},
-      });
+      const totalSupply = await near.ft.totalSupply({ contractId: CONTRACT_ID });
       document.getElementById('total-supply').textContent =
         totalSupply ? `${(parseFloat(totalSupply) / 1e18).toFixed(4)} avocados` : '—';
 
