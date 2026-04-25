@@ -1,3 +1,15 @@
+# 1.1.1
+
+- Metadata-only release that lifts every workspace package to the same
+  monorepo version. No `@fastnear/api` source changes — the published
+  bundle is byte-identical to 1.1.0.
+- Recipe catalog at `js.fastnear.com/recipes.json` upgraded to v4 with
+  seven new entries that exercise the 1.1.0 `near.ft.*`, `near.nft.*`,
+  and `useArchival` surfaces (`ft-balance`, `ft-metadata`, `ft-inventory`,
+  `nft-for-owner`, `nft-inventory`, `archival-snapshot`,
+  `connect-testnet`). The catalog is hosted, not bundled, so it reaches
+  consumers without needing a re-install.
+
 # 1.1.0
 
 ## Archival opt-in
