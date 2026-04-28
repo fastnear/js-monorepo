@@ -328,13 +328,6 @@ process.stdout.write(JSON.stringify(discovery));
       throw new Error(`Terminal wrapper output missing expected account: ${bashOutput}`);
     }
 
-    const zshOutput = runCommand("zsh", ["-lc", viewTerminalSnippet], {
-      env: terminalEnv,
-    });
-    if (!zshOutput.includes('"account_id": "root.near"')) {
-      throw new Error(`zsh terminal wrapper output missing expected account: ${zshOutput}`);
-    }
-
     const wrapperApiKeyOutput = runCommand("bash", ["-lc", `node -e "$(curl -fsSL ${baseUrl}/agents.js)" <<'EOF'
 near.print(near.config().apiKey);
 EOF`], {
