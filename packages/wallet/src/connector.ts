@@ -465,7 +465,7 @@ export async function signDelegateActions(
   if (!state.connectedWallet) {
     throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
-  const delegateActions = params.delegateActions.map((da: any) => ({
+  const delegateActions = params.delegateActions.map((da) => ({
     receiverId: da.receiverId,
     actions: da.actions.some(isFastnearAction)
       ? toConnectorActions(da.actions)
