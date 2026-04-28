@@ -377,6 +377,30 @@ near.print(result);`,
 
 near.print(result);`,
 
+  signDelegateActions: `const cu = near.utils.convertUnit;
+
+const result = await nearWallet.signDelegateActions({
+  delegateActions: [
+    {
+      receiverId: "berryclub.ek.near",
+      actions: [
+        {
+          type: "FunctionCall",
+          methodName: "draw",
+          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+          gas: cu("100 Tgas"),
+          deposit: "0",
+        },
+      ],
+    },
+  ],
+});
+
+near.print({
+  count: result.signedDelegateActions.length,
+  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,
+});`,
+
   ftBalance: `const balance = await near.ft.balance({
   contractId: "berryclub.ek.near",
   accountId: "root.near",
@@ -893,6 +917,33 @@ const walletSnippets = {
       code: withEsmApiKeyConfig(code.signMessage, { includeWallet: true }),
     },
   ],
+  signDelegateActions: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Signing delegate actions depends on a connected wallet provider."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.signDelegateActions,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.signDelegateActions, { includeWallet: true }),
+    },
+  ],
   connectTestnet: [
     {
       id: "terminal",
@@ -1213,7 +1264,7 @@ export const recipeCatalog = [
       "If the next step is a simple NEAR payment, continue with near.recipes.transfer.",
     ],
     pagination: paginationNone,
-    relatedRecipes: ["function-call", "transfer", "sign-message"],
+    relatedRecipes: ["function-call", "transfer", "sign-message", "sign-delegate-actions"],
   }),
   enrichRecipe({
     id: "function-call",
@@ -1308,7 +1359,53 @@ export const recipeCatalog = [
       "If the flow turns into an on-chain action, move to near.recipes.functionCall or near.recipes.transfer.",
     ],
     pagination: paginationNone,
-    relatedRecipes: ["connect-wallet"],
+    relatedRecipes: ["connect-wallet", "sign-delegate-actions"],
+  }),
+  enrichRecipe({
+    id: "sign-delegate-actions",
+    title: "How do I sign delegate actions for gasless transactions?",
+    summary: "Sign NEP-366 delegate actions via the connected wallet so a relayer can submit them on-chain without the user paying gas.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "nearWallet.signDelegateActions",
+    example: {
+      delegateActions: [
+        {
+          receiverId: "berryclub.ek.near",
+          actions: [
+            {
+              type: "FunctionCall",
+              methodName: "draw",
+              args: { pixels: [{ x: 10, y: 20, color: 65280 }] },
+              gas: "100 Tgas",
+              deposit: "0",
+            },
+          ],
+        },
+      ],
+    },
+    snippets: walletSnippets.signDelegateActions,
+  }, {
+    service: "wallet",
+    returns: "SignDelegateActionsResponse",
+    outputKeys: [
+      "signedDelegateActions[].delegateHash",
+      "signedDelegateActions[].signedDelegate",
+    ],
+    responseNotes: [
+      "Returns signed delegate actions that a relayer can submit on-chain, enabling gasless transactions for the user.",
+      "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions).",
+    ],
+    chooseWhen: [
+      "Choose this when building gasless or relay-based flows where a third party submits the transaction on the user's behalf.",
+      "Prefer sign-message when you only need an off-chain signature, or function-call when the user can pay gas directly.",
+    ],
+    followUps: [
+      "Submit the signed delegate actions through a relayer service to execute on-chain without the signer paying gas.",
+      "If the flow does not need a relayer, use near.recipes.functionCall for a standard wallet-signed transaction instead.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet", "sign-message", "function-call"],
   }),
   enrichRecipe({
     id: "ft-balance",

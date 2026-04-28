@@ -1197,8 +1197,16 @@
               {
                 "type": "FunctionCall",
                 "methodName": "draw",
-                "args": { "pixels": [{ "x": 10, "y": 20, "color": 65280 }] },
-                "gas": "30000000000000",
+                "args": {
+                  "pixels": [
+                    {
+                      "x": 10,
+                      "y": 20,
+                      "color": 65280
+                    }
+                  ]
+                },
+                "gas": "100 Tgas",
                 "deposit": "0"
               }
             ]
@@ -1221,7 +1229,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "const result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: \"30000000000000\",\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+          "code": "const cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
         },
         {
           "id": "esm",
@@ -1229,7 +1237,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as nearWallet from \"@fastnear/wallet\";\n\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: \"30000000000000\",\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
         }
       ],
       "service": "wallet",

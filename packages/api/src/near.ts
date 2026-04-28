@@ -1586,6 +1586,11 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     title: "How do I sign a message?",
   },
   {
+    id: "sign-delegate-actions",
+    api: "nearWallet.signDelegateActions",
+    title: "How do I sign delegate actions for gasless transactions?",
+  },
+  {
     id: "ft-balance",
     api: "near.ft.balance",
     title: "What is this account's FT balance?",

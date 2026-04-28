@@ -465,13 +465,17 @@ export async function signDelegateActions(
   if (!state.connectedWallet) {
     throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
+  const wallet: any = state.connectedWallet;
+  if (typeof wallet.signDelegateActions !== "function") {
+    throw new Error("Connected wallet does not support signDelegateActions");
+  }
   const delegateActions = params.delegateActions.map((da: any) => ({
     receiverId: da.receiverId,
     actions: da.actions.some(isFastnearAction)
       ? toConnectorActions(da.actions)
       : da.actions,
   }));
-  return state.connectedWallet.signDelegateActions({
+  return wallet.signDelegateActions({
     delegateActions,
     signerId: params.signerId ?? state.currentAccountId ?? undefined,
     network,
