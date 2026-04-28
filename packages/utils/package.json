@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/utils",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "Utility functions for interactions with the NEAR blockchain",
   "type": "module",
   "types": "./dist/esm/index.d.ts",

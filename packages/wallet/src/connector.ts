@@ -4,10 +4,18 @@ import {
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
   type SignMessageParams,
+  type SignDelegateActionsParams,
   type ConnectorAction,
   type WalletManifest,
 } from "@fastnear/near-connect";
+import type {
+  SignDelegateActionResult,
+  SignDelegateActionsResponse,
+} from "@fastnear/near-connect/build/types";
 export type { WalletManifest };
+
+export type { SignDelegateActionsParams } from "@fastnear/near-connect";
+export type { SignDelegateActionResult, SignDelegateActionsResponse };
 
 type Network = "mainnet" | "testnet";
 
@@ -439,6 +447,35 @@ export async function signMessage(params: SignMessageParams & { network?: Networ
     throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
   }
   return state.connectedWallet.signMessage({ ...params, network });
+}
+
+/**
+ * Sign delegate actions (NEP-366) via the connected wallet.
+ * Accepts both fastnear-style flat actions and ConnectorActions.
+ */
+export async function signDelegateActions(
+  params: SignDelegateActionsParams & { network?: Network }
+): Promise<SignDelegateActionsResponse> {
+  const network = params.network ?? activeNetwork;
+  const state = networkStates[network];
+  if (!state.connectedWallet) {
+    throw new Error(`No wallet connected on ${network}. Call connect({ network: "${network}" }) first.`);
+  }
+  const wallet: any = state.connectedWallet;
+  if (typeof wallet.signDelegateActions !== "function") {
+    throw new Error("Connected wallet does not support signDelegateActions");
+  }
+  const delegateActions = params.delegateActions.map((da: any) => ({
+    receiverId: da.receiverId,
+    actions: da.actions.some(isFastnearAction)
+      ? toConnectorActions(da.actions)
+      : da.actions,
+  }));
+  return wallet.signDelegateActions({
+    delegateActions,
+    signerId: params.signerId ?? state.currentAccountId ?? undefined,
+    network,
+  });
 }
 
 /**

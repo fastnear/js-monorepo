@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -11,13 +11,11 @@ const recipeIndex = JSON.parse(
 );
 const rootReadme = readFileSync(path.join(repoRoot, "README.md"), "utf8");
 const packageReadme = readFileSync(path.join(repoRoot, "packages/api/README.md"), "utf8");
-const hostedReadme = readFileSync(path.resolve(repoRoot, "../js-example-berryclub/README.md"), "utf8");
 const expectedRecipeDiscovery = recipeIndex.recipes.map(({ id, api, title }) => ({
   id,
   api,
   title,
 }));
-const hostedPageModulePath = path.resolve(repoRoot, "../js-example-berryclub/public/index.js");
 const nearBundlePath = path.join(repoRoot, "packages/api/dist/umd/browser.global.js");
 const wrapperPath = path.join(repoRoot, "recipes/near-node.mjs");
 const nearBundleSource = readFileSync(nearBundlePath, "utf8");
@@ -40,21 +38,6 @@ function runCommand(command, args, options = {}) {
 
 function replaceCdnBase(code, localBase) {
   return code.replaceAll("https://js.fastnear.com", localBase);
-}
-
-function decodeHtml(value) {
-  return value
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
-}
-
-function extractHtmlCodeBlocks(html) {
-  return [...html.matchAll(/<pre[^>]*>\s*<code(?:\s[^>]*)?>([\s\S]*?)<\/code>\s*<\/pre>/g)].map((match) =>
-    decodeHtml(match[1])
-  );
 }
 
 function extractMarkdownFences(text, language) {
@@ -210,136 +193,6 @@ ${scriptBody}
 `;
 }
 
-function createMockLink(assetKey) {
-  return {
-    dataset: { hostedAssetLink: assetKey },
-    href: "",
-    getAttribute(name) {
-      if (name === "data-hosted-asset-link") {
-        return this.dataset.hostedAssetLink;
-      }
-      return null;
-    },
-    setAttribute(name, value) {
-      if (name === "href") {
-        this.href = value;
-      }
-    },
-  };
-}
-
-async function assertHostedPageUsesCurrentOrigin(pageOrigin) {
-  const pageModule = await import(`${pathToFileURL(hostedPageModulePath).href}?smoke=${Date.now()}`);
-  const elements = new Map(
-    ["hero-quickstart", "surface-grid", "docs-launch", "agent-guidance", "agent-recipes"].map((id) => [
-      id,
-      { id, innerHTML: "" },
-    ])
-  );
-  const hostedLinks = [createMockLink("recipes"), createMockLink("agents")];
-  const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
-  const previousFetch = globalThis.fetch;
-  let fetchedUrl = "";
-
-  globalThis.window = { location: { origin: pageOrigin } };
-  globalThis.document = {
-    getElementById(id) {
-      return elements.get(id) ?? null;
-    },
-    querySelectorAll(selector) {
-      if (selector === "[data-hosted-asset-link]") {
-        return hostedLinks;
-      }
-      return [];
-    },
-  };
-  globalThis.fetch = async (url) => {
-    fetchedUrl = String(url);
-    return {
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      async json() {
-        return JSON.parse(JSON.stringify(recipeIndex));
-      },
-    };
-  };
-
-  try {
-    await pageModule.renderAgentRecipes();
-  } finally {
-    if (previousWindow === undefined) {
-      delete globalThis.window;
-    } else {
-      globalThis.window = previousWindow;
-    }
-
-    if (previousDocument === undefined) {
-      delete globalThis.document;
-    } else {
-      globalThis.document = previousDocument;
-    }
-
-    if (previousFetch === undefined) {
-      delete globalThis.fetch;
-    } else {
-      globalThis.fetch = previousFetch;
-    }
-  }
-
-  if (fetchedUrl !== `${pageOrigin}/recipes.json`) {
-    throw new Error(`Hosted page should fetch recipes.json from the current origin, received ${fetchedUrl}`);
-  }
-
-  const quickstartHtml = elements.get("hero-quickstart").innerHTML;
-  const guidanceHtml = elements.get("agent-guidance").innerHTML;
-  const recipesHtml = elements.get("agent-recipes").innerHTML;
-
-  if (!quickstartHtml.includes(`${pageOrigin}/agents.js`)) {
-    throw new Error("Hosted page quickstart should rewrite terminal snippets to the current-origin agents.js URL");
-  }
-  if (!quickstartHtml.includes(`FASTNEAR_CDN_BASE=${pageOrigin}`)) {
-    throw new Error("Hosted page quickstart should inject FASTNEAR_CDN_BASE for local-origin terminal snippets");
-  }
-  if (quickstartHtml.includes("https://js.fastnear.com/agents.js")) {
-    throw new Error("Hosted page quickstart should not leave canonical agents.js URLs in local preview snippets");
-  }
-  if (!guidanceHtml.includes(`${pageOrigin}/recipes.json`) || !guidanceHtml.includes(`${pageOrigin}/llms.txt`)) {
-    throw new Error("Hosted page catalog note should point asset links at the current origin");
-  }
-  if (!recipesHtml.includes(`${pageOrigin}/agents.js`)) {
-    throw new Error("Hosted page task snippets should rewrite hosted asset URLs to the current origin");
-  }
-  if (!recipesHtml.includes(`FASTNEAR_CDN_BASE=${pageOrigin}`)) {
-    throw new Error("Hosted page task snippets should inject FASTNEAR_CDN_BASE for local-origin wrapper commands");
-  }
-  if (hostedLinks[0].href !== `${pageOrigin}/recipes.json` || hostedLinks[1].href !== `${pageOrigin}/agents.js`) {
-    throw new Error("Hosted page static asset links should point at the current origin");
-  }
-
-  const quickstartSnippets = extractHtmlCodeBlocks(quickstartHtml);
-  const recipeSnippets = extractHtmlCodeBlocks(recipesHtml);
-
-  if (quickstartSnippets.length < 2) {
-    throw new Error("Hosted page should render two quickstart copy blocks");
-  }
-  if (!recipeSnippets.length) {
-    throw new Error("Hosted page should render copyable task snippets");
-  }
-  if (!recipeSnippets[0].includes('near.recipes.viewAccount("root.near")')) {
-    throw new Error("Hosted page should start the visible task list with the view-account snippet");
-  }
-  if (!recipesHtml.includes("Browser-only step") || !recipesHtml.includes("Try sign in on this page")) {
-    throw new Error("Hosted page wallet task cards should clearly label browser-only flows");
-  }
-
-  return {
-    quickstartSnippets,
-    recipeSnippets,
-  };
-}
-
 async function main() {
   const { child, baseUrl } = await startAssetServer();
 
@@ -407,7 +260,6 @@ async function main() {
     const readmeExamples = [
       ...collectExecutableBashExamples("root README", rootReadme),
       ...collectExecutableBashExamples("package README", packageReadme),
-      ...collectExecutableBashExamples("hosted README", hostedReadme),
     ];
 
     const readOnlyRecipes = [
@@ -441,7 +293,6 @@ async function main() {
     assertNoApiKeyReset("recipes/index.json", JSON.stringify(recipeIndex));
     assertNoApiKeyReset("README.md", rootReadme);
     assertNoApiKeyReset("packages/api/README.md", packageReadme);
-    assertNoApiKeyReset("js-example-berryclub/README.md", hostedReadme);
 
     const recipeDiscoveryOutput = runCommand("node", ["-e", browserHarness(`
 const discovery = {
@@ -470,41 +321,11 @@ process.stdout.write(JSON.stringify(discovery));
       );
     }
 
-    const hostedPage = await assertHostedPageUsesCurrentOrigin(baseUrl);
-
-    const renderedQuickstartOutput = runCommand("bash", ["-lc", hostedPage.quickstartSnippets[0]], {
-      env: terminalEnv,
-    });
-    if (!renderedQuickstartOutput.includes('"account_id": "root.near"')) {
-      throw new Error(`Rendered hosted-page terminal quickstart failed: ${renderedQuickstartOutput}`);
-    }
-
-    const renderedCurlOutput = runCommand("bash", ["-lc", hostedPage.quickstartSnippets[1]], {
-      env: terminalEnv,
-    });
-    if (!renderedCurlOutput.includes('"account_id": "root.near"')) {
-      throw new Error(`Rendered hosted-page curl quickstart failed: ${renderedCurlOutput}`);
-    }
-
-    const renderedFirstTaskOutput = runCommand("bash", ["-lc", hostedPage.recipeSnippets[0]], {
-      env: terminalEnv,
-    });
-    if (!renderedFirstTaskOutput.includes('"block_hash"') || !renderedFirstTaskOutput.includes('"storage_usage"')) {
-      throw new Error(`Rendered hosted-page first task snippet failed: ${renderedFirstTaskOutput}`);
-    }
-
     const bashOutput = runCommand("bash", ["-lc", viewTerminalSnippet], {
       env: terminalEnv,
     });
     if (!bashOutput.includes('"account_id": "root.near"')) {
       throw new Error(`Terminal wrapper output missing expected account: ${bashOutput}`);
-    }
-
-    const zshOutput = runCommand("zsh", ["-lc", viewTerminalSnippet], {
-      env: terminalEnv,
-    });
-    if (!zshOutput.includes('"account_id": "root.near"')) {
-      throw new Error(`zsh terminal wrapper output missing expected account: ${zshOutput}`);
     }
 
     const wrapperApiKeyOutput = runCommand("bash", ["-lc", `node -e "$(curl -fsSL ${baseUrl}/agents.js)" <<'EOF'

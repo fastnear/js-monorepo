@@ -963,7 +963,8 @@
       "relatedRecipes": [
         "function-call",
         "transfer",
-        "sign-message"
+        "sign-message",
+        "sign-delegate-actions"
       ]
     },
     {
@@ -1177,7 +1178,96 @@
         "filtersMustStayStable": false
       },
       "relatedRecipes": [
-        "connect-wallet"
+        "connect-wallet",
+        "sign-delegate-actions"
+      ]
+    },
+    {
+      "id": "sign-delegate-actions",
+      "title": "How do I sign delegate actions for gasless transactions?",
+      "summary": "Sign NEP-366 delegate actions via the connected wallet so a relayer can submit them on-chain without the user paying gas.",
+      "network": "mainnet",
+      "auth": "wallet",
+      "api": "nearWallet.signDelegateActions",
+      "example": {
+        "delegateActions": [
+          {
+            "receiverId": "berryclub.ek.near",
+            "actions": [
+              {
+                "type": "FunctionCall",
+                "methodName": "draw",
+                "args": {
+                  "pixels": [
+                    {
+                      "x": 10,
+                      "y": 20,
+                      "color": 65280
+                    }
+                  ]
+                },
+                "gas": "100 Tgas",
+                "deposit": "0"
+              }
+            ]
+          }
+        ]
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Signing delegate actions depends on a connected wallet provider.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+        }
+      ],
+      "service": "wallet",
+      "returns": "SignDelegateActionsResponse",
+      "outputKeys": [
+        "signedDelegateActions[].delegateHash",
+        "signedDelegateActions[].signedDelegate"
+      ],
+      "responseNotes": [
+        "Returns signed delegate actions that a relayer can submit on-chain, enabling gasless transactions for the user.",
+        "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions)."
+      ],
+      "chooseWhen": [
+        "Choose this when building gasless or relay-based flows where a third party submits the transaction on the user's behalf.",
+        "Prefer sign-message when you only need an off-chain signature, or function-call when the user can pay gas directly."
+      ],
+      "followUps": [
+        "Submit the signed delegate actions through a relayer service to execute on-chain without the signer paying gas.",
+        "If the flow does not need a relayer, use near.recipes.functionCall for a standard wallet-signed transaction instead."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-wallet",
+        "sign-message",
+        "function-call"
       ]
     },
     {
