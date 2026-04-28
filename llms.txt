@@ -36,6 +36,7 @@ Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.sendTransaction({ receiverId, actions, network })
 - nearWallet.sendTransactions({ transactions, network })
 - nearWallet.signMessage({ message, recipient, nonce, network })
+- nearWallet.signDelegateActions({ delegateActions, signerId, network })
 - nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })
 - nearWallet.accountId({ network })
 - nearWallet.isConnected({ network })
