@@ -8,18 +8,14 @@ import {
   type ConnectorAction,
   type WalletManifest,
 } from "@fastnear/near-connect";
+import type {
+  SignDelegateActionResult,
+  SignDelegateActionsResponse,
+} from "@fastnear/near-connect/build/types";
 export type { WalletManifest };
 
 export type { SignDelegateActionsParams } from "@fastnear/near-connect";
-
-export interface SignDelegateActionResult {
-  delegateHash: Uint8Array;
-  signedDelegate: any;
-}
-
-export interface SignDelegateActionsResponse {
-  signedDelegateActions: SignDelegateActionResult[];
-}
+export type { SignDelegateActionResult, SignDelegateActionsResponse };
 
 type Network = "mainnet" | "testnet";
 
