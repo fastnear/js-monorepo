@@ -377,6 +377,17 @@ near.print(result);`,
 
 near.print(result);`,
 
+  connectAndSignMessage: `const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);`,
+
   signDelegateActions: `const cu = near.utils.convertUnit;
 
 const result = await nearWallet.signDelegateActions({
@@ -998,6 +1009,33 @@ const walletSnippets = {
       code: withEsmApiKeyConfig(code.functionCallTestnet, { includeWallet: true }),
     },
   ],
+  connectAndSignMessage: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Connecting and signing a message needs a browser environment with a wallet."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.connectAndSignMessage,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.connectAndSignMessage, { includeWallet: true }),
+    },
+  ],
 };
 
 export const recipeCatalog = [
@@ -1403,6 +1441,41 @@ export const recipeCatalog = [
     followUps: [
       "Submit the signed delegate actions through a relayer service to execute on-chain without the signer paying gas.",
       "If the flow does not need a relayer, use near.recipes.functionCall for a standard wallet-signed transaction instead.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet", "sign-message", "function-call"],
+  }),
+  enrichRecipe({
+    id: "connect-and-sign-message",
+    title: "How do I connect a wallet and sign a message in one step?",
+    summary: "Combine sign-in and NEP-413 message signing into a single wallet popup instead of two.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "near.recipes.connect",
+    example: {
+      contractId: "berryclub.ek.near",
+      signMessageParams: {
+        message: "Sign in to myapp.near",
+        recipient: "myapp.near",
+        nonce: "(32-byte Uint8Array)",
+      },
+    },
+    snippets: walletSnippets.connectAndSignMessage,
+  }, {
+    service: "wallet",
+    returns: "{ accountId: string; publicKey?: string; signedMessage?: SignedMessage }",
+    outputKeys: ["accountId", "publicKey", "signedMessage"],
+    responseNotes: [
+      "When signMessageParams is provided, the connector filters the wallet picker to only show wallets with the signInAndSignMessage feature flag.",
+      "The signedMessage field contains the NEP-413 signature result, avoiding a second popup.",
+    ],
+    chooseWhen: [
+      "Choose this when you want sign-in and message signing in a single user interaction.",
+      "Prefer this over separate connect + signMessage calls when the wallet supports signInAndSignMessage.",
+    ],
+    followUps: [
+      "If the wallet doesn't support signInAndSignMessage, fall back to separate near.recipes.connect and near.recipes.signMessage calls.",
+      "After connecting and signing, send one contract action with near.recipes.functionCall.",
     ],
     pagination: paginationNone,
     relatedRecipes: ["connect-wallet", "sign-message", "function-call"],

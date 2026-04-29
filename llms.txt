@@ -104,6 +104,7 @@ Recipe index:
 - transfer: How do I transfer NEAR? (wallet, WalletTransactionResult, wallet+deposit, mainnet)
 - sign-message: How do I sign a message? (wallet, WalletMessageSignatureResult, wallet, mainnet)
 - sign-delegate-actions: How do I sign delegate actions for gasless transactions? (wallet, SignDelegateActionsResponse, wallet, mainnet)
+- connect-and-sign-message: How do I connect a wallet and sign a message in one step? (wallet, { accountId: string; publicKey?: string; signedMessage?: SignedMessage }, wallet, mainnet)
 - ft-balance: What is this account's FT balance? (rpc, string, none, mainnet)
 - ft-metadata: What does this NEP-141 token call itself? (rpc, { name: string; symbol: string; decimals: number; icon?: string; reference?: string; reference_hash?: string }, none, mainnet)
 - ft-inventory: Which fungible tokens does this account hold? (api, { tokens: Array<{ contract_id: string; balance: string; last_update_block_height?: number }> }, bearer, mainnet)

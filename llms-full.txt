@@ -1596,6 +1596,101 @@ near.print({
 });
 ```
 
+## How do I connect a wallet and sign a message in one step?
+
+- ID: `connect-and-sign-message`
+- API: `near.recipes.connect`
+- Service: `wallet`
+- Returns: `{ accountId: string; publicKey?: string; signedMessage?: SignedMessage }`
+- Network: `mainnet`
+- Auth: `wallet`
+- Summary: Combine sign-in and NEP-413 message signing into a single wallet popup instead of two.
+- Output keys: `accountId`, `publicKey`, `signedMessage`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when you want sign-in and message signing in a single user interaction.
+- Prefer this over separate connect + signMessage calls when the wallet supports signInAndSignMessage.
+
+Response notes:
+
+- When signMessageParams is provided, the connector filters the wallet picker to only show wallets with the signInAndSignMessage feature flag.
+- The signedMessage field contains the NEP-413 signature result, avoiding a second popup.
+
+Follow-ups:
+
+- If the wallet doesn't support signInAndSignMessage, fall back to separate near.recipes.connect and near.recipes.signMessage calls.
+- After connecting and signing, send one contract action with near.recipes.functionCall.
+
+Related recipes:
+
+- `connect-wallet`
+- `sign-message`
+- `function-call`
+
+Example inputs:
+
+```json
+{
+  "contractId": "berryclub.ek.near",
+  "signMessageParams": {
+    "message": "Sign in to myapp.near",
+    "recipient": "myapp.near",
+    "nonce": "(32-byte Uint8Array)"
+  }
+}
+```
+
+### Terminal
+
+```bash
+# Browser wallet required.
+# Connecting and signing a message needs a browser environment with a wallet.
+# Use the browser-global or ESM snippet for this task.
+```
+
+### Browser Global
+
+```js
+const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+import * as nearWallet from "@fastnear/wallet";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+near.useWallet(nearWallet);
+await nearWallet.restore({
+  network: "mainnet",
+  contractId: "berryclub.ek.near",
+  manifest: "./manifest.json",
+});
+
+const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);
+```
+
 ## What is this account's FT balance?
 
 - ID: `ft-balance`
