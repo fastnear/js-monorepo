@@ -98,6 +98,11 @@ export interface RecipeConnectParams {
   // falls back to `near.config().networkId`. With @fastnear/wallet 1.1.0+
   // the per-network sessions live alongside each other on the same page.
   network?: "mainnet" | "testnet";
+  signMessageParams?: {
+    message: string;
+    recipient: string;
+    nonce: Uint8Array;
+  };
 }
 
 export interface FastNearRecipeDiscoveryEntry {

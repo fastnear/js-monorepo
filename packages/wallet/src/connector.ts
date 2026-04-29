@@ -4,6 +4,7 @@ import {
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
   type SignMessageParams,
+  type SignedMessage,
   type SignDelegateActionsParams,
   type ConnectorAction,
   type WalletManifest,
@@ -14,7 +15,7 @@ import type {
 } from "@fastnear/near-connect/build/types";
 export type { WalletManifest };
 
-export type { SignDelegateActionsParams } from "@fastnear/near-connect";
+export type { SignDelegateActionsParams, SignedMessage } from "@fastnear/near-connect";
 export type { SignDelegateActionResult, SignDelegateActionsResponse };
 
 type Network = "mainnet" | "testnet";
@@ -41,6 +42,7 @@ export interface ConnectOptions {
     linkText?: string;
     icon?: string;
   } | null;
+  signMessageParams?: Omit<SignMessageParams, "signerId" | "network">;
 }
 
 /**
@@ -88,6 +90,7 @@ export interface ConnectResult {
   accountId: string;
   publicKey?: string;
   network?: Network;
+  signedMessage?: SignedMessage;
 }
 
 type ConnectCallback = (result: ConnectResult) => void;
@@ -342,9 +345,30 @@ export async function connect(
   const network = resolveNetwork(options);
   const state = networkStates[network];
   const c = getOrCreateConnector(options);
+
+  let signedMessageResult: ConnectResult["signedMessage"] | null = null;
+
+  if (options?.signMessageParams) {
+    const handler = (event: any) => {
+      const acct = event?.accounts?.[0];
+      if (acct?.signedMessage) {
+        signedMessageResult = {
+          accountId: acct.signedMessage.accountId,
+          publicKey: acct.signedMessage.publicKey,
+          signature: acct.signedMessage.signature,
+        };
+      }
+      c.off("wallet:signInAndSignMessage", handler);
+    };
+    c.on("wallet:signInAndSignMessage", handler);
+  }
+
   let wallet;
   try {
-    wallet = await c.connect({ walletId: options?.walletId });
+    wallet = await c.connect({
+      walletId: options?.walletId,
+      signMessageParams: options?.signMessageParams,
+    });
   } catch (_) {
     // User closed the modal or wallet rejected
     return null;
@@ -352,6 +376,7 @@ export async function connect(
   state.connectedWallet = wallet;
   activeNetwork = network;
 
+  let publicKey: string | undefined;
   // Account info is set by the wallet:signIn event handler,
   // but if it hasn't fired yet, try to get it from the connector.
   if (!state.currentAccountId) {
@@ -359,6 +384,7 @@ export async function connect(
       const info = await c.getConnectedWallet();
       if (info?.accounts?.length) {
         state.currentAccountId = info.accounts[0].accountId;
+        publicKey = info.accounts[0].publicKey;
       }
     } catch (_) {
       // ignore
@@ -367,8 +393,9 @@ export async function connect(
 
   return {
     accountId: state.currentAccountId ?? "",
-    publicKey: undefined,
+    publicKey,
     network,
+    signedMessage: signedMessageResult ?? undefined,
   };
 }
 

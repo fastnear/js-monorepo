@@ -20,4 +20,4 @@ export {
   signDelegateActions
 } from "./connector";
 
-export type { ConnectOptions, ConnectResult, WalletManifest, SignDelegateActionsParams, SignDelegateActionResult, SignDelegateActionsResponse } from "./connector";
+export type { ConnectOptions, ConnectResult, WalletManifest, SignedMessage, SignDelegateActionsParams, SignDelegateActionResult, SignDelegateActionsResponse } from "./connector";

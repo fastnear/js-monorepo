@@ -296,6 +296,7 @@
         "near.recipes.transfer",
         "near.recipes.signMessage",
         "near.recipes.connect",
+        "near.recipes.connect",
         "near.recipes.functionCall"
       ],
       "explain": [
@@ -1257,6 +1258,79 @@
       "followUps": [
         "Submit the signed delegate actions through a relayer service to execute on-chain without the signer paying gas.",
         "If the flow does not need a relayer, use near.recipes.functionCall for a standard wallet-signed transaction instead."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "connect-wallet",
+        "sign-message",
+        "function-call"
+      ]
+    },
+    {
+      "id": "connect-and-sign-message",
+      "title": "How do I connect a wallet and sign a message in one step?",
+      "summary": "Combine sign-in and NEP-413 message signing into a single wallet popup instead of two.",
+      "network": "mainnet",
+      "auth": "wallet",
+      "api": "near.recipes.connect",
+      "example": {
+        "contractId": "berryclub.ek.near",
+        "signMessageParams": {
+          "message": "Sign in to myapp.near",
+          "recipient": "myapp.near",
+          "nonce": "(32-byte Uint8Array)"
+        }
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "reason": "browser_required",
+          "code": "# Browser wallet required.\n# Connecting and signing a message needs a browser environment with a wallet.\n# Use the browser-global or ESM snippet for this task."
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "const result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n  signMessageParams: {\n    message: \"Sign in to FastNear Berry Club\",\n    recipient: window.location.host,\n    nonce: crypto.getRandomValues(new Uint8Array(32)),\n  },\n});\n\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n  signMessageParams: {\n    message: \"Sign in to FastNear Berry Club\",\n    recipient: window.location.host,\n    nonce: crypto.getRandomValues(new Uint8Array(32)),\n  },\n});\n\nnear.print(result);"
+        }
+      ],
+      "service": "wallet",
+      "returns": "{ accountId: string; publicKey?: string; signedMessage?: SignedMessage }",
+      "outputKeys": [
+        "accountId",
+        "publicKey",
+        "signedMessage"
+      ],
+      "responseNotes": [
+        "When signMessageParams is provided, the connector filters the wallet picker to only show wallets with the signInAndSignMessage feature flag.",
+        "The signedMessage field contains the NEP-413 signature result, avoiding a second popup."
+      ],
+      "chooseWhen": [
+        "Choose this when you want sign-in and message signing in a single user interaction.",
+        "Prefer this over separate connect + signMessage calls when the wallet supports signInAndSignMessage."
+      ],
+      "followUps": [
+        "If the wallet doesn't support signInAndSignMessage, fall back to separate near.recipes.connect and near.recipes.signMessage calls.",
+        "After connecting and signing, send one contract action with near.recipes.functionCall."
       ],
       "pagination": {
         "kind": "none",

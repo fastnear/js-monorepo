@@ -562,11 +562,17 @@ export const requestSignIn = async ({
   excludedWallets,
   features,
   network,
+  signMessageParams,
 }: {
   contractId?: string;
   excludedWallets?: string[];
   features?: Record<string, boolean>;
   network?: FastNearNetworkId;
+  signMessageParams?: {
+    message: string;
+    recipient: string;
+    nonce: Uint8Array;
+  };
 } = {}) => {
   const provider = getWalletProvider();
   if (!provider) {
@@ -589,6 +595,7 @@ export const requestSignIn = async ({
     network: targetNetwork,
     excludedWallets,
     features,
+    signMessageParams,
   });
 
   if (!result) {
@@ -1589,6 +1596,11 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     id: "sign-delegate-actions",
     api: "nearWallet.signDelegateActions",
     title: "How do I sign delegate actions for gasless transactions?",
+  },
+  {
+    id: "connect-and-sign-message",
+    api: "near.recipes.connect",
+    title: "How do I connect a wallet and sign a message in one step?",
   },
   {
     id: "ft-balance",

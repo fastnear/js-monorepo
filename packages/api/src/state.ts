@@ -242,7 +242,26 @@ let _activeNetwork: FastNearNetworkId = normalizeNetworkId(_config.networkId);
 export let _state: AccountSlot = _networkStates[_activeNetwork];
 
 export interface WalletProvider {
-  connect(options?: { contractId?: string; network?: string; excludedWallets?: string[]; features?: Record<string, boolean> }): Promise<{ accountId: string; network?: string } | null>;
+  connect(options?: {
+    contractId?: string;
+    network?: string;
+    excludedWallets?: string[];
+    features?: Record<string, boolean>;
+    signMessageParams?: {
+      message: string;
+      recipient: string;
+      nonce: Uint8Array;
+    };
+  }): Promise<{
+    accountId: string;
+    network?: string;
+    publicKey?: string;
+    signedMessage?: {
+      accountId: string;
+      publicKey: string;
+      signature: string;
+    };
+  } | null>;
   restore?(options?: { contractId?: string; network?: string }): Promise<{ accountId: string; network?: string } | null>;
   disconnect(options?: { network?: string }): Promise<void>;
   sendTransaction(params: { receiverId: string; actions: any[]; signerId?: string; network?: string }): Promise<any>;
