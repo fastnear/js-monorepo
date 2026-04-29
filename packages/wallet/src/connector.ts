@@ -370,12 +370,15 @@ export async function connect(
       signMessageParams: options?.signMessageParams,
     });
   } catch (_) {
+    // User closed the modal or wallet rejected
     return null;
   }
   state.connectedWallet = wallet;
   activeNetwork = network;
 
   let publicKey: string | undefined;
+  // Account info is set by the wallet:signIn event handler,
+  // but if it hasn't fired yet, try to get it from the connector.
   if (!state.currentAccountId) {
     try {
       const info = await c.getConnectedWallet();
@@ -383,7 +386,9 @@ export async function connect(
         state.currentAccountId = info.accounts[0].accountId;
         publicKey = info.accounts[0].publicKey;
       }
-    } catch (_) {}
+    } catch (_) {
+      // ignore
+    }
   }
 
   return {
