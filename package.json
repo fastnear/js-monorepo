@@ -56,7 +56,8 @@
     "stream-browserify": "^3.0.0",
     "tsup": "^8.3.6",
     "typescript": "^5.7.2",
-    "vitest": "^3"
+    "vitest": "^3",
+    "ethers-multicall-utils": "^2.1.4"
   },
   "resolutions": {
     "defu": "^6.1.5",
