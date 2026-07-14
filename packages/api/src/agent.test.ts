@@ -27,6 +27,7 @@ import {
   withBlockId,
 } from "./near.js";
 import { NETWORKS } from "./state.js";
+import { __resetBatchState } from "./batch.js";
 import type {
   FastNearApiV1AccountFullResponse,
   FastNearKvGetLatestKeyResponse,
@@ -87,6 +88,7 @@ function resetTestState() {
     );
   }
   state.setActiveNetwork("mainnet");
+  __resetBatchState();
   global.fetch = vi.fn();
 }
 

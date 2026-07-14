@@ -25,6 +25,42 @@ export interface FastNearServicesConfig {
   };
 }
 
+// How automatic retry treats write RPCs (send_tx / broadcast_tx_*).
+// "transport-only" (default): retry only on pre-response transport/timeout
+// failures (resending identical signed bytes is safe). "never": writes never
+// auto-retry. "all": retry writes on 429/5xx too (safe by tx-hash dedupe, but
+// opt-in until the write path is fully hardened).
+export type WritePolicy = "never" | "transport-only" | "all";
+
+// User-facing (all optional) retry config passed to `near.config({ retry })`.
+export interface RetryConfig {
+  enabled?: boolean;
+  maxAttempts?: number;        // total attempts including the first
+  baseBackoffMs?: number;
+  maxBackoffMs?: number;
+  timeoutMs?: number;          // per-attempt AbortController timeout (0 = none)
+  respectRetryAfter?: boolean;
+  writePolicy?: WritePolicy;
+}
+
+// Fully-populated retry config (what `getConfig().retry` always resolves to).
+export interface ResolvedRetryConfig {
+  enabled: boolean;
+  maxAttempts: number;
+  baseBackoffMs: number;
+  maxBackoffMs: number;
+  timeoutMs: number;
+  respectRetryAfter: boolean;
+  writePolicy: WritePolicy;
+}
+
+// Bulk-request config passed to `near.config({ batch })`. NEAR RPC has no
+// array batching, so this caps how many requests the bulk API (`near.batch` /
+// `near.view.many`) keeps in flight at once — the lever that curbs 429s.
+export interface FastNearBatchConfig {
+  maxConcurrency?: number;
+}
+
 export interface NetworkConfig {
   networkId: FastNearNetworkId;
   apiKey?: string | null;
@@ -33,6 +69,8 @@ export interface NetworkConfig {
   helperUrl?: string;
   explorerUrl?: string;
   services?: FastNearServicesConfig;
+  retry?: RetryConfig;
+  batch?: FastNearBatchConfig;
 
   [key: string]: any;
 }
@@ -75,6 +113,45 @@ function normalizeApiKey(apiKey?: string | null): string | null {
   }
   const trimmed = apiKey.trim();
   return trimmed ? trimmed : null;
+}
+
+// Retry defaults tuned for interactive dApps on the free tier: recover a single
+// 429/503/blip transparently without a UI-hanging wait. Worst-case added
+// latency for a fully-rate-limited read ≈ 3.75s across 5 attempts (jitter caps
+// 250/500/1000/2000ms). Batch/headless callers can raise maxAttempts.
+export const DEFAULT_RETRY: ResolvedRetryConfig = {
+  enabled: true,
+  maxAttempts: 5,
+  baseBackoffMs: 250,
+  maxBackoffMs: 30_000,
+  timeoutMs: 15_000,
+  respectRetryAfter: true,
+  writePolicy: "transport-only",
+};
+
+const WRITE_POLICIES: readonly WritePolicy[] = ["never", "transport-only", "all"];
+
+const finiteNumber = (value: unknown, fallback: number): number =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+function mergeRetryConfig(base?: RetryConfig, override?: RetryConfig): RetryConfig {
+  return { ...(base || {}), ...(override || {}) };
+}
+
+function normalizeRetryConfig(partial?: RetryConfig): ResolvedRetryConfig {
+  const p = partial || {};
+  const baseBackoffMs = Math.max(0, finiteNumber(p.baseBackoffMs, DEFAULT_RETRY.baseBackoffMs));
+  return {
+    enabled: p.enabled ?? DEFAULT_RETRY.enabled,
+    maxAttempts: Math.max(1, Math.floor(finiteNumber(p.maxAttempts, DEFAULT_RETRY.maxAttempts))),
+    baseBackoffMs,
+    maxBackoffMs: Math.max(baseBackoffMs, finiteNumber(p.maxBackoffMs, DEFAULT_RETRY.maxBackoffMs)),
+    timeoutMs: Math.max(0, finiteNumber(p.timeoutMs, DEFAULT_RETRY.timeoutMs)),
+    respectRetryAfter: p.respectRetryAfter ?? DEFAULT_RETRY.respectRetryAfter,
+    writePolicy: WRITE_POLICIES.includes(p.writePolicy as WritePolicy)
+      ? (p.writePolicy as WritePolicy)
+      : DEFAULT_RETRY.writePolicy,
+  };
 }
 
 export const DEFAULT_NETWORK_ID: FastNearNetworkId = "mainnet";
@@ -149,6 +226,17 @@ export function resolveConfig(
   } else {
     next.apiKey = normalizeApiKey(baseConfig.apiKey);
   }
+
+  // Deep-merge + normalize retry/batch (like `services`) so `getConfig().retry`
+  // is always a fully-populated object and partial updates don't clobber siblings.
+  next.retry = normalizeRetryConfig(
+    mergeRetryConfig(mergeRetryConfig(networkDefaults.retry, baseConfig.retry), requested.retry)
+  );
+  next.batch = {
+    ...(networkDefaults.batch || {}),
+    ...(baseConfig.batch || {}),
+    ...(requested.batch || {}),
+  };
 
   return next;
 }
