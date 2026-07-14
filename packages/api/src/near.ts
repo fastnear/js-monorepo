@@ -92,6 +92,7 @@ import {
 import { sha256 } from "@noble/hashes/sha2.js";
 import * as reExportAllUtils from "@fastnear/utils";
 import * as stateExports from "./state.js";
+import { reserveNonce } from "./nonce.js";
 
 export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
 
@@ -1204,19 +1205,24 @@ export const sendTx = async ({
   // `nonce`/`block` caches are now per-network too, so a sendTx on a
   // non-active network signs against that network's RPC and caches the
   // nonce/block under the right key.
-  const nonceKey = `nonce.${targetNetwork}`;
   const blockKey = `block.${targetNetwork}`;
 
-  let nonce = lsGet(nonceKey) as number | null;
-  if (nonce == null) {
+  // Reserve a unique nonce under a per-network in-process lock. Concurrent
+  // sendTx calls on a cold `nonce.<network>` cache (the first burst after
+  // connect) would otherwise each read the same value and sign the same nonce —
+  // one lands, the rest fail InvalidNonce. The cold access-key fetch runs once,
+  // inside the lock; later waiters reuse the warmed cache. See reserveNonce.
+  const nonce = await reserveNonce(targetNetwork, async () => {
     const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
     if (accessKey.result.error) {
       throw new Error(`Access key error: ${accessKey.result.error} when attempting to get nonce for ${signerId} for public key ${pubKey}`);
     }
-    nonce = accessKey.result.nonce;
-    lsSet(nonceKey, nonce);
-  }
+    return accessKey.result.nonce;
+  });
 
+  // The block hash is independent of the nonce, so it stays outside the lock;
+  // its own cache and 6h staleness window make a rare concurrent double-fetch
+  // harmless (each tx still signs against a valid recent block).
   let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
   if (
     !lastKnownBlock ||
@@ -1231,9 +1237,6 @@ export const sendTx = async ({
     };
     lsSet(blockKey, lastKnownBlock);
   }
-
-  nonce += 1;
-  lsSet(nonceKey, nonce);
 
   const blockHash = lastKnownBlock.header.hash;
 
