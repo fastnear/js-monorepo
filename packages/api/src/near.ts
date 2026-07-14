@@ -398,8 +398,7 @@ const WRITE_METHODS = new Set<string>([
 ]);
 
 // Resolve a call's full route: the authed POST URL (which folds in network,
-// archival, rpcUrl and apiKey) plus the resolved retry policy. The batcher
-// buckets on `url`, so identical routes share a batch.
+// archival, rpcUrl and apiKey) plus the resolved retry policy.
 function resolveRpcRoute(options?: RpcRouteOptions): RpcRoute {
   const config = resolveConfigForCall(options?.network);
   const useArchival = !!options?.useArchival;
@@ -701,8 +700,10 @@ export interface ViewManySpec {
   network?: FastNearNetworkId;
 }
 
-// `view.many`: batch many contract view calls (same-route calls collapse into
-// one JSON-RPC array), decoding each ok result exactly like `view`.
+// `view.many`: run many contract view calls as a concurrency-limited fan-out
+// (at most `batch.maxConcurrency` in flight), decoding each ok result exactly
+// like `view`. NEAR RPC has no array batching, so calls aren't merged into one
+// request.
 async function viewMany(specs: ViewManySpec[]): Promise<BatchItemResult[]> {
   const { maxConcurrency } = resolveBatchConfig(getConfig());
   // Build + call + decode all happen inside `viewImpl`, wrapped per item, so a
