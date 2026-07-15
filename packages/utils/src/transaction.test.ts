@@ -8,16 +8,18 @@ import {
 } from "./transaction.js";
 import {
   keyFromString,
+  keyToString,
   publicKeyFromPrivate,
   privateKeyFromRandom,
   signHash,
   sha256,
+  type NearPublicKey,
 } from "./crypto.js";
 import { toBase58 } from "./misc.js";
 
 // ── helpers ─────────────────────────────────────────────────────────
 
-function fakeTx(publicKey: string): PlainTransaction {
+function fakeTx(publicKey: NearPublicKey): PlainTransaction {
   return {
     signerId: "alice.near",
     publicKey,
@@ -25,6 +27,17 @@ function fakeTx(publicKey: string): PlainTransaction {
     receiverId: "bob.near",
     blockHash: toBase58(new Uint8Array(32)), // 32 zero bytes
     actions: [{ type: "Transfer", deposit: "1000000000000000000000000" }],
+  };
+}
+
+function fakeDelegate(publicKey: NearPublicKey) {
+  return {
+    senderId: "alice.near",
+    receiverId: "bob.near",
+    actions: [{ type: "Transfer" as const, deposit: "1" }],
+    nonce: 1,
+    maxBlockHeight: 100,
+    publicKey,
   };
 }
 
@@ -49,6 +62,21 @@ describe("mapTransaction", () => {
     const mapped = mapTransaction(fakeTx(pub));
     expect(mapped.publicKey).toHaveProperty("secp256k1Key");
     expect((mapped.publicKey as any).secp256k1Key.data.length).toBe(64);
+  });
+
+  it("ML-DSA-65 key → tag-2 variant with 1952-byte data", () => {
+    const publicKey = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    const mapped = mapTransaction(fakeTx(publicKey));
+    expect(mapped.publicKey).toHaveProperty("mlDsa65Key");
+    expect((mapped.publicKey as any).mlDsa65Key.data.length).toBe(1952);
+  });
+
+  it("rejects ML-DSA-65 hash handles as transaction keys", () => {
+    expect(() =>
+      mapTransaction(
+        fakeTx("ml-dsa-65-hash:11111111111111111111111111111111" as any),
+      ),
+    ).toThrow("handles cannot be used");
   });
 });
 
@@ -94,6 +122,68 @@ describe("serializeSignedTransaction", () => {
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.length).toBeGreaterThan(0);
   });
+
+  it("accepts raw signature bytes", () => {
+    const { priv, pub } = keyPair("ed25519");
+    const tx = fakeTx(pub);
+    const signature = signHash(sha256(serializeTransaction(tx)), priv);
+
+    expect(serializeSignedTransaction(tx, signature)).toEqual(
+      serializeSignedTransaction(tx, signHash(sha256(serializeTransaction(tx)), priv, {
+        returnBase58: true,
+      })),
+    );
+  });
+
+  it("serializes an ML-DSA-65 raw signature with enum tag 2", () => {
+    const publicKey = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    const tx = fakeTx(publicKey);
+    const transactionBytes = serializeTransaction(tx);
+    const bytes = serializeSignedTransaction(tx, new Uint8Array(3309));
+
+    expect(bytes[transactionBytes.length]).toBe(2);
+    expect(bytes.length).toBe(transactionBytes.length + 1 + 3309);
+  });
+
+  it("accepts a canonical prefixed ML-DSA-65 signature", () => {
+    const publicKey = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    const signature = keyToString(new Uint8Array(3309), "ml-dsa-65");
+    const tx = fakeTx(publicKey);
+    const transactionBytes = serializeTransaction(tx);
+    const bytes = serializeSignedTransaction(tx, signature);
+
+    expect(bytes[transactionBytes.length]).toBe(2);
+  });
+
+  it("rejects a prefixed signature that does not match its signer key type", () => {
+    const { pub } = keyPair("ed25519");
+    const signature = keyToString(new Uint8Array(65), "secp256k1");
+    expect(() => serializeSignedTransaction(fakeTx(pub), signature)).toThrow(
+      "does not match signer key type",
+    );
+  });
+
+  it("rejects a signature with the wrong length for its key type", () => {
+    const { pub } = keyPair("ed25519");
+    expect(() => serializeSignedTransaction(fakeTx(pub), new Uint8Array(63))).toThrow(
+      "expected 64 bytes, got 63",
+    );
+  });
+
+  it.each(["bare", "prefixed"])(
+    "rejects non-base58 characters in a %s signature",
+    (form) => {
+      const { pub } = keyPair("ed25519");
+      const valid = toBase58(new Uint8Array(64));
+      const malformed = `!${valid.slice(1)}`;
+      const signature = form === "prefixed"
+        ? `ed25519:${malformed}`
+        : malformed;
+      expect(() => serializeSignedTransaction(fakeTx(pub), signature)).toThrow(
+        "Invalid base58",
+      );
+    },
+  );
 });
 
 // ── mapAction: Stake ────────────────────────────────────────────────
@@ -117,6 +207,13 @@ describe("mapAction — Stake", () => {
       publicKey: pub,
     }) as any;
     expect(mapped.stake.publicKey).toHaveProperty("secp256k1Key");
+  });
+
+  it("rejects ML-DSA-65 validator keys", () => {
+    const publicKey = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    expect(() =>
+      mapAction({ type: "Stake", stake: "1000", publicKey }),
+    ).toThrow("validator staking keys must be Ed25519");
   });
 });
 
@@ -148,6 +245,36 @@ describe("mapAction — AddKey", () => {
     }) as any;
     expect(mapped.addKey.publicKey).toHaveProperty("secp256k1Key");
   });
+
+  it("defaults an omitted access-key nonce to zero", () => {
+    const { pub } = keyPair("ed25519");
+    const mapped = mapAction({
+      type: "AddKey",
+      publicKey: pub,
+      accessKey: { permission: "FullAccess" },
+    }) as any;
+    expect(mapped.addKey.accessKey.nonce).toBe(0n);
+  });
+
+  it("normalizes a nested function-call permission", () => {
+    const { pub } = keyPair("ed25519");
+    const mapped = mapAction({
+      type: "AddKey",
+      publicKey: pub,
+      accessKey: {
+        permission: {
+          allowance: "0",
+          receiverId: "contract.near",
+          methodNames: ["ping"],
+        },
+      },
+    }) as any;
+    expect(mapped.addKey.accessKey.permission.functionCall).toEqual({
+      allowance: 0n,
+      receiverId: "contract.near",
+      methodNames: ["ping"],
+    });
+  });
 });
 
 // ── mapAction: DeleteKey ────────────────────────────────────────────
@@ -176,7 +303,7 @@ describe("mapAction — SignedDelegate", () => {
 
     const mapped = mapAction({
       type: "SignedDelegate",
-      delegateAction: { type: "Transfer", deposit: "1" },
+      delegateAction: fakeDelegate(pub),
       signature: sig,
       publicKey: pub,
     }) as any;
@@ -190,12 +317,53 @@ describe("mapAction — SignedDelegate", () => {
 
     const mapped = mapAction({
       type: "SignedDelegate",
-      delegateAction: { type: "Transfer", deposit: "1" },
+      delegateAction: fakeDelegate(pub),
       signature: sig,
       publicKey: pub,
     }) as any;
     expect(mapped.signedDelegate.signature).toHaveProperty(
       "secp256k1Signature",
     );
+  });
+
+  it("maps the complete delegate action structure", () => {
+    const { priv, pub } = keyPair("ed25519");
+    const signature = signHash(
+      sha256(new TextEncoder().encode("delegate")),
+      priv,
+    );
+    const mapped = mapAction({
+      type: "SignedDelegate",
+      delegateAction: fakeDelegate(pub),
+      signature,
+    }) as any;
+
+    expect(mapped.signedDelegate.delegateAction).toMatchObject({
+      senderId: "alice.near",
+      receiverId: "bob.near",
+      nonce: 1n,
+      maxBlockHeight: 100n,
+    });
+    expect(mapped.signedDelegate.delegateAction.actions[0]).toEqual({
+      transfer: { deposit: 1n },
+    });
+  });
+
+  it("rejects a redundant delegate signer key that does not match", () => {
+    const ed = keyPair("ed25519");
+    const secp = keyPair("secp256k1");
+    const signature = signHash(
+      sha256(new TextEncoder().encode("delegate")),
+      ed.priv,
+    );
+
+    expect(() =>
+      mapAction({
+        type: "SignedDelegate",
+        delegateAction: fakeDelegate(ed.pub),
+        publicKey: secp.pub,
+        signature,
+      }),
+    ).toThrow("must match delegateAction.publicKey");
   });
 });

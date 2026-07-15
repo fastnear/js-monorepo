@@ -1,14 +1,22 @@
 {
-  "name": "@fastnear/utils",
+  "name": "@fastnear/ml-dsa-65",
   "version": "1.3.0",
-  "description": "Utility functions for interactions with the NEAR blockchain",
+  "description": "Opt-in ML-DSA-65 access-key and transaction-signing support for NEAR Protocol",
+  "license": "MIT",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.js",
   "browser": "./dist/umd/browser.global.js",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "build": "tsup",
+    "test": "yarn --cwd ../.. vitest run packages/ml-dsa-65/src/index.test.ts",
+    "bench": "node bench/benchmark.mjs",
+    "benchmark": "node bench/benchmark.mjs",
     "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
     "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
     "release": "node ../../scripts/publish-packed.mjs",
@@ -23,27 +31,28 @@
   },
   "keywords": [
     "near-protocol",
-    "web3-utils",
-    "blockchain",
+    "post-quantum",
+    "ml-dsa-65",
+    "fips-204",
+    "cryptography",
     "fastnear",
     "web3"
   ],
   "files": [
-    "dist"
+    "dist",
+    "bench"
   ],
   "exports": {
     ".": {
-      "require": "./dist/cjs/index.cjs",
-      "import": "./dist/esm/index.js"
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
     }
   },
   "dependencies": {
-    "@fastnear/borsh": "workspace:*",
-    "@fastnear/borsh-schema": "workspace:*",
-    "@noble/curves": "*",
     "@noble/hashes": "*",
-    "base58-js": "*",
-    "js-base64": "*"
+    "@noble/post-quantum": "*",
+    "base58-js": "*"
   },
   "devDependencies": {
     "rimraf": "*",

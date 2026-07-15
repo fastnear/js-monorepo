@@ -8,6 +8,7 @@ import {
   generatedArtifact,
   recipeCatalog,
   explainSurface,
+  mlDsa65Surface,
   supportSurface,
 } from "../recipes/source.mjs";
 
@@ -60,6 +61,20 @@ function assertCatalogContract() {
       }
     }
   }
+
+  if (mlDsa65Surface.protocolVersion !== 85) {
+    throw new Error(`Expected ML-DSA-65 protocol version 85, received ${mlDsa65Surface.protocolVersion}`);
+  }
+  if (mlDsa65Surface.quickstarts.length !== 4) {
+    throw new Error("Expected four ML-DSA-65 quickstarts");
+  }
+  for (const quickstart of mlDsa65Surface.quickstarts) {
+    for (const field of ["id", "title", "summary", "language", "code"]) {
+      if (!(field in quickstart)) {
+        throw new Error(`ML-DSA-65 quickstart ${quickstart.id ?? "<unknown>"} is missing required field ${field}`);
+      }
+    }
+  }
 }
 
 function renderSnippet(snippet) {
@@ -107,6 +122,38 @@ ${example}
 \`\`\`
 
 ${recipe.snippets.map(renderSnippet).join("\n\n")}`;
+}
+
+function renderMlDsa65Section({ headingLevel = 3 } = {}) {
+  const heading = "#".repeat(headingLevel);
+  const subheading = "#".repeat(headingLevel + 1);
+
+  return `${heading} ML-DSA-65 account-key quickstarts
+
+The opt-in \`${mlDsa65Surface.package}\` package provides protocol-v${mlDsa65Surface.protocolVersion} account access keys and transaction signatures without pulling the post-quantum backend into \`@fastnear/api\` or \`@fastnear/utils\`.
+
+- Runtime: ${mlDsa65Surface.runtime}.
+- Scope: ${mlDsa65Surface.scope}
+- Exact byte lengths: seed ${mlDsa65Surface.sizes.seed}, public key ${mlDsa65Surface.sizes.publicKey}, expanded secret key ${mlDsa65Surface.sizes.expandedSecretKey}, signature ${mlDsa65Surface.sizes.signature}.
+- Verification charge: ${mlDsa65Surface.verificationCharge.display} (${mlDsa65Surface.verificationCharge.gas} gas) for ${mlDsa65Surface.verificationCharge.appliesTo}.
+- Full key: \`${mlDsa65Surface.keyForms.full}\`; list handle: \`${mlDsa65Surface.keyForms.handle}\`.
+- Handle derivation: ${mlDsa65Surface.keyForms.derivation}; domain tag \`${mlDsa65Surface.keyForms.domainTag}\`.
+
+${mlDsa65Surface.keyForms.rule}
+
+${subheading} Safety constraints
+
+${renderList(mlDsa65Surface.safety)}
+
+${mlDsa65Surface.quickstarts.map((quickstart) => `${subheading} ${quickstart.title}
+
+Recipe ID: \`${quickstart.id}\`
+
+${quickstart.summary}
+
+\`\`\`${quickstart.language}
+${quickstart.code}
+\`\`\``).join("\n\n")}`;
 }
 
 function renderSupportSection() {
@@ -241,6 +288,8 @@ ${terminal.code}
 \`\`\``;
   }).join("\n\n")}
 
+${renderMlDsa65Section()}
+
 ### Structured explain helpers
 
 ${explainSurface.map((entry) => `- ` + "`" + entry.api + "`" + `: ${entry.summary}`).join("\n")}
@@ -371,6 +420,8 @@ ${supportSurface.captureExample.code}
 
 ${renderFamilySection()}
 
+${renderMlDsa65Section()}
+
 ### Example: explain a transaction before signing
 
 \`\`\`js
@@ -446,6 +497,7 @@ Primary packages:
 - @fastnear/api
 - @fastnear/wallet
 - @fastnear/utils
+- @fastnear/ml-dsa-65
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -454,6 +506,10 @@ Low-level-first runtime surfaces:
 - near.view.many — bulk views, settled results, concurrency-capped
 - near.batch — bulk RPC, settled results, per-item error kind (transport/http/rpc/contract)
 - near.queryAccount
+- near.queryAccessKey
+- near.queryAccessKeyList
+- near.queryProtocolVersion
+- near.sendTx({ signer, signerId, ... })
 - near.tx.transactions
 - near.api.v1.accountFull
 - near.transfers.query
@@ -471,6 +527,16 @@ Low-level-first runtime surfaces:
 - near.explain.action
 - near.explain.tx
 - near.explain.error
+
+ML-DSA-65 account-key surface:
+- @fastnear/ml-dsa-65 generateSigner / signerFromSeed / signerFromSecretKey
+- Protocol activation: active RPC protocol_version >= ${mlDsa65Surface.protocolVersion}
+- Exact wire sizes: ${mlDsa65Surface.sizes.publicKey}-byte public key; ${mlDsa65Surface.sizes.signature}-byte signature
+- Verification charge: ${mlDsa65Surface.verificationCharge.display} per outer or delegated verification
+- Full access-key form: ${mlDsa65Surface.keyForms.full}
+- Access-key-list form: ${mlDsa65Surface.keyForms.handle}
+- Handle domain tag: ${mlDsa65Surface.keyForms.domainTag}
+- Quickstarts: ${mlDsa65Surface.quickstarts.map(({ id }) => id).join(", ")}
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })
@@ -541,6 +607,7 @@ Prefer ` + "`recipes/index.json`" + ` when you need structured task data.
 - ` + "`@fastnear/api`" + `: low-level NEAR RPC and FastNear family APIs, plus ` + "`near.recipes`" + ` task helpers and ` + "`near.explain`" + `
 - ` + "`@fastnear/wallet`" + `: wallet connection and transaction/signing provider
 - ` + "`@fastnear/utils`" + `: units, crypto, serialization, storage helpers
+- ` + "`@fastnear/ml-dsa-65`" + `: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
 
 ## Unified config
 
@@ -588,6 +655,9 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 - ` + "`near.view.many`" + ` (bulk views; settled results)
 - ` + "`near.batch`" + ` (bulk RPC; settled results)
 - ` + "`near.queryAccount`" + `
+- ` + "`near.queryAccessKey`" + `
+- ` + "`near.queryAccessKeyList`" + `
+- ` + "`near.queryProtocolVersion`" + `
 - ` + "`near.queryTx`" + `
 - ` + "`near.sendTx`" + `
 - ` + "`near.requestSignIn`" + `
@@ -628,6 +698,8 @@ ${supportSurface.captureExample.summary}
 \`\`\`${supportSurface.captureExample.language}
 ${supportSurface.captureExample.code}
 \`\`\`
+
+${renderMlDsa65Section({ headingLevel: 2 })}
 
 ## Recipe catalog
 

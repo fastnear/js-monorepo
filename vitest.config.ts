@@ -14,6 +14,10 @@ export default defineConfig({
       ),
       "@fastnear/utils": path.resolve(__dirname, "packages/utils/src"),
       "@fastnear/api": path.resolve(__dirname, "packages/api/src"),
+      "@fastnear/ml-dsa-65": path.resolve(
+        __dirname,
+        "packages/ml-dsa-65/src",
+      ),
     },
   },
 });

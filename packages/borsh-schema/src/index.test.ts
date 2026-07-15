@@ -13,9 +13,11 @@ describe("schema structure", () => {
   const expectedSchemas = [
     "Ed25519Signature",
     "Secp256k1Signature",
+    "MlDsa65Signature",
     "Signature",
     "Ed25519Data",
     "Secp256k1Data",
+    "MlDsa65Data",
     "PublicKey",
     "FunctionCallPermission",
     "FullAccessPermission",
@@ -37,7 +39,7 @@ describe("schema structure", () => {
     "SignedTransaction",
   ];
 
-  it("has all 24 expected schemas", () => {
+  it("has all expected schemas", () => {
     for (const name of expectedSchemas) {
       expect(nearChainSchema).toHaveProperty(name);
     }
@@ -55,6 +57,12 @@ describe("schema structure", () => {
     expect(s.struct.data.array.type).toBe("u8");
   });
 
+  it("MlDsa65Signature has 3309-byte fixed array", () => {
+    const s = nearChainSchema.MlDsa65Signature as any;
+    expect(s.struct.data.array.len).toBe(3309);
+    expect(s.struct.data.array.type).toBe("u8");
+  });
+
   it("Ed25519Data has 32-byte fixed array", () => {
     const s = nearChainSchema.Ed25519Data as any;
     expect(s.struct.data.array.len).toBe(32);
@@ -65,14 +73,19 @@ describe("schema structure", () => {
     expect(s.struct.data.array.len).toBe(64);
   });
 
-  it("Signature enum has 2 variants (ed25519, secp256k1)", () => {
-    const s = nearChainSchema.Signature as any;
-    expect(s.enum).toHaveLength(2);
+  it("MlDsa65Data has 1952-byte fixed array", () => {
+    const s = nearChainSchema.MlDsa65Data as any;
+    expect(s.struct.data.array.len).toBe(1952);
   });
 
-  it("PublicKey enum has 2 variants (ed25519, secp256k1)", () => {
+  it("Signature enum has 3 variants", () => {
+    const s = nearChainSchema.Signature as any;
+    expect(s.enum).toHaveLength(3);
+  });
+
+  it("PublicKey enum has 3 variants", () => {
     const s = nearChainSchema.PublicKey as any;
-    expect(s.enum).toHaveLength(2);
+    expect(s.enum).toHaveLength(3);
   });
 
   it("ClassicAction enum has 8 variants", () => {
@@ -129,6 +142,15 @@ describe("PublicKey serialization", () => {
     expect(encoded[0]).toBe(1); // enum index 1
     expect(encoded.length).toBe(1 + 64);
   });
+
+  it("ML-DSA-65 public key round-trips with enum index 2", () => {
+    const pk = { mlDsa65Key: { data: zeroBytes(1952) } };
+    const encoded = serialize(nearChainSchema.PublicKey, pk);
+
+    expect(encoded[0]).toBe(2);
+    expect(encoded.length).toBe(1 + 1952);
+    expect(deserialize(nearChainSchema.PublicKey, encoded)).toEqual(pk);
+  });
 });
 
 // ── Signature serialization ──────────────────────────────────────────
@@ -156,6 +178,15 @@ describe("Signature serialization", () => {
     const sig = { secp256k1Signature: { data: zeroBytes(65) } };
     const encoded = serialize(nearChainSchema.Signature, sig);
     expect(encoded.length).toBe(66);
+  });
+
+  it("ML-DSA-65 signature round-trips with enum index 2", () => {
+    const sig = { mlDsa65Signature: { data: zeroBytes(3309) } };
+    const encoded = serialize(nearChainSchema.Signature, sig);
+
+    expect(encoded[0]).toBe(2);
+    expect(encoded.length).toBe(1 + 3309);
+    expect(deserialize(nearChainSchema.Signature, encoded)).toEqual(sig);
   });
 });
 

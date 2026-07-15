@@ -221,9 +221,27 @@ function encodeValue(buf: EncodeBuffer, value: any, schema: Schema): void {
     }
 
     if ("array" in schema) {
-      if (schema.array.len == null) {
-        buf.storeU32(value.length);
+      if (value == null || typeof value.length !== "number") {
+        throw new Error("Borsh: array value must have a numeric length");
       }
+
+      const expectedLength = schema.array.len;
+      if (expectedLength != null && value.length !== expectedLength) {
+        throw new Error(
+          `Borsh: fixed array length mismatch: expected ${expectedLength}, got ${value.length}`,
+        );
+      }
+
+      if (expectedLength == null) buf.storeU32(value.length);
+
+      // Public keys and signatures can be several kilobytes long. Copy byte
+      // arrays in one operation instead of growing and writing the buffer once
+      // per byte.
+      if (schema.array.type === "u8" && value instanceof Uint8Array) {
+        buf.storeBytes(value);
+        return;
+      }
+
       for (let i = 0; i < value.length; i++) {
         encodeValue(buf, value[i], schema.array.type);
       }

@@ -53,6 +53,19 @@ function collectWorkspaceVersions() {
   return workspaceVersions;
 }
 
+function collectRootDependencySpecifiers() {
+  const rootManifest = readJson(path.join(repoRoot, "package.json"));
+  const specifiers = new Map();
+
+  for (const section of dependencySections) {
+    for (const [name, specifier] of Object.entries(rootManifest[section] ?? {})) {
+      specifiers.set(name, String(specifier));
+    }
+  }
+
+  return specifiers;
+}
+
 function readDirNames(dir) {
   return readdirSync(dir);
 }
@@ -83,6 +96,7 @@ if (mode === "prepare") {
   const originalSource = readFileSync(packageJsonPath, "utf8");
   const manifest = JSON.parse(originalSource);
   const workspaceVersions = collectWorkspaceVersions();
+  const rootDependencySpecifiers = collectRootDependencySpecifiers();
   let changed = false;
 
   if (existsSync(backupPath)) {
@@ -99,14 +113,20 @@ if (mode === "prepare") {
     }
 
     for (const [name, specifier] of Object.entries(deps)) {
-      if (!String(specifier).startsWith("workspace:")) {
-        continue;
+      let resolved = String(specifier);
+      if (resolved.startsWith("workspace:")) {
+        resolved = resolveWorkspaceSpecifier(
+          resolved,
+          workspaceVersions.get(name),
+        );
+      } else if (resolved === "*") {
+        resolved = rootDependencySpecifiers.get(name) ?? "";
+        if (!resolved || resolved === "*") {
+          throw new Error(
+            `Cannot publish wildcard dependency ${name}: add its version range to the root package.json`,
+          );
+        }
       }
-
-      const resolved = resolveWorkspaceSpecifier(
-        String(specifier),
-        workspaceVersions.get(name),
-      );
 
       if (resolved !== specifier) {
         deps[name] = resolved;
