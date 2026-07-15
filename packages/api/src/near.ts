@@ -87,7 +87,15 @@ import {
   setConfig,
   resetTxHistory,
   resolveConfig,
+  DEFAULT_RETRY,
 } from "./state.js";
+
+import type { ResolvedRetryConfig } from "./state.js";
+
+import { runWithRetry, outcomeError, RETRYABLE_HTTP_STATUSES, RETRYABLE_RPC_CODES } from "./resilience.js";
+import { rpcSend, serviceSend, type RpcRoute } from "./transport.js";
+import { nextRpcId, resolveBatchConfig, mapWithConcurrency } from "./batch.js";
+import { FastNearRpcError, type RpcErrorKind } from "./errors.js";
 
 import { sha256 } from "@noble/hashes/sha2.js";
 import * as reExportAllUtils from "@fastnear/utils";
@@ -110,7 +118,7 @@ function looksRetryable(message: string, code: string | number | null, kind: Exp
   if (kind === "transport_error") {
     return true;
   }
-  if (typeof code === "number" && [408, 429, 500, 502, 503, 504, -32000].includes(code)) {
+  if (typeof code === "number" && ([...RETRYABLE_HTTP_STATUSES, ...RETRYABLE_RPC_CODES] as number[]).includes(code)) {
     return true;
   }
   return /timeout|temporar|temporarily|rate limit|unavailable|network|gateway/i.test(message);
@@ -248,30 +256,6 @@ function buildUrl(baseUrl: string, path: string, query?: Record<string, any>): s
   return appendQueryParams(url, query).toString();
 }
 
-async function parseResponsePayload(response: Response) {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function buildHttpError(service: ServiceFamily, response: Response, payload: any): Error {
-  return new Error(
-    JSON.stringify({
-      code: response.status,
-      name: `${service}.http_error`,
-      message: `${service} request failed with ${response.status} ${response.statusText}`,
-      data: payload,
-    })
-  );
-}
-
 // Resolve the config to use for a per-call override. Without an
 // override, returns the active config. With one, returns a config built
 // from `NETWORKS[network].services` (so URLs hit the right hosts) but
@@ -285,7 +269,7 @@ function resolveConfigForCall(network?: FastNearNetworkId): NetworkConfig {
   if (!network || network === active.networkId) {
     return active;
   }
-  return resolveConfig({ apiKey: active.apiKey ?? null }, NETWORKS[network]);
+  return resolveConfig({ apiKey: active.apiKey ?? null, retry: active.retry }, NETWORKS[network]);
 }
 
 function resolveServiceBaseUrl(family: Exclude<ServiceFamily, "rpc">, config: NetworkConfig): string {
@@ -363,6 +347,8 @@ async function sendServiceRequest<T = any>({
 }: ServiceRequestOptions): Promise<T> {
   const config = resolveConfigForCall(network);
   const authStyle = SERVICE_AUTH_STYLES[family];
+  // Build the URL up front so a service misconfiguration (e.g. transfers on
+  // testnet) still throws synchronously, with zero fetch attempts.
   const url = buildAuthedUrl(family, resolveServiceBaseUrl(family, config), path, query, config);
   const requestHeaders: Record<string, string> = { ...headers };
 
@@ -376,18 +362,14 @@ async function sendServiceRequest<T = any>({
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(url, {
-    method,
-    headers: requestHeaders,
-    body: requestBody,
-  });
-  const payload = await parseResponsePayload(response);
-
-  if (!response.ok) {
-    throw buildHttpError(family, response, payload);
+  const cfg = (config.retry as ResolvedRetryConfig) ?? DEFAULT_RETRY;
+  const outcome = await runWithRetry(cfg, false, (signal) =>
+    serviceSend(family, url, method, requestHeaders, requestBody, signal),
+  );
+  if (outcome.kind === "ok") {
+    return outcome.value as T;
   }
-
-  return payload as T;
+  throw outcomeError(outcome);
 }
 
 export interface RpcRouteOptions {
@@ -406,32 +388,89 @@ export interface RpcRouteOptions {
   network?: FastNearNetworkId;
 }
 
+// Write RPCs must never be batched, and retry only per the config's
+// writePolicy (default: pre-response transport failures only).
+const WRITE_METHODS = new Set<string>([
+  "send_tx",
+  "send_tx_async",
+  "broadcast_tx_commit",
+  "broadcast_tx_async",
+]);
+
+// Resolve a call's full route: the authed POST URL (which folds in network,
+// archival, rpcUrl and apiKey) plus the resolved retry policy.
+function resolveRpcRoute(options?: RpcRouteOptions): RpcRoute {
+  const config = resolveConfigForCall(options?.network);
+  const useArchival = !!options?.useArchival;
+  const baseUrl = useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
+  const url = buildAuthedUrl("rpc", baseUrl, "", undefined, config);
+  return {
+    url,
+    networkId: config.networkId,
+    useArchival,
+    retry: (config.retry as ResolvedRetryConfig) ?? DEFAULT_RETRY,
+  };
+}
+
 export async function sendRpc<T = any>(
   method: string,
   params: Record<string, any> | any[],
   options?: RpcRouteOptions,
 ): Promise<T> {
-  const config = resolveConfigForCall(options?.network);
-  const baseUrl = options?.useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
-  const response = await fetch(buildAuthedUrl("rpc", baseUrl, "", undefined, config), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: `fastnear-${Date.now()}`,
-      method,
-      params,
-    }),
-  });
-  const result = await parseResponsePayload(response);
-  if (!response.ok) {
-    throw buildHttpError("rpc", response, result);
+  const route = resolveRpcRoute(options);
+  // Serialize once so every retry attempt sends byte-identical bytes
+  // (write-safe: resending the same signed tx is deduped by hash).
+  const bodyStr = JSON.stringify({ jsonrpc: "2.0", id: nextRpcId(), method, params });
+  const isWrite = WRITE_METHODS.has(method);
+  const outcome = await runWithRetry<T>(route.retry, isWrite, (signal) =>
+    rpcSend(route, bodyStr, signal),
+  );
+  if (outcome.kind === "ok") {
+    return outcome.value as T;
   }
-  if (result && typeof result === "object" && "error" in result && (result as any).error) {
-    throw new Error(JSON.stringify(result.error));
-  }
-  return result as T;
+  throw outcomeError(outcome);
 }
+
+export interface BatchRequest {
+  method: string;
+  params: Record<string, any> | any[];
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}
+
+export type BatchItemResult<T = any> =
+  | { status: "ok"; result: T }
+  | { status: "error"; kind: RpcErrorKind | "unknown"; error: any };
+
+// Tag each settled error with its category so callers can tell an application
+// (smart-contract) failure from an infra one without re-parsing the error.
+const errorKind = (error: unknown): RpcErrorKind | "unknown" =>
+  error instanceof FastNearRpcError ? error.kind : "unknown";
+
+/**
+ * Explicit bulk API: run many RPC calls, each as its own retried request, with
+ * at most `batch.maxConcurrency` (default 30) in flight — the lever that curbs
+ * 429s without bursting. (NEAR RPC has no array batching, so calls can't be
+ * collapsed into one request.) Returns settled results in input order — one
+ * failing call never rejects the whole set. Write methods (`send_tx` /
+ * `broadcast_tx_*`) are rejected per-item.
+ */
+export const batch = async (requests: BatchRequest[]): Promise<BatchItemResult[]> => {
+  const { maxConcurrency } = resolveBatchConfig(getConfig());
+  return mapWithConcurrency(requests, maxConcurrency, async (req): Promise<BatchItemResult> => {
+    // Everything in the try, so a malformed item settles as an error instead of
+    // rejecting the whole set.
+    try {
+      if (WRITE_METHODS.has(req.method)) {
+        return { status: "error", kind: "unknown", error: new Error(`fastnear: method "${req.method}" cannot be batched`) };
+      }
+      const result = await sendRpc(req.method, req.params, { useArchival: req.useArchival, network: req.network });
+      return { status: "ok", result };
+    } catch (error) {
+      return { status: "error", kind: errorKind(error), error };
+    }
+  });
+};
 
 export function afterTxSent(txId: string, network?: FastNearNetworkId) {
   const txHistory = getTxHistory();
@@ -605,15 +644,35 @@ export const requestSignIn = async ({
   return result;
 };
 
-export const view = async ({
-                             contractId,
-                             methodName,
-                             args,
-                             argsBase64,
-                             blockId,
-                             useArchival,
-                             network,
-                           }: {
+// Shared JSON-RPC `query`/`call_function` params builder for `view`/`view.many`.
+function buildViewParams(spec: {
+  contractId: string;
+  methodName: string;
+  args?: any;
+  argsBase64?: string;
+  blockId?: string;
+}): Record<string, any> {
+  const encodedArgs = spec.argsBase64 || (spec.args ? toBase64(JSON.stringify(spec.args)) : "");
+  return withBlockId(
+    {
+      request_type: "call_function",
+      account_id: spec.contractId,
+      method_name: spec.methodName,
+      args_base64: encodedArgs,
+    },
+    spec.blockId,
+  );
+}
+
+const viewImpl = async ({
+                          contractId,
+                          methodName,
+                          args,
+                          argsBase64,
+                          blockId,
+                          useArchival,
+                          network,
+                        }: {
   contractId: string;
   methodName: string;
   args?: any;
@@ -622,23 +681,46 @@ export const view = async ({
   useArchival?: boolean;
   network?: FastNearNetworkId;
 }) => {
-  const encodedArgs = argsBase64 || (args ? toBase64(JSON.stringify(args)) : "");
   const queryResult = await sendRpc(
     "query",
-    withBlockId(
-      {
-        request_type: "call_function",
-        account_id: contractId,
-        method_name: methodName,
-        args_base64: encodedArgs,
-      },
-      blockId
-    ),
+    buildViewParams({ contractId, methodName, args, argsBase64, blockId }),
     { useArchival, network },
   );
 
   return parseJsonFromBytes(queryResult.result.result);
 };
+
+export interface ViewManySpec {
+  contractId: string;
+  methodName: string;
+  args?: any;
+  argsBase64?: string;
+  blockId?: string;
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}
+
+// `view.many`: run many contract view calls as a concurrency-limited fan-out
+// (at most `batch.maxConcurrency` in flight), decoding each ok result exactly
+// like `view`. NEAR RPC has no array batching, so calls aren't merged into one
+// request.
+async function viewMany(specs: ViewManySpec[]): Promise<BatchItemResult[]> {
+  const { maxConcurrency } = resolveBatchConfig(getConfig());
+  // Build + call + decode all happen inside `viewImpl`, wrapped per item, so a
+  // malformed spec or a bad/decode-failing response settles as an error rather
+  // than rejecting the whole set.
+  return mapWithConcurrency(specs, maxConcurrency, async (spec): Promise<BatchItemResult> => {
+    try {
+      const result = await viewImpl(spec);
+      return { status: "ok", result };
+    } catch (error) {
+      return { status: "error", kind: errorKind(error), error };
+    }
+  });
+}
+
+// `view(...)` stays callable exactly as before; `.many([...])` is the bulk form.
+export const view = Object.assign(viewImpl, { many: viewMany });
 
 export const queryAccount = async ({
                                 accountId,

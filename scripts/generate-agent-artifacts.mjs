@@ -149,6 +149,45 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 `).join("\n")}`;
 }
 
+function renderResilienceSection(headingPrefix = "###") {
+  const h = headingPrefix;
+  return `${h} Resilience and bulk reads
+
+\`@fastnear/api\` retries transient RPC failures (HTTP 408/429/500/502/503/504 and JSON-RPC \`-429\`/\`-32000\`) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through \`near.config\` and are on by default.
+
+**Retry** — \`near.config({ retry })\`:
+
+- \`enabled\` (default \`true\`) — set \`false\` to restore single-attempt behavior.
+- \`maxAttempts\` (\`5\`) — total attempts including the first.
+- \`baseBackoffMs\` (\`250\`) / \`maxBackoffMs\` (\`30000\`) — full-jitter exponential backoff bounds.
+- \`timeoutMs\` (\`15000\`) — per-attempt AbortController timeout (\`0\` disables it).
+- \`respectRetryAfter\` (\`true\`) — honor a \`Retry-After\` header, capped at \`maxBackoffMs\`.
+- \`writePolicy\` (\`"transport-only"\`) — how writes (\`send_tx\` / \`broadcast_tx_*\`) retry: \`"never"\`, \`"transport-only"\` (only pre-response transport/timeout errors, resending identical signed bytes — safe against double-apply), or \`"all"\`.
+
+**Bulk reads** — concurrency-limited fan-out (NEAR RPC has no array batching, so calls are not merged into one request):
+
+- \`near.batch(requests)\` — each \`{ method, params, useArchival?, network? }\` runs as its own retried call, at most \`batch.maxConcurrency\` (default \`30\`) in flight. Write methods are rejected per-item.
+- \`near.view.many(specs)\` — the same fan-out for \`{ contractId, methodName, args?, argsBase64?, blockId? }\` view specs, decoding each ok result like \`near.view\`.
+- \`near.config({ batch: { maxConcurrency: 30 } })\` tunes the in-flight cap.
+
+Both return **settled** results in input order — one failing call never rejects the set:
+
+\`\`\`js
+const results = await near.view.many([
+  { contractId: "token.near", methodName: "ft_balance_of", args: { account_id: "a.near" } },
+  { contractId: "token.near", methodName: "ft_balance_of", args: { account_id: "b.near" } },
+]);
+
+for (const r of results) {
+  if (r.status === "ok") near.print(r.result);
+  else if (r.kind === "contract") console.warn("contract reverted:", r.error);
+  else console.warn("infra error:", r.kind, r.error);
+}
+\`\`\`
+
+Each error item carries a \`kind\` — \`"contract"\` (the contract method reverted or failed), \`"transport"\` (no HTTP response: network or timeout), \`"http"\` (non-2xx), or \`"rpc"\` (JSON-RPC error) — so application failures stay distinguishable from infrastructure ones without re-parsing. Thrown errors are \`FastNearRpcError\` instances exposing the same \`kind\`, plus \`status\`, \`code\`, \`data\`, and \`retryable\`.`;
+}
+
 function renderRootReadmeSection() {
   const primaryRecipes = recipeCatalog.filter((recipe) =>
     ["view-contract", "inspect-transaction", "account-full", "kv-latest-key"].includes(recipe.id)
@@ -174,6 +213,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - Named exported response types are available from ` + "`@fastnear/api`" + `, for example ` + "`FastNearTxTransactionsResponse`" + ` and ` + "`FastNearKvGetLatestKeyResponse`" + `.
 - ` + "`near.explain.*`" + ` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: ` + "`near.view`" + `, ` + "`near.queryAccount`" + `, ` + "`near.queryTx`" + `, ` + "`near.sendTx`" + `, ` + "`near.requestSignIn`" + `, and ` + "`near.signMessage`" + `.
+- ` + "`near.batch(...)`" + ` and ` + "`near.view.many(...)`" + ` fan out many reads with settled, concurrency-capped results, and ` + "`near.config({ retry, batch })`" + ` tunes automatic 429/transient retry — both on by default. See the API package README for details.
 
 ### Hosted agent entrypoint
 
@@ -226,6 +266,10 @@ Use the low-level APIs when you already know the FastNear family and want exact 
 - ` + "`near.config({ networkId })`" + ` switches the family defaults together.
 - ` + "`near.config({ apiKey })`" + ` applies auth in the right style for each family.
 - ` + "`near.config({ nodeUrl })`" + ` keeps the RPC override path backward compatible.
+- ` + "`near.config({ retry })`" + ` tunes or disables automatic 429/transient retry (see below).
+- ` + "`near.config({ batch })`" + ` sets the bulk-read concurrency cap (see below).
+
+${renderResilienceSection("###")}
 
 ### Named endpoint types
 
@@ -405,7 +449,10 @@ Primary packages:
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
+- near.config({ retry, batch }) — auto 429/transient retry + bulk-read concurrency cap, both on by default
 - near.view
+- near.view.many — bulk views, settled results, concurrency-capped
+- near.batch — bulk RPC, settled results, per-item error kind (transport/http/rpc/contract)
 - near.queryAccount
 - near.tx.transactions
 - near.api.v1.accountFull
@@ -500,6 +547,10 @@ Prefer ` + "`recipes/index.json`" + ` when you need structured task data.
 - ` + "`near.config({ networkId })`" + `
 - ` + "`near.config({ apiKey })`" + `
 - ` + "`near.config({ nodeUrl })`" + `
+- ` + "`near.config({ retry })`" + `
+- ` + "`near.config({ batch })`" + `
+
+${renderResilienceSection("##")}
 
 ## Named endpoint types
 
@@ -534,6 +585,8 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 ## Low-level API entrypoints
 
 - ` + "`near.view`" + `
+- ` + "`near.view.many`" + ` (bulk views; settled results)
+- ` + "`near.batch`" + ` (bulk RPC; settled results)
 - ` + "`near.queryAccount`" + `
 - ` + "`near.queryTx`" + `
 - ` + "`near.sendTx`" + `

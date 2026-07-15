@@ -9,7 +9,10 @@ Primary packages:
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
+- near.config({ retry, batch }) — auto 429/transient retry + bulk-read concurrency cap, both on by default
 - near.view
+- near.view.many — bulk views, settled results, concurrency-capped
+- near.batch — bulk RPC, settled results, per-item error kind (transport/http/rpc/contract)
 - near.queryAccount
 - near.tx.transactions
 - near.api.v1.accountFull
