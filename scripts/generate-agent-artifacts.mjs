@@ -86,6 +86,51 @@ function assertCatalogContract() {
   if (x402Surface.chooseByTask.length !== 5 || x402Surface.quickstarts.length !== 2) {
     throw new Error("Expected the x402 task chooser and two focused quickstarts");
   }
+
+  const expectedX402Entrypoints = new Map([
+    [
+      "@fastnear/x402",
+      ["createFastNearWalletSigner", "createNearX402Client", "createNearPaymentFetch"],
+    ],
+    ["@fastnear/x402/node", ["createLocalNearSigner"]],
+    ["@fastnear/x402/server", ["createNearResourceServer"]],
+    ["@fastnear/x402/facilitator", ["createNearFacilitator"]],
+  ]);
+  for (const [subpath, expectedExports] of expectedX402Entrypoints) {
+    const entrypoint = x402Surface.entrypoints.find(entry => entry.subpath === subpath);
+    if (!entrypoint || JSON.stringify(entrypoint.exports) !== JSON.stringify(expectedExports)) {
+      throw new Error(`Expected canonical x402 exports for ${subpath}`);
+    }
+  }
+
+  const expectedX402Tasks = new Map([
+    ["Pay an x402 URL from Node.js", ["createLocalNearSigner", "createNearPaymentFetch"]],
+    ["Pay an x402 URL from a browser wallet", ["createFastNearWalletSigner", "createNearPaymentFetch"]],
+    ["Protect a seller resource", ["createNearResourceServer"]],
+    ["Operate a NEAR facilitator", ["createNearFacilitator"]],
+    ["Integrate below the paid-fetch helper", ["createNearX402Client"]],
+  ]);
+  for (const [task, expectedFactories] of expectedX402Tasks) {
+    const choice = x402Surface.chooseByTask.find(item => item.task === task);
+    if (!choice || JSON.stringify(choice.use) !== JSON.stringify(expectedFactories)) {
+      throw new Error(`Expected canonical x402 task mapping for ${task}`);
+    }
+  }
+
+  const quickstartIds = new Set(x402Surface.quickstarts.map(quickstart => quickstart.id));
+  for (const id of ["x402-node-paid-fetch", "x402-remote-facilitator-seller"]) {
+    if (!quickstartIds.has(id)) {
+      throw new Error(`Expected x402 quickstart ${id}`);
+    }
+  }
+  for (const phrase of ["Only x402 v2 exact", "NEP-141", "explicit facilitator"]) {
+    if (!x402Surface.constraints.some(constraint => constraint.includes(phrase))) {
+      throw new Error(`Expected x402 constraint containing ${phrase}`);
+    }
+  }
+  if (!/^https:\/\/.+/.test(x402Surface.guideUrl)) {
+    throw new Error("Expected an absolute x402 package guide URL");
+  }
   for (const feature of ["signDelegateActions", "signDelegateActionsWithTtl"]) {
     if (!x402Surface.walletFeatures.includes(feature)) {
       throw new Error(`Expected x402 wallet feature ${feature}`);
