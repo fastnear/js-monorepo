@@ -18,6 +18,7 @@
     "bench:ml-dsa-65": "yarn workspace @fastnear/ml-dsa-65 bench",
     "smoke:ml-dsa:testnet": "yarn build && node scripts/smoke-ml-dsa-testnet.mjs",
     "smoke:x402:testnet": "yarn build && node scripts/smoke-x402-testnet.mjs",
+    "smoke:x402:published": "node scripts/verify-published-x402.mjs",
     "smoke:services:live": "yarn workspace @fastnear/api build && node scripts/smoke-services-live.mjs",
     "smoke:agent:published": "node scripts/smoke-published-agent-surfaces.mjs",
     "test": "vitest run && yarn test:agent"

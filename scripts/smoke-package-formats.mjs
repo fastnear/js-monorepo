@@ -239,6 +239,21 @@ for (const { directory, globalName, probes, subpaths = [] } of packages) {
   }
   assertProbes(sandbox[globalName], probes, `${manifest.name} IIFE`);
   if (directory === "x402") {
+    const descriptor = Object.getOwnPropertyDescriptor(sandbox, globalName);
+    if (!descriptor || descriptor.configurable !== false) {
+      throw new Error("@fastnear/x402 IIFE did not lock globalThis.nearX402");
+    }
+    for (const serverOnlyExport of [
+      "createLocalNearSigner",
+      "createNearResourceServer",
+      "createNearFacilitator",
+    ]) {
+      if (serverOnlyExport in sandbox[globalName]) {
+        throw new Error(
+          `@fastnear/x402 IIFE leaked server-only export ${serverOnlyExport}`,
+        );
+      }
+    }
     await smokeX402BrowserPayment(sandbox);
   }
 
