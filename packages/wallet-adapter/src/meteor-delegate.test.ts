@@ -262,6 +262,40 @@ describe("Meteor delegate signing", () => {
     expect(sendMessageData).not.toHaveBeenCalled();
   });
 
+  it("normalizes a null signed-delegate item into a transport error", async () => {
+    mockFinalBlock(1_000);
+    let listener: ((data: any) => void) | undefined;
+    const bridge: MeteorExtensionBridge = {
+      addMessageDataListener: (next) => {
+        listener = next;
+      },
+      sendMessageData: (message) => {
+        if (message.inputs == null) return;
+        queueMicrotask(() =>
+          listener?.({
+            uid: message.uid,
+            status: "closed_success",
+            payload: { signedDelegatesWithHashes: [null] },
+          }),
+        );
+      },
+    };
+    const meteor = createMeteorAdapter({
+      storage: createStorage(),
+      getExtensionBridge: () => bridge,
+      getNetworkProviders: () => ["https://rpc.testnet.example"],
+    });
+
+    await expect(meteor.signDelegateActions({
+      network: "testnet",
+      delegateActions: [{
+        receiverId: "usdc.fakes.testnet",
+        blockHeightTtl: 300,
+        actions: [],
+      }],
+    })).rejects.toMatchObject({ code: "INVALID_DELEGATE_RESPONSE" });
+  });
+
   it("rejects a non-Borsh response from the wallet transport", async () => {
     mockFinalBlock(1_000);
     let listener: ((data: any) => void) | undefined;

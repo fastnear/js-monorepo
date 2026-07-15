@@ -683,6 +683,8 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
     return {
       signedDelegateActions: signedDelegates.map((result, index) => {
         if (
+          result == null ||
+          typeof result !== "object" ||
           typeof result.signedDelegateAction !== "string" ||
           result.signedDelegateAction.length === 0
         ) {
