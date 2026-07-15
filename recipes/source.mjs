@@ -2018,6 +2018,8 @@ export const generatedArtifact = {
       explain: explainSurface.map(({ api }) => api),
       lowLevel: [
         "near.view",
+        "near.view.many",
+        "near.batch",
         "near.queryAccount",
         "near.queryAccessKey",
         "near.queryAccessKeyList",

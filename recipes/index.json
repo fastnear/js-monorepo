@@ -311,6 +311,8 @@
       ],
       "lowLevel": [
         "near.view",
+        "near.view.many",
+        "near.batch",
         "near.queryAccount",
         "near.queryAccessKey",
         "near.queryAccessKeyList",

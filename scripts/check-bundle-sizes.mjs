@@ -12,7 +12,7 @@ const budgets = [
   { package: "borsh", baselineGzip: 2_496 },
   { package: "borsh-schema", baselineGzip: 1_411 },
   { package: "utils", baselineGzip: 35_696 },
-  { package: "api", baselineGzip: 46_535 },
+  { package: "api", baselineGzip: 49_371 },
   { package: "wallet", baselineGzip: 21_323 },
   { package: "wallet-adapter", baselineGzip: 41_529 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },

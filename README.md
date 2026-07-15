@@ -35,6 +35,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - Named exported response types are available from `@fastnear/api`, for example `FastNearTxTransactionsResponse` and `FastNearKvGetLatestKeyResponse`.
 - `near.explain.*` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: `near.view`, `near.queryAccount`, `near.queryTx`, `near.sendTx`, `near.requestSignIn`, and `near.signMessage`.
+- `near.batch(...)` and `near.view.many(...)` fan out many reads with settled, concurrency-capped results, and `near.config({ retry, batch })` tunes automatic 429/transient retry — both on by default. See the API package README for details.
 
 ### Hosted agent entrypoint
 
