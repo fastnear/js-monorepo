@@ -183,7 +183,9 @@ describe("Meteor delegate signing", () => {
       close: vi.fn(),
       postMessage,
     };
-    const openWindow = vi.fn(() => popup);
+    const openWindow = vi.fn(
+      (_url: string, _name?: string, _features?: string) => popup,
+    );
     const removeEventListener = vi.fn();
     vi.stubGlobal("window", {
       top: {
