@@ -20,4 +20,13 @@ export {
   signDelegateActions
 } from "./connector.js";
 
-export type { ConnectOptions, ConnectResult, WalletManifest, SignDelegateActionsParams, SignDelegateActionResult, SignDelegateActionsResponse } from "./connector.js";
+export type {
+  BorshSerializedSignedDelegate,
+  ConnectOptions,
+  ConnectResult,
+  WalletManifest,
+  SignDelegateAction,
+  SignDelegateActionsParams,
+  SignDelegateActionResult,
+  SignDelegateActionsResponse,
+} from "./connector.js";

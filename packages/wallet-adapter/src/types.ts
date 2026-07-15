@@ -52,6 +52,27 @@ export interface SignAndSendTransactionsParams {
   }>;
 }
 
+export interface SignDelegateActionParams {
+  receiverId: string;
+  actions: ConnectorActionLike[];
+  /** Number of blocks after the wallet's final block at which the delegate expires. */
+  blockHeightTtl?: number;
+}
+
+export interface SignDelegateActionsParams {
+  network: WalletNetwork;
+  signerId?: string;
+  delegateActions: SignDelegateActionParams[];
+}
+
+export interface BorshSerializedSignedDelegate {
+  borshSerializedBase64: string;
+}
+
+export interface SignDelegateActionsResponse {
+  signedDelegateActions: BorshSerializedSignedDelegate[];
+}
+
 export interface WalletAdapter {
   signIn(params: SignInParams): Promise<WalletAccount[]>;
   signOut(params: SignOutParams): Promise<void>;
@@ -64,6 +85,7 @@ export interface WalletAdapter {
   }>;
   signAndSendTransaction(params: SignAndSendTransactionParams): Promise<any>;
   signAndSendTransactions(params: SignAndSendTransactionsParams): Promise<any[]>;
+  signDelegateActions?(params: SignDelegateActionsParams): Promise<SignDelegateActionsResponse>;
 }
 
 export interface AdapterStorage {

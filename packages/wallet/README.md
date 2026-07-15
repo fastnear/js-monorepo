@@ -105,6 +105,46 @@ if (result) {
 }
 ```
 
+## Timeout-aware delegate signing
+
+`signDelegateActions` supports NEP-366 delegates with an explicit block-height
+TTL. This is the bridge used by `@fastnear/x402` to satisfy the x402 NEAR exact
+scheme's expiry rules.
+
+```js
+import * as nearWallet from "@fastnear/wallet";
+
+await nearWallet.connect({
+  network: "testnet",
+  features: {
+    signDelegateActions: true,
+    signDelegateActionsWithTtl: true,
+  },
+});
+
+const result = await nearWallet.signDelegateActions({
+  network: "testnet",
+  delegateActions: [{
+    receiverId: "usdc.fakes.testnet",
+    blockHeightTtl: 300,
+    actions: [{
+      type: "FunctionCall",
+      params: {
+        methodName: "ft_transfer",
+        args: { receiver_id: "merchant.testnet", amount: "10000" },
+        gas: "30000000000000",
+        deposit: "1",
+      },
+    }],
+  }],
+});
+```
+
+The TTL is accepted only when the selected wallet explicitly advertises
+`signDelegateActionsWithTtl`; missing capability fails before opening a signing
+prompt. Compatible near-connect manifests and wallet releases are a prerequisite
+for using this path in production.
+
 ## Browser (IIFE)
 
 ```html

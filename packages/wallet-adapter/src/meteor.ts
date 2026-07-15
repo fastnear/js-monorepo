@@ -4,11 +4,16 @@ import {
   publicKeyFromPrivate,
   bytesToBase64,
   decodeNearPublicKey,
+  mapAction,
   mapTransaction,
   SCHEMA,
 } from "@fastnear/utils";
 import type { NearPublicKey, PlainTransaction } from "@fastnear/utils";
 import { connectorActionsToFastnearActions } from "./actions.js";
+import {
+  validateSignedDelegate,
+  type SignedDelegateExpectation,
+} from "./delegate-validation.js";
 import { firstClassicalPublicKey } from "./key-selection.js";
 import { createRpcFactory } from "./rpc.js";
 import { TransportError, UserRejectedError } from "./errors.js";
@@ -21,6 +26,8 @@ import type {
   PopupWindowLike,
   SignAndSendTransactionParams,
   SignAndSendTransactionsParams,
+  SignDelegateActionsParams,
+  SignDelegateActionsResponse,
   SignInParams,
   SignMessageParams,
   WalletAccount,
@@ -32,6 +39,7 @@ const METEOR_CONNECTION_PING_MS = 450;
 const METEOR_POPUP_WIDTH = 390;
 const METEOR_POPUP_HEIGHT = 650;
 const LEGACY_AUTH_KEY_SUFFIX = "_meteor_wallet_auth_key";
+const METEOR_DEFAULT_DELEGATE_TTL = 200;
 
 type MeteorConnectionStatus =
   | "initializing"
@@ -42,7 +50,13 @@ type MeteorConnectionStatus =
   | "closed_fail"
   | "closed_window";
 
-type MeteorActionType = "login" | "logout" | "sign" | "verify_owner" | "sign_message";
+type MeteorActionType =
+  | "login"
+  | "logout"
+  | "sign"
+  | "verify_owner"
+  | "sign_message"
+  | "sign_delegate_actions";
 
 interface MeteorAuthState {
   accountId?: string;
@@ -74,6 +88,15 @@ interface MeteorActionResponse {
   payload?: any;
   endTags?: string[];
   message?: string;
+}
+
+interface MeteorSerializedSignedDelegate {
+  delegateHash?: string;
+  signedDelegateAction?: string;
+}
+
+interface MeteorSignDelegateActionsResponse {
+  signedDelegatesWithHashes?: MeteorSerializedSignedDelegate[];
 }
 
 const randomUid = (): string => {
@@ -406,6 +429,62 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
     }));
   };
 
+  const prepareMeteorDelegateActions = async (
+    network: WalletNetwork,
+    signerId: string,
+    delegateActions: SignDelegateActionsParams["delegateActions"],
+  ): Promise<{
+    encoded: string;
+    expectations: SignedDelegateExpectation[];
+  }> => {
+    const block = await rpcForNetwork(network).block({ finality: "final" });
+    const finalBlockHeight = BigInt(block.header.height);
+    // Meteor replaces this valid, randomly generated placeholder key and the
+    // placeholder nonce with the selected account's access key before signing.
+    // The dApp never signs the delegate locally.
+    const placeholderPublicKey = decodeNearPublicKey(
+      publicKeyFromPrivate(privateKeyFromRandom()),
+    );
+
+    const prepared = delegateActions.map((delegateAction, index) => {
+      const blockHeightTtl =
+        delegateAction.blockHeightTtl ?? METEOR_DEFAULT_DELEGATE_TTL;
+      if (!Number.isSafeInteger(blockHeightTtl) || blockHeightTtl <= 0) {
+        throw new TransportError(
+          "INVALID_DELEGATE_TTL",
+          "blockHeightTtl must be a positive safe integer",
+        );
+      }
+
+      const actions = connectorActionsToFastnearActions(delegateAction.actions).map(mapAction);
+      const maxBlockHeight = finalBlockHeight + BigInt(blockHeightTtl);
+      const serialized = borshSerialize(SCHEMA.DelegateAction, {
+        senderId: signerId,
+        receiverId: delegateAction.receiverId,
+        actions,
+        // Meteor replaces the placeholder key and nonce with the selected
+        // account's access key before presenting and signing the delegate.
+        nonce: BigInt(index),
+        maxBlockHeight,
+        publicKey: { ed25519Key: { data: placeholderPublicKey.data } },
+      });
+      return {
+        encoded: bytesToBase64(new Uint8Array(serialized)),
+        expectation: {
+          senderId: signerId,
+          receiverId: delegateAction.receiverId,
+          actions,
+          maxBlockHeight,
+        },
+      };
+    });
+
+    return {
+      encoded: prepared.map(({ encoded }) => encoded).join(","),
+      expectations: prepared.map(({ expectation }) => expectation),
+    };
+  };
+
   const getAccountsForNetwork = async (network: WalletNetwork): Promise<WalletAccount[]> => {
     const auth = await loadAuth(network);
     if (!auth.accountId) return [];
@@ -552,6 +631,84 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
     return result[0];
   };
 
+  const signDelegateActions = async ({
+    network,
+    signerId,
+    delegateActions,
+  }: SignDelegateActionsParams): Promise<SignDelegateActionsResponse> => {
+    const net = ensureNetwork(network);
+    const auth = await loadAuth(net);
+    const useSigner = signerId ?? auth.accountId;
+    if (useSigner == null) {
+      throw new TransportError("NOT_SIGNED_IN", "Wallet is not signed in");
+    }
+    if (auth.accountId != null && auth.accountId !== useSigner) {
+      throw new TransportError(
+        "SIGNER_MISMATCH",
+        `Connected Meteor account ${auth.accountId} cannot sign for ${useSigner}`,
+      );
+    }
+    if (delegateActions.length === 0) {
+      throw new TransportError(
+        "INVALID_DELEGATE_ACTIONS",
+        "At least one delegate action is required",
+      );
+    }
+
+    const preparedDelegateActions = await prepareMeteorDelegateActions(
+      net,
+      useSigner,
+      delegateActions,
+    );
+    const response = await connectAndWaitForResponse<MeteorSignDelegateActionsResponse>(
+      net,
+      "sign_delegate_actions",
+      { delegateActions: preparedDelegateActions.encoded },
+    ).catch((error) => {
+      throw normalizeActionError(error);
+    });
+
+    const signedDelegates = response?.signedDelegatesWithHashes;
+    if (
+      !Array.isArray(signedDelegates) ||
+      signedDelegates.length !== delegateActions.length
+    ) {
+      throw new TransportError(
+        "INVALID_DELEGATE_RESPONSE",
+        `Meteor returned ${signedDelegates?.length ?? 0} signed delegates for ${delegateActions.length} requests`,
+        { details: response },
+      );
+    }
+
+    return {
+      signedDelegateActions: signedDelegates.map((result, index) => {
+        if (
+          typeof result.signedDelegateAction !== "string" ||
+          result.signedDelegateAction.length === 0
+        ) {
+          throw new TransportError(
+            "INVALID_DELEGATE_RESPONSE",
+            "Meteor returned a malformed signed delegate",
+            { details: result },
+          );
+        }
+        try {
+          validateSignedDelegate(
+            result.signedDelegateAction,
+            preparedDelegateActions.expectations[index],
+          );
+        } catch (error) {
+          throw new TransportError(
+            "INVALID_DELEGATE_RESPONSE",
+            error instanceof Error ? error.message : "Meteor returned an invalid signed delegate",
+            { cause: error instanceof Error ? error : undefined, details: result },
+          );
+        }
+        return { borshSerializedBase64: result.signedDelegateAction };
+      }),
+    };
+  };
+
   return {
     signIn,
     signOut,
@@ -560,5 +717,6 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
     signMessage,
     signAndSendTransaction,
     signAndSendTransactions,
+    signDelegateActions,
   };
 };
