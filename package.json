@@ -63,7 +63,7 @@
     "stream-browserify": "^3.0.0",
     "tsup": "^8.3.6",
     "typescript": "^5.7.2",
-    "vitest": "^3"
+    "vitest": "^3.2.6"
   },
   "resolutions": {
     "defu": "^6.1.5",
@@ -73,8 +73,9 @@
     "picomatch": "^2.3.2",
     "postcss": "^8.5.10",
     "rollup": "^4.59.0",
-    "tar": "^7.5.11",
-    "vite": "^7.3.2"
+    "tar": "^7.5.16",
+    "vite": "^7.3.5",
+    "@walletconnect/jsonrpc-ws-connection/ws": "^7.5.11"
   },
   "packageManager": "yarn@4.14.1"
 }
