@@ -1961,12 +1961,144 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
   ],
 };
 
+/**
+ * The x402 surface is discovery metadata rather than a near.recipes.* entry.
+ * It spans four package exports and deliberately keeps server-only code out of
+ * the browser bundle.
+ */
+export const x402Surface = {
+  package: "@fastnear/x402",
+  runtime: "Package-only; not included in agents.js or near.js.",
+  guideUrl: "https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md",
+  protocol: {
+    version: 2,
+    scheme: "exact",
+    networks: ["near:mainnet", "near:testnet"],
+    authorization: "NEP-366 SignedDelegate",
+    paymentAsset: "NEP-141 fungible tokens",
+  },
+  browserGlobal: "nearX402",
+  browserStatus: "Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.",
+  walletFeatures: ["signDelegateActions", "signDelegateActionsWithTtl"],
+  chooseByTask: [
+    {
+      task: "Pay an x402 URL from Node.js",
+      use: ["createLocalNearSigner", "createNearPaymentFetch"],
+      imports: ["@fastnear/x402/node", "@fastnear/x402"],
+      status: "stable core path",
+    },
+    {
+      task: "Pay an x402 URL from a browser wallet",
+      use: ["createFastNearWalletSigner", "createNearPaymentFetch"],
+      imports: ["@fastnear/wallet", "@fastnear/x402"],
+      status: "preview until the timeout-aware wallet bridge ships",
+    },
+    {
+      task: "Protect a seller resource",
+      use: ["createNearResourceServer"],
+      imports: ["@fastnear/x402/server"],
+      status: "requires an explicit facilitator",
+    },
+    {
+      task: "Operate a NEAR facilitator",
+      use: ["createNearFacilitator"],
+      imports: ["@fastnear/x402/facilitator"],
+      status: "HTTP framework and secret storage are operator choices",
+    },
+    {
+      task: "Integrate below the paid-fetch helper",
+      use: ["createNearX402Client"],
+      imports: ["@fastnear/x402"],
+      status: "lower-level client path",
+    },
+  ],
+  entrypoints: [
+    {
+      subpath: "@fastnear/x402",
+      exports: [
+        "createFastNearWalletSigner",
+        "createNearX402Client",
+        "createNearPaymentFetch",
+      ],
+      purpose: "injected FastNEAR wallet signer, NEAR-only x402 client, and paid fetch",
+    },
+    {
+      subpath: "@fastnear/x402/node",
+      exports: ["createLocalNearSigner"],
+      purpose: "official RPC-backed local full-access-key signer",
+    },
+    {
+      subpath: "@fastnear/x402/server",
+      exports: ["createNearResourceServer"],
+      purpose: "resource server with one or more explicitly configured facilitators",
+    },
+    {
+      subpath: "@fastnear/x402/facilitator",
+      exports: ["createNearFacilitator"],
+      purpose: "self-hosted facilitator registration for concrete NEAR networks",
+    },
+  ],
+  constraints: [
+    "Only x402 v2 exact payments on near:mainnet and near:testnet are supported.",
+    "Payments use NEP-141 tokens; native NEAR is not a direct payment asset.",
+    "Wallet and local-key payers require full-access keys, and recipients need token storage registration.",
+    "Resource servers require an explicit facilitator; no x402.org or other default is selected.",
+    "Browser wallet access is injected explicitly and payment occurs only when the application calls the paid fetch function.",
+  ],
+  safeDefaults: [
+    "Pin near:testnet during development and a concrete NEAR network in production; use near:* only for an intentionally cross-network client.",
+    "Keep payer and relayer secret keys in server-side secret storage, never browser code.",
+    "String and number seller prices use the official USDC contract; wNEAR and custom tokens require an explicit { amount, asset } price.",
+    "Always configure a facilitator explicitly.",
+  ],
+  quickstarts: [
+    {
+      id: "x402-node-paid-fetch",
+      title: "Pay an x402 URL from Node.js",
+      summary: "Use the upstream local full-access-key signer with the high-level paid-fetch helper.",
+      language: "js",
+      code: `import { createNearPaymentFetch } from "@fastnear/x402";
+import { createLocalNearSigner } from "@fastnear/x402/node";
+
+const { NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, X402_RESOURCE_URL } = process.env;
+if (!NEAR_PAYER_ACCOUNT_ID || !NEAR_PAYER_SECRET_KEY || !X402_RESOURCE_URL) {
+  throw new Error("NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, and X402_RESOURCE_URL are required");
+}
+
+const signer = createLocalNearSigner({
+  accountId: NEAR_PAYER_ACCOUNT_ID,
+  secretKey: NEAR_PAYER_SECRET_KEY,
+  rpcUrls: { "near:testnet": "https://rpc.testnet.fastnear.com" },
+});
+const paidFetch = createNearPaymentFetch({ signer, network: "near:testnet" });
+const response = await paidFetch(X402_RESOURCE_URL);
+if (!response.ok) throw new Error(\`Paid request failed: \${response.status}\`);
+console.log(await response.json());`,
+    },
+    {
+      id: "x402-remote-facilitator-seller",
+      title: "Configure a seller with an explicit remote facilitator",
+      summary: "Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.",
+      language: "js",
+      code: `import { createNearResourceServer } from "@fastnear/x402/server";
+
+const { X402_FACILITATOR_URL } = process.env;
+if (!X402_FACILITATOR_URL) throw new Error("X402_FACILITATOR_URL is required");
+
+export const resourceServer = createNearResourceServer({
+  facilitators: { url: X402_FACILITATOR_URL },
+});
+await resourceServer.initialize();`,
+    },
+  ],
+};
+
 export const generatedArtifact = {
-  version: 4,
+  version: 5,
   homepage: FASTNEAR_CDN_BASE,
   source: "recipes/source.mjs",
   catalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
-  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils", "@fastnear/ml-dsa-65"],
+  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils", "@fastnear/ml-dsa-65", "@fastnear/x402"],
   support: supportSurface,
   families: familyCatalog,
   runtimes: {
@@ -2075,5 +2207,6 @@ export const generatedArtifact = {
   },
   recipes: recipeCatalog,
   mlDsa65: mlDsa65Surface,
+  x402: x402Surface,
   explain: explainSurface,
 };

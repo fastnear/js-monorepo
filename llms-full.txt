@@ -8,6 +8,7 @@ Prefer `recipes/index.json` when you need structured task data.
 - `@fastnear/wallet`: wallet connection and transaction/signing provider
 - `@fastnear/utils`: units, crypto, serialization, storage helpers
 - `@fastnear/ml-dsa-65`: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
+- `@fastnear/x402`: official x402 v2 NEAR adapters for paid fetch, local-key clients, resource servers, and facilitators
 
 ## Unified config
 
@@ -261,7 +262,7 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - `nearWallet.connect` / `disconnect` / `restore`: open, close, or rehydrate a session per network. `connect({ network, contractId, manifest })` is the canonical entrypoint; `contractId` mints a function-call key scoped to that contract so zero-deposit calls sign silently.
 - `nearWallet.sendTransaction({ receiverId, actions, network })` / `sendTransactions`: dispatch one or many transactions through the connected wallet on the chosen network.
 - `nearWallet.signMessage({ message, recipient, nonce, network })`: NEP-413 message signing.
-- `nearWallet.signDelegateActions({ delegateActions, signerId?, network? })`: sign NEP-366 delegate actions for gasless relay-based flows. Returns `{ signedDelegateActions: Array<{ delegateHash: Uint8Array; signedDelegate: SignedDelegate }> }`.
+- `nearWallet.signDelegateActions({ delegateActions, signerId?, network? })`: sign NEP-366 delegate actions for gasless relay-based flows. Each request may include `blockHeightTtl`; using it requires a wallet that advertises `signDelegateActionsWithTtl`. The canonical transport result is `{ borshSerializedBase64: string }`, while legacy structured and bare-base64 results remain accepted during the bridge transition.
 - `nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })` (`@fastnear/wallet@1.1.4+`): grant a second function-call key on another contract after sign-in, so a follow-on zero-deposit call to that contract also signs silently.
 - `nearWallet.accountId` / `isConnected` / `connectedNetworks` / `switchNetwork`: per-network session inspection and the active-network cursor.
 - `nearWallet.onConnect` / `onDisconnect`: subscribe to session lifecycle.
@@ -300,6 +301,92 @@ BLOCK_HASH="$(printf '%s\n' "$ACCOUNT_SUMMARY" | jq -r '.block_hash')"
 STORAGE_USAGE="$(printf '%s\n' "$ACCOUNT_SUMMARY" | jq -r '.storage_usage')"
 
 printf 'block_hash=%s\nstorage_usage=%s\n' "$BLOCK_HASH" "$STORAGE_USAGE"
+```
+
+## x402 payments on NEAR
+
+`@fastnear/x402` adapts the official x402 Foundation NEAR mechanism without introducing another wire format.
+
+- Protocol: x402 v2 `exact` on `near:mainnet` and `near:testnet`.
+- Authorization: NEP-366 SignedDelegate; asset: NEP-141 fungible tokens.
+- Browser global: `nearX402`.
+- Runtime: Package-only; not included in agents.js or near.js.
+- Browser status: Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.
+- Required wallet features: `signDelegateActions` and `signDelegateActionsWithTtl`.
+- Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md).
+
+### Choose by task
+
+- Pay an x402 URL from Node.js: `createLocalNearSigner` + `createNearPaymentFetch` from `@fastnear/x402/node` and `@fastnear/x402` — stable core path.
+- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — preview until the timeout-aware wallet bridge ships.
+- Protect a seller resource: `createNearResourceServer` from `@fastnear/x402/server` — requires an explicit facilitator.
+- Operate a NEAR facilitator: `createNearFacilitator` from `@fastnear/x402/facilitator` — HTTP framework and secret storage are operator choices.
+- Integrate below the paid-fetch helper: `createNearX402Client` from `@fastnear/x402` — lower-level client path.
+
+### Entrypoints
+
+- `@fastnear/x402`: `createFastNearWalletSigner`, `createNearX402Client`, `createNearPaymentFetch` — injected FastNEAR wallet signer, NEAR-only x402 client, and paid fetch.
+- `@fastnear/x402/node`: `createLocalNearSigner` — official RPC-backed local full-access-key signer.
+- `@fastnear/x402/server`: `createNearResourceServer` — resource server with one or more explicitly configured facilitators.
+- `@fastnear/x402/facilitator`: `createNearFacilitator` — self-hosted facilitator registration for concrete NEAR networks.
+
+### Constraints
+
+- Only x402 v2 exact payments on near:mainnet and near:testnet are supported.
+- Payments use NEP-141 tokens; native NEAR is not a direct payment asset.
+- Wallet and local-key payers require full-access keys, and recipients need token storage registration.
+- Resource servers require an explicit facilitator; no x402.org or other default is selected.
+- Browser wallet access is injected explicitly and payment occurs only when the application calls the paid fetch function.
+
+### Safe defaults
+
+- Pin near:testnet during development and a concrete NEAR network in production; use near:* only for an intentionally cross-network client.
+- Keep payer and relayer secret keys in server-side secret storage, never browser code.
+- String and number seller prices use the official USDC contract; wNEAR and custom tokens require an explicit { amount, asset } price.
+- Always configure a facilitator explicitly.
+
+### Pay an x402 URL from Node.js
+
+Quickstart ID: `x402-node-paid-fetch`
+
+Use the upstream local full-access-key signer with the high-level paid-fetch helper.
+
+```js
+import { createNearPaymentFetch } from "@fastnear/x402";
+import { createLocalNearSigner } from "@fastnear/x402/node";
+
+const { NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, X402_RESOURCE_URL } = process.env;
+if (!NEAR_PAYER_ACCOUNT_ID || !NEAR_PAYER_SECRET_KEY || !X402_RESOURCE_URL) {
+  throw new Error("NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, and X402_RESOURCE_URL are required");
+}
+
+const signer = createLocalNearSigner({
+  accountId: NEAR_PAYER_ACCOUNT_ID,
+  secretKey: NEAR_PAYER_SECRET_KEY,
+  rpcUrls: { "near:testnet": "https://rpc.testnet.fastnear.com" },
+});
+const paidFetch = createNearPaymentFetch({ signer, network: "near:testnet" });
+const response = await paidFetch(X402_RESOURCE_URL);
+if (!response.ok) throw new Error(`Paid request failed: ${response.status}`);
+console.log(await response.json());
+```
+
+### Configure a seller with an explicit remote facilitator
+
+Quickstart ID: `x402-remote-facilitator-seller`
+
+Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.
+
+```js
+import { createNearResourceServer } from "@fastnear/x402/server";
+
+const { X402_FACILITATOR_URL } = process.env;
+if (!X402_FACILITATOR_URL) throw new Error("X402_FACILITATOR_URL is required");
+
+export const resourceServer = createNearResourceServer({
+  facilitators: { url: X402_FACILITATOR_URL },
+});
+await resourceServer.initialize();
 ```
 
 ## ML-DSA-65 account-key quickstarts

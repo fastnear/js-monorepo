@@ -117,22 +117,25 @@ EOF`;
 }
 
 async function main() {
-  const [nearAsset, agentsAsset, recipesAsset, llmsAsset] = await Promise.all([
+  const [nearAsset, agentsAsset, recipesAsset, llmsAsset, llmsFullAsset] = await Promise.all([
     fetchAsset("https://js.fastnear.com/near.js"),
     fetchAsset("https://js.fastnear.com/agents.js"),
     fetchAsset("https://js.fastnear.com/recipes.json"),
     fetchAsset("https://js.fastnear.com/llms.txt"),
+    fetchAsset("https://js.fastnear.com/llms-full.txt"),
   ]);
 
   assertNotHtmlAsset("Public near.js", nearAsset);
   assertNotHtmlAsset("Public agents.js", agentsAsset);
   assertNotHtmlAsset("Public recipes.json", recipesAsset);
   assertNotHtmlAsset("Public llms.txt", llmsAsset);
+  assertNotHtmlAsset("Public llms-full.txt", llmsFullAsset);
 
   const nearSource = nearAsset.text;
   const agentsSource = agentsAsset.text;
   const recipesText = recipesAsset.text;
   const llmsText = llmsAsset.text;
+  const llmsFullText = llmsFullAsset.text;
 
   if (!agentsSource.includes("process.env.FASTNEAR_API_KEY") || !agentsSource.includes("globalThis.near.config({ apiKey })")) {
     throw new Error("Public agents.js is missing the FASTNEAR_API_KEY auto-config behavior");
@@ -140,6 +143,11 @@ async function main() {
 
   if (!llmsText.includes("https://js.fastnear.com/recipes.json") || !llmsText.includes("https://js.fastnear.com/agents.js")) {
     throw new Error("Public llms.txt is missing the expected hosted discovery entries");
+  }
+  for (const [label, text] of [["llms.txt", llmsText], ["llms-full.txt", llmsFullText]]) {
+    if (!text.includes("@fastnear/x402")) {
+      throw new Error(`Public ${label} is missing @fastnear/x402 discovery metadata`);
+    }
   }
 
   const publicNearBundle = inspectNearBundle(nearSource);
@@ -162,6 +170,11 @@ async function main() {
 
   if (publicCatalog.version !== localCatalog.version) {
     throw new Error(`Public recipe catalog version ${publicCatalog.version} does not match local version ${localCatalog.version}`);
+  }
+
+  assertEqualArrays("Package list", localCatalog.packages, publicCatalog.packages);
+  if (JSON.stringify(publicCatalog.x402) !== JSON.stringify(localCatalog.x402)) {
+    throw new Error("x402 discovery metadata drifted between local and public recipes.json");
   }
 
   assertEqualArrays(

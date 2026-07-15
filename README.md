@@ -36,6 +36,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - `near.explain.*` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: `near.view`, `near.queryAccount`, `near.queryTx`, `near.sendTx`, `near.requestSignIn`, and `near.signMessage`.
 - `near.batch(...)` and `near.view.many(...)` fan out many reads with settled, concurrency-capped results, and `near.config({ retry, batch })` tunes automatic 429/transient retry — both on by default. See the API package README for details.
+- `@fastnear/x402` provides opt-in x402 v2 NEAR payment clients plus focused `/node`, `/server`, and `/facilitator` entrypoints; its browser-wallet path is a preview pending the timeout-aware wallet bridge.
 
 ### Hosted agent entrypoint
 
@@ -520,6 +521,92 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 }
 ```
 
+### x402 payments on NEAR
+
+`@fastnear/x402` adapts the official x402 Foundation NEAR mechanism without introducing another wire format.
+
+- Protocol: x402 v2 `exact` on `near:mainnet` and `near:testnet`.
+- Authorization: NEP-366 SignedDelegate; asset: NEP-141 fungible tokens.
+- Browser global: `nearX402`.
+- Runtime: Package-only; not included in agents.js or near.js.
+- Browser status: Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.
+- Required wallet features: `signDelegateActions` and `signDelegateActionsWithTtl`.
+- Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md).
+
+#### Choose by task
+
+- Pay an x402 URL from Node.js: `createLocalNearSigner` + `createNearPaymentFetch` from `@fastnear/x402/node` and `@fastnear/x402` — stable core path.
+- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — preview until the timeout-aware wallet bridge ships.
+- Protect a seller resource: `createNearResourceServer` from `@fastnear/x402/server` — requires an explicit facilitator.
+- Operate a NEAR facilitator: `createNearFacilitator` from `@fastnear/x402/facilitator` — HTTP framework and secret storage are operator choices.
+- Integrate below the paid-fetch helper: `createNearX402Client` from `@fastnear/x402` — lower-level client path.
+
+#### Entrypoints
+
+- `@fastnear/x402`: `createFastNearWalletSigner`, `createNearX402Client`, `createNearPaymentFetch` — injected FastNEAR wallet signer, NEAR-only x402 client, and paid fetch.
+- `@fastnear/x402/node`: `createLocalNearSigner` — official RPC-backed local full-access-key signer.
+- `@fastnear/x402/server`: `createNearResourceServer` — resource server with one or more explicitly configured facilitators.
+- `@fastnear/x402/facilitator`: `createNearFacilitator` — self-hosted facilitator registration for concrete NEAR networks.
+
+#### Constraints
+
+- Only x402 v2 exact payments on near:mainnet and near:testnet are supported.
+- Payments use NEP-141 tokens; native NEAR is not a direct payment asset.
+- Wallet and local-key payers require full-access keys, and recipients need token storage registration.
+- Resource servers require an explicit facilitator; no x402.org or other default is selected.
+- Browser wallet access is injected explicitly and payment occurs only when the application calls the paid fetch function.
+
+#### Safe defaults
+
+- Pin near:testnet during development and a concrete NEAR network in production; use near:* only for an intentionally cross-network client.
+- Keep payer and relayer secret keys in server-side secret storage, never browser code.
+- String and number seller prices use the official USDC contract; wNEAR and custom tokens require an explicit { amount, asset } price.
+- Always configure a facilitator explicitly.
+
+#### Pay an x402 URL from Node.js
+
+Quickstart ID: `x402-node-paid-fetch`
+
+Use the upstream local full-access-key signer with the high-level paid-fetch helper.
+
+```js
+import { createNearPaymentFetch } from "@fastnear/x402";
+import { createLocalNearSigner } from "@fastnear/x402/node";
+
+const { NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, X402_RESOURCE_URL } = process.env;
+if (!NEAR_PAYER_ACCOUNT_ID || !NEAR_PAYER_SECRET_KEY || !X402_RESOURCE_URL) {
+  throw new Error("NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, and X402_RESOURCE_URL are required");
+}
+
+const signer = createLocalNearSigner({
+  accountId: NEAR_PAYER_ACCOUNT_ID,
+  secretKey: NEAR_PAYER_SECRET_KEY,
+  rpcUrls: { "near:testnet": "https://rpc.testnet.fastnear.com" },
+});
+const paidFetch = createNearPaymentFetch({ signer, network: "near:testnet" });
+const response = await paidFetch(X402_RESOURCE_URL);
+if (!response.ok) throw new Error(`Paid request failed: ${response.status}`);
+console.log(await response.json());
+```
+
+#### Configure a seller with an explicit remote facilitator
+
+Quickstart ID: `x402-remote-facilitator-seller`
+
+Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.
+
+```js
+import { createNearResourceServer } from "@fastnear/x402/server";
+
+const { X402_FACILITATOR_URL } = process.env;
+if (!X402_FACILITATOR_URL) throw new Error("X402_FACILITATOR_URL is required");
+
+export const resourceServer = createNearResourceServer({
+  facilitators: { url: X402_FACILITATOR_URL },
+});
+await resourceServer.initialize();
+```
+
 ### Structured explain helpers
 
 - `near.explain.action`: Normalize one action into a stable JSON summary.
@@ -533,7 +620,7 @@ The repo keeps the confidence ladder intentionally small:
 
 - `yarn test` is the fast local and PR path. It runs Vitest plus the local generated-snippet smoke.
 - `yarn smoke:services:live` is the live infrastructure check. It does one read-only call per FastNear family, including a pinned archival RPC read.
-- `yarn smoke:agent:published` is the manual published-surface gate. Use it after publish when you want to verify the public `agents.js`, `recipes.json`, and `llms.txt` assets.
+- `yarn smoke:agent:published` is the manual published-surface gate. Use it after publish to verify `agents.js`, `near.js`, `recipes.json`, `llms.txt`, and `llms-full.txt`, including the package-only x402 metadata.
 
 ## Using this repo
 

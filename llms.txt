@@ -7,6 +7,7 @@ Primary packages:
 - @fastnear/wallet
 - @fastnear/utils
 - @fastnear/ml-dsa-65
+- @fastnear/x402
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -54,7 +55,7 @@ Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.sendTransaction({ receiverId, actions, network })
 - nearWallet.sendTransactions({ transactions, network })
 - nearWallet.signMessage({ message, recipient, nonce, network })
-- nearWallet.signDelegateActions({ delegateActions, signerId, network })
+- nearWallet.signDelegateActions({ delegateActions: [{ ..., blockHeightTtl }], signerId, network }) — timeout-aware requests require signDelegateActionsWithTtl
 - nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })
 - nearWallet.accountId({ network })
 - nearWallet.isConnected({ network })
@@ -62,6 +63,19 @@ Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.switchNetwork(network)
 - nearWallet.onConnect(handler)
 - nearWallet.onDisconnect(handler)
+
+x402 payment surface (@fastnear/x402):
+- Runtime: Package-only; not included in agents.js or near.js.
+- Protocol: x402 v2 exact; networks: near:mainnet, near:testnet; asset: NEP-141 fungible tokens
+- Pay a URL in Node: createLocalNearSigner + createNearPaymentFetch (@fastnear/x402/node + @fastnear/x402)
+- Protect a seller resource: createNearResourceServer (@fastnear/x402/server); explicit facilitator required
+- Browser: createFastNearWalletSigner / createNearX402Client / createNearPaymentFetch (global nearX402)
+- Node: @fastnear/x402/node createLocalNearSigner
+- Seller: @fastnear/x402/server createNearResourceServer; explicit facilitator required
+- Self-hosted facilitator: @fastnear/x402/facilitator createNearFacilitator
+- Wallet features: signDelegateActions + signDelegateActionsWithTtl
+- Status: Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.
+- Guide: https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md
 
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
