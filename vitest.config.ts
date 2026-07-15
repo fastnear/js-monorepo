@@ -18,6 +18,22 @@ export default defineConfig({
         __dirname,
         "packages/ml-dsa-65/src",
       ),
+      "@fastnear/x402/facilitator": path.resolve(
+        __dirname,
+        "packages/x402/src/facilitator.ts",
+      ),
+      "@fastnear/x402/server": path.resolve(
+        __dirname,
+        "packages/x402/src/server.ts",
+      ),
+      "@fastnear/x402/node": path.resolve(
+        __dirname,
+        "packages/x402/src/node.ts",
+      ),
+      "@fastnear/x402": path.resolve(
+        __dirname,
+        "packages/x402/src/index.ts",
+      ),
     },
   },
 });

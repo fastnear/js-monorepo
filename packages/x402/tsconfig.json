@@ -9,8 +9,6 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
-      "@fastnear/borsh": ["../borsh/src/index.ts"],
-      "@fastnear/borsh-schema": ["../borsh-schema/src/index.ts"],
       "@fastnear/wallet": ["../wallet/src/index.ts"]
     }
   },

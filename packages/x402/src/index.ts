@@ -1,14 +1,10 @@
 import type { x402Client as X402Client } from "@x402/core/client";
 import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
-import { deserialize, serialize } from "@fastnear/borsh";
-import { nearChainSchema } from "@fastnear/borsh-schema";
 import {
-  encodeDelegateAction,
   encodeSignedDelegate,
   type SignedDelegate,
 } from "@near-js/transactions";
-import { verify as verifySecp256k1 } from "@noble/secp256k1";
 import type { ClientNearSigner } from "@x402/near";
 import { ExactNearScheme } from "@x402/near/exact/client";
 
@@ -52,6 +48,8 @@ export interface NearPaymentFetchOptions extends NearX402ClientOptions {
 const NEAR_NETWORKS = new Set<NearNetwork>(["near:mainnet", "near:testnet"]);
 const FT_TRANSFER_GAS = "30000000000000";
 const ONE_YOCTO = "1";
+// The official NEAR exact v2 scheme estimates one block per second.
+const ESTIMATED_BLOCK_SECONDS = 1;
 
 function toWalletNetwork(network: string): "mainnet" | "testnet" {
   if (!NEAR_NETWORKS.has(network as NearNetwork)) {
@@ -64,7 +62,7 @@ function timeoutBlocks(maxTimeoutSeconds: number): number {
   if (!Number.isFinite(maxTimeoutSeconds) || maxTimeoutSeconds <= 0) {
     throw new Error("x402 maxTimeoutSeconds must be a positive finite number");
   }
-  const blocks = Math.ceil(maxTimeoutSeconds);
+  const blocks = Math.ceil(maxTimeoutSeconds / ESTIMATED_BLOCK_SECONDS);
   if (!Number.isSafeInteger(blocks)) {
     throw new Error("x402 timeout exceeds the wallet delegate-action limit");
   }
@@ -91,161 +89,19 @@ function fromBase64(value: string): Uint8Array {
   }
 }
 
-interface DecodedFunctionCall {
-  methodName: string;
-  args: number[];
-  gas: bigint;
-  deposit: bigint;
-}
-
-interface RawKeyOrSignature {
-  data: number[];
-}
-
-interface DecodedSignedDelegate {
-  delegateAction: {
-    senderId: string;
-    receiverId: string;
-    actions: Array<{ functionCall?: DecodedFunctionCall }>;
-    nonce: bigint;
-    maxBlockHeight: bigint;
-    publicKey: {
-      ed25519Key?: RawKeyOrSignature;
-      secp256k1Key?: RawKeyOrSignature;
-    };
-  };
-  signature: {
-    ed25519Signature?: RawKeyOrSignature;
-    secp256k1Signature?: RawKeyOrSignature;
-  };
-}
-
-interface SignedDelegateExpectation {
-  signerId: string;
-  asset: string;
-  payTo: string;
-  amount: string;
-}
-
-function decodeSignedDelegate(value: string): DecodedSignedDelegate {
+function assertCanonicalBase64(value: string): void {
   try {
     const bytes = fromBase64(value);
     if (bytes.length === 0 || toBase64(bytes) !== value) throw new Error("non-canonical base64");
-    const decoded = deserialize(
-      nearChainSchema.SignedDelegate,
-      bytes,
-    ) as DecodedSignedDelegate;
-    const canonical = serialize(nearChainSchema.SignedDelegate, decoded);
-    if (
-      canonical.length !== bytes.length ||
-      canonical.some((byte, index) => byte !== bytes[index])
-    ) {
-      throw new Error("non-canonical signed delegate");
-    }
-    return decoded;
   } catch {
     throw new Error("Wallet returned a malformed signed delegate action");
   }
 }
 
-function invalidDelegate(reason: string): never {
-  throw new Error(`Wallet returned a signed delegate that does not match the payment request: ${reason}`);
-}
-
-async function hasValidSignature(signedDelegate: DecodedSignedDelegate): Promise<boolean> {
-  const { delegateAction, signature } = signedDelegate;
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) return false;
-  const digest = new Uint8Array(
-    await subtle.digest("SHA-256", encodeDelegateAction(delegateAction as never)),
-  );
-  const edKey = delegateAction.publicKey.ed25519Key;
-  const edSignature = signature.ed25519Signature;
-  if (edKey && edSignature) {
-    try {
-      const publicKey = await subtle.importKey(
-        "raw",
-        Uint8Array.from(edKey.data),
-        "Ed25519",
-        false,
-        ["verify"],
-      );
-      return await subtle.verify(
-        "Ed25519",
-        publicKey,
-        Uint8Array.from(edSignature.data),
-        digest,
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  const secpKey = delegateAction.publicKey.secp256k1Key;
-  const secpSignature = signature.secp256k1Signature;
-  if (secpKey && secpSignature) {
-    const publicKey = new Uint8Array(65);
-    publicKey[0] = 4;
-    publicKey.set(secpKey.data, 1);
-    return verifySecp256k1(
-      Uint8Array.from(secpSignature.data).subarray(0, 64),
-      digest,
-      publicKey,
-      { prehash: false, lowS: false },
-    );
-  }
-  return false;
-}
-
-async function assertDelegateMatches(
-  signedDelegate: DecodedSignedDelegate,
-  expected: SignedDelegateExpectation,
-): Promise<void> {
-  const delegate = signedDelegate.delegateAction;
-  if (!delegate || delegate.senderId !== expected.signerId) invalidDelegate("signer");
-  if (delegate.receiverId !== expected.asset) invalidDelegate("token contract");
-  if (!Array.isArray(delegate.actions) || delegate.actions.length !== 1) {
-    invalidDelegate("action count");
-  }
-
-  const action = delegate.actions[0];
-  const functionCall = action?.functionCall;
-  if (!functionCall || Object.keys(action).length !== 1) invalidDelegate("action kind");
-  if (functionCall.methodName !== "ft_transfer") invalidDelegate("method name");
-  if (functionCall.gas !== BigInt(FT_TRANSFER_GAS)) invalidDelegate("gas");
-  if (functionCall.deposit !== BigInt(ONE_YOCTO)) invalidDelegate("deposit");
-
-  let args: unknown;
-  try {
-    const json = new TextDecoder("utf-8", { fatal: true }).decode(
-      Uint8Array.from(functionCall.args),
-    );
-    args = JSON.parse(json);
-  } catch {
-    invalidDelegate("ft_transfer arguments");
-  }
-  if (!args || typeof args !== "object" || Array.isArray(args)) {
-    invalidDelegate("ft_transfer arguments");
-  }
-  const transfer = args as Record<string, unknown>;
-  if (
-    Object.keys(transfer).length !== 2 ||
-    transfer.receiver_id !== expected.payTo ||
-    transfer.amount !== expected.amount
-  ) {
-    invalidDelegate("ft_transfer arguments");
-  }
-  if (typeof delegate.nonce !== "bigint" || delegate.nonce <= 0n) invalidDelegate("nonce");
-  if (typeof delegate.maxBlockHeight !== "bigint" || delegate.maxBlockHeight <= 0n) {
-    invalidDelegate("maximum block height");
-  }
-  if (!await hasValidSignature(signedDelegate)) invalidDelegate("signature");
-}
-
-async function normalizeSignedDelegate(
-  result: unknown,
-  expected: SignedDelegateExpectation,
-): Promise<string> {
+// Compliant wallet transports validate the delegate they sign, and @x402/near's
+// facilitator is the authoritative payload/signature verifier. This adapter
+// intentionally validates only the response envelope, not the protocol again.
+function normalizeSignedDelegate(result: unknown): string {
   let encoded: string;
   if (typeof result === "string") {
     encoded = result;
@@ -268,8 +124,7 @@ async function normalizeSignedDelegate(
   } else {
     throw new Error("Wallet returned an unsupported signed delegate result");
   }
-  if (encoded.length === 0) throw new Error("Wallet returned an empty signed delegate action");
-  await assertDelegateMatches(decodeSignedDelegate(encoded), expected);
+  assertCanonicalBase64(encoded);
   return encoded;
 }
 
@@ -318,12 +173,7 @@ export function createFastNearWalletSigner({
       if (!Array.isArray(results) || results.length !== 1) {
         throw new Error(`Wallet must return exactly one signed delegate action; received ${results?.length ?? 0}`);
       }
-      return normalizeSignedDelegate(results[0], {
-        signerId,
-        asset: paymentRequirements.asset,
-        payTo: paymentRequirements.payTo,
-        amount: paymentRequirements.amount,
-      });
+      return normalizeSignedDelegate(results[0]);
     },
   };
 }

@@ -58,40 +58,6 @@ const encodedSignedDelegate = Buffer.from(
   encodeSignedDelegate(signedDelegate as never),
 ).toString("base64");
 
-const secp256k1SignedDelegate = {
-  ...signedDelegate,
-  delegateAction: {
-    ...signedDelegate.delegateAction,
-    publicKey: {
-      secp256k1Key: {
-        data: Array.from(Buffer.from(
-          "VrMoswyL9YOeJAWHR4eUCL2zYkHcnC58YZ+qErKSCWerfNn/jqf9T0IbHhn1LpVdSXosgyhaao/3LFd9bC/UkA==",
-          "base64",
-        )),
-      },
-    },
-  },
-  signature: {
-    secp256k1Signature: {
-      data: Array.from(Buffer.from(
-        "skNYqVxh/JoaIxCIjDLuZ/JohTh3ee+FYHbIJQJ9o4tGdARjEVWk4B07IXp3KrPBmaltu+3CJv/nJc4vYxeZaQA=",
-        "base64",
-      )),
-    },
-  },
-};
-
-const encodedSecp256k1SignedDelegate = Buffer.from(
-  encodeSignedDelegate(secp256k1SignedDelegate as never),
-).toString("base64");
-
-const encodedInvalidSignatureDelegate = Buffer.from(
-  encodeSignedDelegate({
-    ...signedDelegate,
-    signature: { ed25519Signature: { data: new Array(64).fill(0) } },
-  } as never),
-).toString("base64");
-
 function walletReturning(result: unknown, account = "payer.testnet") {
   return {
     accountId: vi.fn(() => account),
@@ -161,6 +127,19 @@ describe("createFastNearWalletSigner", () => {
     },
   );
 
+  it("rejects a timeout that cannot be forwarded as a safe wallet TTL", async () => {
+    const signer = createFastNearWalletSigner({
+      wallet: walletReturning(encodedSignedDelegate) as never,
+    });
+    await expect(signer.createSignedDelegateAction({
+      x402Version: 2,
+      paymentRequirements: {
+        ...requirements,
+        maxTimeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
+      },
+    })).rejects.toThrow("delegate-action limit");
+  });
+
   it("normalizes legacy SignedDelegate objects", async () => {
     const wallet = walletReturning({ signedDelegate });
     const signer = createFastNearWalletSigner({ wallet: wallet as never });
@@ -168,16 +147,6 @@ describe("createFastNearWalletSigner", () => {
       x402Version: 2,
       paymentRequirements: requirements,
     })).resolves.toBe(encodedSignedDelegate);
-  });
-
-  it("accepts a valid secp256k1 wallet signature", async () => {
-    const signer = createFastNearWalletSigner({
-      wallet: walletReturning(encodedSecp256k1SignedDelegate) as never,
-    });
-    await expect(signer.createSignedDelegateAction({
-      x402Version: 2,
-      paymentRequirements: requirements,
-    })).resolves.toBe(encodedSecp256k1SignedDelegate);
   });
 
   it.each([
@@ -209,79 +178,25 @@ describe("createFastNearWalletSigner", () => {
     })).rejects.toThrow("timeout-aware delegate signing");
   });
 
-  it("rejects invalid wallet responses", async () => {
-    const wrongPayment = {
-      ...signedDelegate,
-      delegateAction: {
-        ...signedDelegate.delegateAction,
-        receiverId: "evil-token.testnet",
-      },
+  it.each([
+    ["zero results", []],
+    ["multiple results", [encodedSignedDelegate, encodedSignedDelegate]],
+    ["malformed base64", ["not base64!"]],
+    ["noncanonical base64", ["YQ"]],
+    ["empty base64", [""]],
+    ["invalid canonical result", [{ borshSerializedBase64: 123 }]],
+    ["invalid legacy result", [{ signedDelegate: null }]],
+    ["unsupported result", [{}]],
+  ])("rejects %s", async (_label, response) => {
+    const wallet = {
+      accountId: () => "payer.testnet",
+      signDelegateActions: async () => ({ signedDelegateActions: response }),
     };
-    const wrongPaymentDelegate = Buffer.from(
-      encodeSignedDelegate(wrongPayment as never),
-    ).toString("base64");
-    const delegateWithTrailingData = Buffer.concat([
-      Buffer.from(encodedSignedDelegate, "base64"),
-      Buffer.from([0]),
-    ]).toString("base64");
-
-    for (const response of [
-      [],
-      [encodedSignedDelegate, encodedSignedDelegate],
-      ["not base64!"],
-      [wrongPaymentDelegate],
-      [delegateWithTrailingData],
-    ]) {
-      const wallet = {
-        accountId: () => "payer.testnet",
-        signDelegateActions: async () => ({ signedDelegateActions: response }),
-      };
-      const signer = createFastNearWalletSigner({ wallet: wallet as never });
-      await expect(signer.createSignedDelegateAction({
-        x402Version: 2,
-        paymentRequirements: requirements,
-      })).rejects.toThrow();
-    }
-  });
-
-  it("rejects an exact delegate with an invalid signature before retry", async () => {
-    const signer = createFastNearWalletSigner({
-      wallet: walletReturning(encodedInvalidSignatureDelegate) as never,
-    });
-
+    const signer = createFastNearWalletSigner({ wallet: wallet as never });
     await expect(signer.createSignedDelegateAction({
       x402Version: 2,
       paymentRequirements: requirements,
-    })).rejects.toThrow("signature");
-  });
-
-  it("does not expose a valid delegate for different payment details", async () => {
-    const stolenDelegate = {
-      ...signedDelegate,
-      delegateAction: {
-        ...signedDelegate.delegateAction,
-        receiverId: "evil-token.testnet",
-        actions: [{
-          functionCall: {
-            ...signedDelegate.delegateAction.actions[0].functionCall,
-            args: Array.from(new TextEncoder().encode(
-              '{"receiver_id":"attacker.testnet","amount":"999999999"}',
-            )),
-          },
-        }],
-      },
-    };
-    const encoded = Buffer.from(
-      encodeSignedDelegate(stolenDelegate as never),
-    ).toString("base64");
-    const signer = createFastNearWalletSigner({
-      wallet: walletReturning(encoded) as never,
-    });
-
-    await expect(signer.createSignedDelegateAction({
-      x402Version: 2,
-      paymentRequirements: requirements,
-    })).rejects.toThrow("does not match the payment request");
+    })).rejects.toThrow();
   });
 });
 
@@ -323,7 +238,7 @@ describe("x402 client and fetch helpers", () => {
     expect(retriedRequest.headers.get("PAYMENT-SIGNATURE")).toBeTruthy();
   });
 
-  it("does not retry the HTTP request after an invalid wallet signature", async () => {
+  it("does not retry the HTTP request after a malformed wallet response", async () => {
     const paymentRequired = encodePaymentRequiredHeader({
       x402Version: 2,
       resource: { url: "https://example.test/paid" },
@@ -334,11 +249,11 @@ describe("x402 client and fetch helpers", () => {
       headers: { "PAYMENT-REQUIRED": paymentRequired },
     }));
     const signer = createFastNearWalletSigner({
-      wallet: walletReturning(encodedInvalidSignatureDelegate) as never,
+      wallet: walletReturning("not base64!") as never,
     });
     const paidFetch = createNearPaymentFetch({ signer, fetch: fetchMock });
 
-    await expect(paidFetch("https://example.test/paid")).rejects.toThrow("signature");
+    await expect(paidFetch("https://example.test/paid")).rejects.toThrow("malformed");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -61,10 +61,7 @@
     }
   },
   "dependencies": {
-    "@fastnear/borsh": "workspace:*",
-    "@fastnear/borsh-schema": "workspace:*",
     "@near-js/transactions": "*",
-    "@noble/secp256k1": "*",
     "@x402/core": "*",
     "@x402/fetch": "*",
     "@x402/near": "*"
