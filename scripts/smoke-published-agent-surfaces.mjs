@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,6 +10,11 @@ const repoRoot = path.resolve(__dirname, "..");
 const localCatalog = JSON.parse(
   readFileSync(path.join(repoRoot, "recipes/index.json"), "utf8")
 );
+const localAssets = {
+  recipes: readFileSync(path.join(repoRoot, "recipes/index.json"), "utf8"),
+  llms: readFileSync(path.join(repoRoot, "llms.txt"), "utf8"),
+  llmsFull: readFileSync(path.join(repoRoot, "llms-full.txt"), "utf8"),
+};
 
 const requiredRecipeFields = [
   "service",
@@ -55,6 +61,11 @@ function assertEqualArrays(label, localValues, publicValues) {
   if (localJoined !== publicJoined) {
     throw new Error(`${label} drifted between local and public assets.\nlocal=${localJoined}\npublic=${publicJoined}`);
   }
+}
+
+function assertEqualBytes(label, localText, publicText) {
+  if (Buffer.from(localText).equals(Buffer.from(publicText))) return;
+  throw new Error(`${label} differs byte-for-byte between the generated monorepo artifact and js.fastnear.com`);
 }
 
 function inspectNearBundle(bundleSource) {
@@ -117,10 +128,18 @@ EOF`;
 }
 
 async function main() {
-  const [nearAsset, agentsAsset, recipesAsset, llmsAsset, llmsFullAsset] = await Promise.all([
+  const [
+    nearAsset,
+    agentsAsset,
+    recipesAsset,
+    generatedRecipesAsset,
+    llmsAsset,
+    llmsFullAsset,
+  ] = await Promise.all([
     fetchAsset("https://js.fastnear.com/near.js"),
     fetchAsset("https://js.fastnear.com/agents.js"),
     fetchAsset("https://js.fastnear.com/recipes.json"),
+    fetchAsset("https://js.fastnear.com/generated/recipes/index.json"),
     fetchAsset("https://js.fastnear.com/llms.txt"),
     fetchAsset("https://js.fastnear.com/llms-full.txt"),
   ]);
@@ -128,6 +147,7 @@ async function main() {
   assertNotHtmlAsset("Public near.js", nearAsset);
   assertNotHtmlAsset("Public agents.js", agentsAsset);
   assertNotHtmlAsset("Public recipes.json", recipesAsset);
+  assertNotHtmlAsset("Public generated recipes/index.json", generatedRecipesAsset);
   assertNotHtmlAsset("Public llms.txt", llmsAsset);
   assertNotHtmlAsset("Public llms-full.txt", llmsFullAsset);
 
@@ -136,6 +156,15 @@ async function main() {
   const recipesText = recipesAsset.text;
   const llmsText = llmsAsset.text;
   const llmsFullText = llmsFullAsset.text;
+
+  assertEqualBytes("Public recipes.json", localAssets.recipes, recipesText);
+  assertEqualBytes(
+    "Public generated recipes/index.json",
+    localAssets.recipes,
+    generatedRecipesAsset.text,
+  );
+  assertEqualBytes("Public llms.txt", localAssets.llms, llmsText);
+  assertEqualBytes("Public llms-full.txt", localAssets.llmsFull, llmsFullText);
 
   if (!agentsSource.includes("process.env.FASTNEAR_API_KEY") || !agentsSource.includes("globalThis.near.config({ apiKey })")) {
     throw new Error("Public agents.js is missing the FASTNEAR_API_KEY auto-config behavior");
@@ -176,6 +205,7 @@ async function main() {
   if (JSON.stringify(publicCatalog.x402) !== JSON.stringify(localCatalog.x402)) {
     throw new Error("x402 discovery metadata drifted between local and public recipes.json");
   }
+  await fetchAsset(localCatalog.x402.guideUrl);
 
   assertEqualArrays(
     "Recipe IDs",
