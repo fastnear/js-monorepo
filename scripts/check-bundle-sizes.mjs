@@ -14,7 +14,9 @@ const budgets = [
   { package: "utils", baselineGzip: 35_696 },
   { package: "api", baselineGzip: 49_371 },
   { package: "wallet", baselineGzip: 21_323 },
-  { package: "wallet-adapter", baselineGzip: 41_529 },
+  // The timeout-aware Meteor bridge authenticates and binds returned Borsh
+  // delegates before exposing them to applications.
+  { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 4 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
 ];
 
@@ -28,6 +30,7 @@ for (const budget of budgets) {
   );
   const bytes = await readFile(filename);
   const gzipBytes = gzipSync(bytes, { level: 9 }).byteLength;
+  const maxGzipGrowth = budget.maxGzipGrowth ?? maxExistingGzipGrowth;
   const result = {
     package: `@fastnear/${budget.package}`,
     rawBytes: bytes.byteLength,
@@ -37,14 +40,14 @@ for (const budget of budgets) {
       : {
           baselineGzipBytes: budget.baselineGzip,
           gzipGrowthBytes: gzipBytes - budget.baselineGzip,
-          budget: { maxGzipGrowthBytes: maxExistingGzipGrowth },
+          budget: { maxGzipGrowthBytes: maxGzipGrowth },
         }),
   };
   results.push(result);
 
   const exceedsBudget = budget.baselineGzip == null
     ? bytes.byteLength > budget.raw || gzipBytes > budget.gzip
-    : gzipBytes - budget.baselineGzip > maxExistingGzipGrowth;
+    : gzipBytes - budget.baselineGzip > maxGzipGrowth;
   if (exceedsBudget) {
     throw new Error(`Bundle budget exceeded: ${JSON.stringify(result)}`);
   }

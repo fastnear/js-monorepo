@@ -4,20 +4,30 @@ import {
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
   type SignMessageParams,
-  type SignDelegateActionsParams,
-  type WalletManifest,
 } from "@fastnear/near-connect";
 import { toConnectorActions } from "./connector-actions.js";
-import type {
+import {
+  prepareDelegateActionsForWallet,
+  type SignDelegateActionResult,
+  type SignDelegateActionsParams,
+  type SignDelegateActionsResponse,
+  type WalletManifest,
+} from "./delegate-actions.js";
+export type {
+  BorshSerializedSignedDelegate,
   SignDelegateActionResult,
+  SignDelegateAction,
+  SignDelegateActionsParams,
   SignDelegateActionsResponse,
-} from "@fastnear/near-connect/build/types";
-export type { WalletManifest };
-
-export type { SignDelegateActionsParams } from "@fastnear/near-connect";
-export type { SignDelegateActionResult, SignDelegateActionsResponse };
+  WalletManifest,
+} from "./delegate-actions.js";
 
 type Network = "mainnet" | "testnet";
+
+/** Detect whether an action is in fastnear flat format (no params wrapper). */
+function isFastnearAction(action: any): boolean {
+  return action.type && !action.params && action.type !== "CreateAccount";
+}
 
 export interface ConnectOptions {
   network?: Network;
@@ -41,13 +51,6 @@ export interface ConnectOptions {
     linkText?: string;
     icon?: string;
   } | null;
-}
-
-/**
- * Detect whether an action is in fastnear flat format (no params wrapper).
- */
-function isFastnearAction(action: any): boolean {
-  return action.type && !action.params && action.type !== "CreateAccount";
 }
 
 export interface ConnectResult {
@@ -431,17 +434,16 @@ export async function signDelegateActions(
   if (typeof wallet.signDelegateActions !== "function") {
     throw new Error("Connected wallet does not support signDelegateActions");
   }
-  const delegateActions = params.delegateActions.map((da: any) => ({
-    receiverId: da.receiverId,
-    actions: da.actions.some(isFastnearAction)
-      ? toConnectorActions(da.actions)
-      : da.actions,
-  }));
-  return wallet.signDelegateActions({
+  const delegateActions = prepareDelegateActionsForWallet(
+    params.delegateActions,
+    wallet.manifest?.features,
+  );
+  const response = await wallet.signDelegateActions({
     delegateActions,
     signerId: params.signerId ?? state.currentAccountId ?? undefined,
     network,
   });
+  return response as SignDelegateActionsResponse;
 }
 
 /**

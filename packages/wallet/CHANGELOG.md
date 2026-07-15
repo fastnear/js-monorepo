@@ -1,3 +1,13 @@
+# 1.4.0
+
+- Adds timeout-aware NEP-366 delegate signing. Delegate requests may include a
+  positive safe-integer `blockHeightTtl`, and wallets must explicitly advertise
+  `signDelegateActionsWithTtl` before `@fastnear/wallet` forwards it.
+- Keeps canonical `{ borshSerializedBase64 }`, legacy structured results, and
+  bare base64 strings in the public response union during the wallet transition.
+- Released with the Meteor transport in `@fastnear/wallet-adapter@1.4.0`; the
+  adapter delegates signing to Meteor and validates the returned delegate.
+
 # 1.1.4
 
 - **New `addFunctionCallKey({ contractId, methodNames, allowance, network, signerId })`
