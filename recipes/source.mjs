@@ -398,7 +398,8 @@ const result = await nearWallet.signDelegateActions({
 
 near.print({
   count: result.signedDelegateActions.length,
-  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,
+  first_delegate_borsh_base64:
+    result.signedDelegateActions[0]?.borshSerializedBase64,
 });`,
 
   ftBalance: `const balance = await near.ft.balance({
@@ -1391,12 +1392,13 @@ export const recipeCatalog = [
     service: "wallet",
     returns: "SignDelegateActionsResponse",
     outputKeys: [
-      "signedDelegateActions[].delegateHash",
-      "signedDelegateActions[].signedDelegate",
+      "signedDelegateActions[].borshSerializedBase64",
     ],
     responseNotes: [
+      "The canonical result is { borshSerializedBase64: string }; legacy structured delegates and bare base64 strings remain in the public union for compatibility.",
       "Returns signed delegate actions that a relayer can submit on-chain, enabling gasless transactions for the user.",
       "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions).",
+      "Requests that include blockHeightTtl additionally require WalletFeatures.signDelegateActionsWithTtl.",
     ],
     chooseWhen: [
       "Choose this when building gasless or relay-based flows where a third party submits the transaction on the user's behalf.",
