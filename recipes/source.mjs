@@ -637,6 +637,8 @@ export const familyCatalog = [
       "near.view",
       "near.queryAccount",
       "near.queryAccessKey",
+      "near.queryAccessKeyList",
+      "near.queryProtocolVersion",
       "near.queryBlock",
       "near.queryTx",
       "near.sendTx",
@@ -1743,12 +1745,228 @@ export const explainSurface = [
   },
 ];
 
+/**
+ * Opt-in account-key recipes live beside, rather than inside, recipeCatalog.
+ * recipeCatalog mirrors near.recipes.* exactly at runtime; these quickstarts
+ * span @fastnear/ml-dsa-65, @fastnear/api, and an application-provided
+ * classical administrator signer.
+ */
+export const mlDsa65Surface = {
+  package: "@fastnear/ml-dsa-65",
+  protocolVersion: 85,
+  runtime: "Node.js 20.19+ or a modern browser",
+  scope: "NEAR account access keys and transaction signatures only; validator and staking keys remain Ed25519.",
+  sizes: {
+    seed: 32,
+    publicKey: 1952,
+    expandedSecretKey: 4032,
+    signature: 3309,
+  },
+  verificationCharge: {
+    gas: "100000000000",
+    display: "100 Ggas",
+    appliesTo: "each outer or delegated ML-DSA-65 signature verification",
+  },
+  keyForms: {
+    full: "ml-dsa-65:<base58 public key>",
+    handle: "ml-dsa-65-hash:<base58 SHA3-256 digest>",
+    domainTag: "near:ml-dsa-65-pubkey-hash:v1",
+    derivation: "SHA3-256 of the ASCII domain tag followed by the raw 1,952-byte public key",
+    rule: "Use the full public key for AddKey, direct access-key lookup, signing, and DeleteKey. Access-key list responses expose the compact handle; derive it with publicKeyToHandle() before comparing.",
+  },
+  safety: [
+    "Check the selected RPC's active protocol_version and require 85 or later before adding or using an ML-DSA-65 key; do not use node software versions or latest_protocol_version as activation signals.",
+    "Never print or persist generated seeds or expanded secret keys. Keep a temporary recovery record public-only: network, account ID, full public key, and hash handle.",
+    "After an AddKey attempt, do not trust a single absence read: submit a finalized classical DeleteKey nonce barrier, confirm absence at finality, and only then remove the public recovery record.",
+    "ML-DSA-65 public keys are 1,952 bytes and signatures are 3,309 bytes, so transactions and key-management actions are substantially larger than classical equivalents.",
+    "NEAR charges 100 Ggas (100,000,000,000 gas) for each outer or delegated ML-DSA-65 signature verification.",
+    "The selected @noble/post-quantum backend describes itself as self-audited and does not claim constant-time side-channel protection. Prefer a native, WASM, HSM, or hardware TransactionSigner when that threat model requires one.",
+    "destroy() provides best-effort zeroization of package-owned JavaScript buffers, not a hard memory-erasure guarantee. Constrained QuickJS and MCU runtimes are not a v1 compatibility target.",
+  ],
+  quickstarts: [
+    {
+      id: "ml-dsa-65-generate",
+      title: "Generate an in-memory ML-DSA-65 signer",
+      summary: "Generate the opt-in signer, retain only public recovery metadata, and always destroy the signer when its lifecycle ends.",
+      language: "js",
+      code: `import { generateSigner } from "@fastnear/ml-dsa-65";
+
+const signer = generateSigner();
+
+try {
+  // Public values are safe to retain for enrollment and cleanup.
+  const recovery = {
+    network: "testnet",
+    accountId: "device.testnet",
+    publicKey: signer.publicKey,
+    publicKeyHandle: signer.publicKeyHandle,
+  };
+
+  console.log(recovery);
+  // Never log or persist signer.exportSeed() or signer.exportSecretKey().
+} finally {
+  signer.destroy();
+}`,
+    },
+    {
+      id: "ml-dsa-65-explicit-send",
+      title: "Send with an enrolled ML-DSA-65 signer",
+      summary: "Use the explicit-signer branch of sendTx after the signer's full public key has been enrolled on the account.",
+      language: "js",
+      code: `import {
+  actions,
+  queryProtocolVersion,
+  sendTx,
+} from "@fastnear/api";
+
+export async function sendOneYoctoWithMlDsa65({ accountId, signer }) {
+  const protocolVersion = await queryProtocolVersion({ network: "testnet" });
+  if (protocolVersion < 85) {
+    throw new Error(\`testnet protocol \${protocolVersion} does not support ML-DSA-65\`);
+  }
+
+  return sendTx({
+    signerId: accountId,
+    signer,
+    receiverId: accountId,
+    actions: [actions.transfer("1")],
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+}`,
+    },
+    {
+      id: "ml-dsa-65-enroll-delete",
+      title: "Enroll and delete a temporary testnet key",
+      summary: "Persist public-only recovery metadata, use an authorized classical full-access signer for both mutations, and establish finalized deletion before removing the record.",
+      language: "js",
+      code: `import {
+  actions,
+  queryAccessKeyList,
+  queryProtocolVersion,
+  sendTx,
+} from "@fastnear/api";
+import {
+  generateSigner,
+} from "@fastnear/ml-dsa-65";
+
+export async function withTemporaryMlDsa65Key({
+  accountId,
+  classicalSigner,
+  run,
+  saveRecovery,
+  removeRecovery,
+}) {
+  if (!accountId.endsWith(".testnet")) {
+    throw new Error("This safety-oriented recipe is testnet-only");
+  }
+
+  const protocolVersion = await queryProtocolVersion({ network: "testnet" });
+  if (protocolVersion < 85) {
+    throw new Error(\`testnet protocol \${protocolVersion} does not support ML-DSA-65\`);
+  }
+
+  const signer = generateSigner();
+  const publicRecovery = {
+    network: "testnet",
+    accountId,
+    publicKey: signer.publicKey,
+    publicKeyHandle: signer.publicKeyHandle,
+  };
+  let addAttempted = false;
+
+  async function deleteWithFinalizedBarrier() {
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        // Submit even when one read says the key is absent. A finalized
+        // classical transaction prevents an ambiguous earlier AddKey from
+        // landing later with the same or a lower nonce.
+        await sendTx({
+          signerId: accountId,
+          signer: classicalSigner,
+          receiverId: accountId,
+          actions: [actions.deleteKey({ publicKey: signer.publicKey })],
+          waitUntil: "FINAL",
+          network: "testnet",
+        });
+        const list = await queryAccessKeyList({
+          accountId,
+          blockId: "final",
+          network: "testnet",
+        });
+        const stillPresent = list.result.keys.some(
+          (entry) => entry.public_key === publicRecovery.publicKeyHandle,
+        );
+        if (!stillPresent) return;
+        lastError = new Error("ML-DSA-65 key remains after finalized deletion");
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("Could not establish ML-DSA-65 key absence");
+  }
+
+  try {
+    // Implement these callbacks with durable application storage. On Node,
+    // create the public-only file with mode 0600. Never include secret bytes.
+    await saveRecovery(publicRecovery);
+    addAttempted = true;
+    await sendTx({
+      signerId: accountId,
+      signer: classicalSigner,
+      receiverId: accountId,
+      actions: [actions.addFullAccessKey({ publicKey: signer.publicKey })],
+      waitUntil: "FINAL",
+      network: "testnet",
+    });
+
+    return await run(signer);
+  } finally {
+    try {
+      if (addAttempted) {
+        await deleteWithFinalizedBarrier();
+        await removeRecovery(publicRecovery);
+      }
+    } finally {
+      signer.destroy();
+    }
+  }
+}`,
+    },
+    {
+      id: "ml-dsa-65-reconcile",
+      title: "Reconcile a full key with its access-key-list handle",
+      summary: "Query the full key directly, then match its locally derived hash handle against the compact list response.",
+      language: "js",
+      code: `import {
+  queryAccessKey,
+  queryAccessKeyList,
+} from "@fastnear/api";
+import { publicKeyToHandle } from "@fastnear/ml-dsa-65";
+
+export async function findMlDsa65AccessKey({ accountId, publicKey }) {
+  const [direct, list] = await Promise.all([
+    queryAccessKey({ accountId, publicKey, network: "testnet" }),
+    queryAccessKeyList({ accountId, network: "testnet" }),
+  ]);
+  const publicKeyHandle = publicKeyToHandle(publicKey);
+  const listed = list.result.keys.find(
+    (entry) => entry.public_key === publicKeyHandle,
+  );
+
+  return { direct: direct.result, publicKeyHandle, listed };
+}`,
+    },
+  ],
+};
+
 export const generatedArtifact = {
   version: 4,
   homepage: FASTNEAR_CDN_BASE,
   source: "recipes/source.mjs",
   catalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
-  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils"],
+  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils", "@fastnear/ml-dsa-65"],
   support: supportSurface,
   families: familyCatalog,
   runtimes: {
@@ -1760,6 +1978,9 @@ export const generatedArtifact = {
       ],
       types: [
         "FastNearRecipeDiscoveryEntry",
+        "AccessKeyListResponse",
+        "RpcStatusResponse",
+        "SendTxParams",
         "FastNearApiV1AccountFullResponse",
         "FastNearApiV1AccountFtResponse",
         "FastNearApiV1AccountNftResponse",
@@ -1797,7 +2018,12 @@ export const generatedArtifact = {
       explain: explainSurface.map(({ api }) => api),
       lowLevel: [
         "near.view",
+        "near.view.many",
+        "near.batch",
         "near.queryAccount",
+        "near.queryAccessKey",
+        "near.queryAccessKeyList",
+        "near.queryProtocolVersion",
         "near.queryTx",
         "near.sendTx",
         "near.requestSignIn",
@@ -1848,5 +2074,6 @@ export const generatedArtifact = {
     },
   },
   recipes: recipeCatalog,
+  mlDsa65: mlDsa65Surface,
   explain: explainSurface,
 };

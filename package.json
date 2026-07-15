@@ -1,6 +1,6 @@
 {
   "name": "fastnear-js-monorepo",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Easily interact with the NEAR Protocol blockchain",
   "scripts": {
     "type-check": "yarn workspaces foreach --all -t run type-check",
@@ -12,6 +12,11 @@
     "generate:agent": "node scripts/generate-agent-artifacts.mjs",
     "check:agent": "node scripts/generate-agent-artifacts.mjs --check",
     "test:agent": "yarn check:agent && yarn workspace @fastnear/api build && node scripts/smoke-agent-snippets.mjs",
+    "test:formats": "node scripts/smoke-package-formats.mjs",
+    "test:packed": "node scripts/smoke-packed-packages.mjs",
+    "check:bundles": "node scripts/check-bundle-sizes.mjs",
+    "bench:ml-dsa-65": "yarn workspace @fastnear/ml-dsa-65 bench",
+    "smoke:ml-dsa:testnet": "yarn build && node scripts/smoke-ml-dsa-testnet.mjs",
     "smoke:services:live": "yarn workspace @fastnear/api build && node scripts/smoke-services-live.mjs",
     "smoke:agent:published": "node scripts/smoke-published-agent-surfaces.mjs",
     "test": "vitest run && yarn test:agent"
@@ -38,8 +43,9 @@
   ],
   "dependencies": {
     "@fastnear/near-connect": "^0.12.1",
-    "@noble/curves": "^2.0.1",
-    "@noble/hashes": "^2.0.1",
+    "@noble/curves": "=2.0.1",
+    "@noble/hashes": "=2.0.1",
+    "@noble/post-quantum": "=0.6.0",
     "@walletconnect/sign-client": "^2.23.7",
     "base58-js": "=2.0.0",
     "events": "^3.3.0",
@@ -49,6 +55,7 @@
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
     "@types/node": "^22.13.1",
+    "esbuild": "=0.27.3",
     "http-browserify": "^1.7.0",
     "https-browserify": "^1.0.0",
     "process": "^0.11.10",

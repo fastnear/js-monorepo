@@ -179,6 +179,27 @@ describe("arrays", () => {
     checkRoundtrip([1, 2], { array: { type: "u8", len: 2 } }, [1, 2]);
   });
 
+  it("rejects fixed arrays shorter than the schema length", () => {
+    expect(() =>
+      serialize({ array: { type: "u8", len: 2 } }, Uint8Array.of(1)),
+    ).toThrow("fixed array length mismatch: expected 2, got 1");
+  });
+
+  it("rejects fixed arrays longer than the schema length", () => {
+    expect(() =>
+      serialize({ array: { type: "u8", len: 2 } }, Uint8Array.of(1, 2, 3)),
+    ).toThrow("fixed array length mismatch: expected 2, got 3");
+  });
+
+  it("encodes a large Uint8Array without changing its bytes", () => {
+    const bytes = new Uint8Array(3_309);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i & 0xff;
+
+    expect(serialize({ array: { type: "u8", len: bytes.length } }, bytes)).toEqual(
+      bytes,
+    );
+  });
+
   it("empty dynamic array", () => {
     checkRoundtrip([], { array: { type: "u8" } }, [0, 0, 0, 0]);
   });

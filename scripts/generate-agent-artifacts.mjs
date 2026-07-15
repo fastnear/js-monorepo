@@ -8,6 +8,7 @@ import {
   generatedArtifact,
   recipeCatalog,
   explainSurface,
+  mlDsa65Surface,
   supportSurface,
 } from "../recipes/source.mjs";
 
@@ -60,6 +61,20 @@ function assertCatalogContract() {
       }
     }
   }
+
+  if (mlDsa65Surface.protocolVersion !== 85) {
+    throw new Error(`Expected ML-DSA-65 protocol version 85, received ${mlDsa65Surface.protocolVersion}`);
+  }
+  if (mlDsa65Surface.quickstarts.length !== 4) {
+    throw new Error("Expected four ML-DSA-65 quickstarts");
+  }
+  for (const quickstart of mlDsa65Surface.quickstarts) {
+    for (const field of ["id", "title", "summary", "language", "code"]) {
+      if (!(field in quickstart)) {
+        throw new Error(`ML-DSA-65 quickstart ${quickstart.id ?? "<unknown>"} is missing required field ${field}`);
+      }
+    }
+  }
 }
 
 function renderSnippet(snippet) {
@@ -109,6 +124,38 @@ ${example}
 ${recipe.snippets.map(renderSnippet).join("\n\n")}`;
 }
 
+function renderMlDsa65Section({ headingLevel = 3 } = {}) {
+  const heading = "#".repeat(headingLevel);
+  const subheading = "#".repeat(headingLevel + 1);
+
+  return `${heading} ML-DSA-65 account-key quickstarts
+
+The opt-in \`${mlDsa65Surface.package}\` package provides protocol-v${mlDsa65Surface.protocolVersion} account access keys and transaction signatures without pulling the post-quantum backend into \`@fastnear/api\` or \`@fastnear/utils\`.
+
+- Runtime: ${mlDsa65Surface.runtime}.
+- Scope: ${mlDsa65Surface.scope}
+- Exact byte lengths: seed ${mlDsa65Surface.sizes.seed}, public key ${mlDsa65Surface.sizes.publicKey}, expanded secret key ${mlDsa65Surface.sizes.expandedSecretKey}, signature ${mlDsa65Surface.sizes.signature}.
+- Verification charge: ${mlDsa65Surface.verificationCharge.display} (${mlDsa65Surface.verificationCharge.gas} gas) for ${mlDsa65Surface.verificationCharge.appliesTo}.
+- Full key: \`${mlDsa65Surface.keyForms.full}\`; list handle: \`${mlDsa65Surface.keyForms.handle}\`.
+- Handle derivation: ${mlDsa65Surface.keyForms.derivation}; domain tag \`${mlDsa65Surface.keyForms.domainTag}\`.
+
+${mlDsa65Surface.keyForms.rule}
+
+${subheading} Safety constraints
+
+${renderList(mlDsa65Surface.safety)}
+
+${mlDsa65Surface.quickstarts.map((quickstart) => `${subheading} ${quickstart.title}
+
+Recipe ID: \`${quickstart.id}\`
+
+${quickstart.summary}
+
+\`\`\`${quickstart.language}
+${quickstart.code}
+\`\`\``).join("\n\n")}`;
+}
+
 function renderSupportSection() {
   return `### Access and chaining
 
@@ -149,6 +196,45 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 `).join("\n")}`;
 }
 
+function renderResilienceSection(headingPrefix = "###") {
+  const h = headingPrefix;
+  return `${h} Resilience and bulk reads
+
+\`@fastnear/api\` retries transient RPC failures (HTTP 408/429/500/502/503/504 and JSON-RPC \`-429\`/\`-32000\`) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through \`near.config\` and are on by default.
+
+**Retry** — \`near.config({ retry })\`:
+
+- \`enabled\` (default \`true\`) — set \`false\` to restore single-attempt behavior.
+- \`maxAttempts\` (\`5\`) — total attempts including the first.
+- \`baseBackoffMs\` (\`250\`) / \`maxBackoffMs\` (\`30000\`) — full-jitter exponential backoff bounds.
+- \`timeoutMs\` (\`15000\`) — per-attempt AbortController timeout (\`0\` disables it).
+- \`respectRetryAfter\` (\`true\`) — honor a \`Retry-After\` header, capped at \`maxBackoffMs\`.
+- \`writePolicy\` (\`"transport-only"\`) — how writes (\`send_tx\` / \`broadcast_tx_*\`) retry: \`"never"\`, \`"transport-only"\` (only pre-response transport/timeout errors, resending identical signed bytes — safe against double-apply), or \`"all"\`.
+
+**Bulk reads** — concurrency-limited fan-out (NEAR RPC has no array batching, so calls are not merged into one request):
+
+- \`near.batch(requests)\` — each \`{ method, params, useArchival?, network? }\` runs as its own retried call, at most \`batch.maxConcurrency\` (default \`30\`) in flight. Write methods are rejected per-item.
+- \`near.view.many(specs)\` — the same fan-out for \`{ contractId, methodName, args?, argsBase64?, blockId? }\` view specs, decoding each ok result like \`near.view\`.
+- \`near.config({ batch: { maxConcurrency: 30 } })\` tunes the in-flight cap.
+
+Both return **settled** results in input order — one failing call never rejects the set:
+
+\`\`\`js
+const results = await near.view.many([
+  { contractId: "token.near", methodName: "ft_balance_of", args: { account_id: "a.near" } },
+  { contractId: "token.near", methodName: "ft_balance_of", args: { account_id: "b.near" } },
+]);
+
+for (const r of results) {
+  if (r.status === "ok") near.print(r.result);
+  else if (r.kind === "contract") console.warn("contract reverted:", r.error);
+  else console.warn("infra error:", r.kind, r.error);
+}
+\`\`\`
+
+Each error item carries a \`kind\` — \`"contract"\` (the contract method reverted or failed), \`"transport"\` (no HTTP response: network or timeout), \`"http"\` (non-2xx), or \`"rpc"\` (JSON-RPC error) — so application failures stay distinguishable from infrastructure ones without re-parsing. Thrown errors are \`FastNearRpcError\` instances exposing the same \`kind\`, plus \`status\`, \`code\`, \`data\`, and \`retryable\`.`;
+}
+
 function renderRootReadmeSection() {
   const primaryRecipes = recipeCatalog.filter((recipe) =>
     ["view-contract", "inspect-transaction", "account-full", "kv-latest-key"].includes(recipe.id)
@@ -174,6 +260,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - Named exported response types are available from ` + "`@fastnear/api`" + `, for example ` + "`FastNearTxTransactionsResponse`" + ` and ` + "`FastNearKvGetLatestKeyResponse`" + `.
 - ` + "`near.explain.*`" + ` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: ` + "`near.view`" + `, ` + "`near.queryAccount`" + `, ` + "`near.queryTx`" + `, ` + "`near.sendTx`" + `, ` + "`near.requestSignIn`" + `, and ` + "`near.signMessage`" + `.
+- ` + "`near.batch(...)`" + ` and ` + "`near.view.many(...)`" + ` fan out many reads with settled, concurrency-capped results, and ` + "`near.config({ retry, batch })`" + ` tunes automatic 429/transient retry — both on by default. See the API package README for details.
 
 ### Hosted agent entrypoint
 
@@ -201,6 +288,8 @@ ${terminal.code}
 \`\`\``;
   }).join("\n\n")}
 
+${renderMlDsa65Section()}
+
 ### Structured explain helpers
 
 ${explainSurface.map((entry) => `- ` + "`" + entry.api + "`" + `: ${entry.summary}`).join("\n")}
@@ -226,6 +315,10 @@ Use the low-level APIs when you already know the FastNear family and want exact 
 - ` + "`near.config({ networkId })`" + ` switches the family defaults together.
 - ` + "`near.config({ apiKey })`" + ` applies auth in the right style for each family.
 - ` + "`near.config({ nodeUrl })`" + ` keeps the RPC override path backward compatible.
+- ` + "`near.config({ retry })`" + ` tunes or disables automatic 429/transient retry (see below).
+- ` + "`near.config({ batch })`" + ` sets the bulk-read concurrency cap (see below).
+
+${renderResilienceSection("###")}
 
 ### Named endpoint types
 
@@ -327,6 +420,8 @@ ${supportSurface.captureExample.code}
 
 ${renderFamilySection()}
 
+${renderMlDsa65Section()}
+
 ### Example: explain a transaction before signing
 
 \`\`\`js
@@ -402,11 +497,19 @@ Primary packages:
 - @fastnear/api
 - @fastnear/wallet
 - @fastnear/utils
+- @fastnear/ml-dsa-65
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
+- near.config({ retry, batch }) — auto 429/transient retry + bulk-read concurrency cap, both on by default
 - near.view
+- near.view.many — bulk views, settled results, concurrency-capped
+- near.batch — bulk RPC, settled results, per-item error kind (transport/http/rpc/contract)
 - near.queryAccount
+- near.queryAccessKey
+- near.queryAccessKeyList
+- near.queryProtocolVersion
+- near.sendTx({ signer, signerId, ... })
 - near.tx.transactions
 - near.api.v1.accountFull
 - near.transfers.query
@@ -424,6 +527,16 @@ Low-level-first runtime surfaces:
 - near.explain.action
 - near.explain.tx
 - near.explain.error
+
+ML-DSA-65 account-key surface:
+- @fastnear/ml-dsa-65 generateSigner / signerFromSeed / signerFromSecretKey
+- Protocol activation: active RPC protocol_version >= ${mlDsa65Surface.protocolVersion}
+- Exact wire sizes: ${mlDsa65Surface.sizes.publicKey}-byte public key; ${mlDsa65Surface.sizes.signature}-byte signature
+- Verification charge: ${mlDsa65Surface.verificationCharge.display} per outer or delegated verification
+- Full access-key form: ${mlDsa65Surface.keyForms.full}
+- Access-key-list form: ${mlDsa65Surface.keyForms.handle}
+- Handle domain tag: ${mlDsa65Surface.keyForms.domainTag}
+- Quickstarts: ${mlDsa65Surface.quickstarts.map(({ id }) => id).join(", ")}
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })
@@ -494,12 +607,17 @@ Prefer ` + "`recipes/index.json`" + ` when you need structured task data.
 - ` + "`@fastnear/api`" + `: low-level NEAR RPC and FastNear family APIs, plus ` + "`near.recipes`" + ` task helpers and ` + "`near.explain`" + `
 - ` + "`@fastnear/wallet`" + `: wallet connection and transaction/signing provider
 - ` + "`@fastnear/utils`" + `: units, crypto, serialization, storage helpers
+- ` + "`@fastnear/ml-dsa-65`" + `: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
 
 ## Unified config
 
 - ` + "`near.config({ networkId })`" + `
 - ` + "`near.config({ apiKey })`" + `
 - ` + "`near.config({ nodeUrl })`" + `
+- ` + "`near.config({ retry })`" + `
+- ` + "`near.config({ batch })`" + `
+
+${renderResilienceSection("##")}
 
 ## Named endpoint types
 
@@ -534,7 +652,12 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 ## Low-level API entrypoints
 
 - ` + "`near.view`" + `
+- ` + "`near.view.many`" + ` (bulk views; settled results)
+- ` + "`near.batch`" + ` (bulk RPC; settled results)
 - ` + "`near.queryAccount`" + `
+- ` + "`near.queryAccessKey`" + `
+- ` + "`near.queryAccessKeyList`" + `
+- ` + "`near.queryProtocolVersion`" + `
 - ` + "`near.queryTx`" + `
 - ` + "`near.sendTx`" + `
 - ` + "`near.requestSignIn`" + `
@@ -575,6 +698,8 @@ ${supportSurface.captureExample.summary}
 \`\`\`${supportSurface.captureExample.language}
 ${supportSurface.captureExample.code}
 \`\`\`
+
+${renderMlDsa65Section({ headingLevel: 2 })}
 
 ## Recipe catalog
 

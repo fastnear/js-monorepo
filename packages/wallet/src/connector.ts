@@ -5,9 +5,9 @@ import {
   type SignAndSendTransactionsParams,
   type SignMessageParams,
   type SignDelegateActionsParams,
-  type ConnectorAction,
   type WalletManifest,
 } from "@fastnear/near-connect";
+import { toConnectorActions } from "./connector-actions.js";
 import type {
   SignDelegateActionResult,
   SignDelegateActionsResponse,
@@ -41,40 +41,6 @@ export interface ConnectOptions {
     linkText?: string;
     icon?: string;
   } | null;
-}
-
-/**
- * Convert a fastnear-style flat action to a @hot-labs/near-connect ConnectorAction.
- * Fastnear format: { type: "FunctionCall", methodName, args, gas, deposit }
- * Connector format: { type: "FunctionCall", params: { methodName, args, gas, deposit } }
- */
-function toConnectorAction(action: any): ConnectorAction {
-  const { type, ...rest } = action;
-  switch (type) {
-    case "FunctionCall":
-      return { type: "FunctionCall", params: { methodName: rest.methodName, args: rest.args ?? {}, gas: rest.gas ?? "30000000000000", deposit: rest.deposit ?? "0" } };
-    case "Transfer":
-      return { type: "Transfer", params: { deposit: rest.deposit } };
-    case "Stake":
-      return { type: "Stake", params: { stake: rest.stake, publicKey: rest.publicKey } };
-    case "AddKey":
-      return { type: "AddKey", params: { publicKey: rest.publicKey, accessKey: rest.accessKey } };
-    case "DeleteKey":
-      return { type: "DeleteKey", params: { publicKey: rest.publicKey } };
-    case "DeleteAccount":
-      return { type: "DeleteAccount", params: { beneficiaryId: rest.beneficiaryId } };
-    case "CreateAccount":
-      return { type: "CreateAccount" } as ConnectorAction;
-    case "DeployContract":
-      return { type: "DeployContract", params: { code: rest.code ?? rest.codeBase64 } } as ConnectorAction;
-    default:
-      // Pass through if already in connector format (has params)
-      return action;
-  }
-}
-
-function toConnectorActions(actions: any[]): ConnectorAction[] {
-  return actions.map(toConnectorAction);
 }
 
 /**

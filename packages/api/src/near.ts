@@ -5,14 +5,25 @@ import {
   fromBase64,
   toBase64,
   canSignWithLAK,
+  assertNearValidatorPublicKey,
+  decodeNearPublicKey,
+  sha256,
   toBase58,
   parseJsonFromBytes,
-  signHash,
+  signerFromPrivateKey,
   serializeTransaction,
-  serializeSignedTransaction, bytesToBase64, PlainTransaction,
+  serializeSignedTransaction,
+  txToJson,
+  bytesToBase64,
+  PlainTransaction,
 } from "@fastnear/utils";
 
-import type { NEP413Message } from "@fastnear/utils";
+import type {
+  NEP413Message,
+  NearAction,
+  NearPublicKey,
+  TransactionSigner,
+} from "@fastnear/utils";
 
 import {
   _state,
@@ -33,6 +44,7 @@ import type { WalletProvider, FastNearNetworkId } from "./state.js";
 import type { NetworkConfig } from "./state.js";
 import type {
   AccessKeyWithError,
+  AccessKeyListResponse,
   BlockView,
   ExplainedAction,
   ExplainedError,
@@ -80,6 +92,7 @@ import type {
   RecipeTransferParams,
   RecipeViewAccountParams,
   RecipeViewContractParams,
+  RpcStatusResponse,
 } from "./types.js";
 
 import {
@@ -87,13 +100,58 @@ import {
   setConfig,
   resetTxHistory,
   resolveConfig,
+  DEFAULT_RETRY,
 } from "./state.js";
 
-import { sha256 } from "@noble/hashes/sha2.js";
+import type { ResolvedRetryConfig } from "./state.js";
+
+import { runWithRetry, outcomeError, RETRYABLE_HTTP_STATUSES, RETRYABLE_RPC_CODES } from "./resilience.js";
+import { rpcSend, serviceSend, type RpcRoute } from "./transport.js";
+import { nextRpcId, resolveBatchConfig, mapWithConcurrency } from "./batch.js";
+import { FastNearRpcError, type RpcErrorKind } from "./errors.js";
+
 import * as reExportAllUtils from "@fastnear/utils";
 import * as stateExports from "./state.js";
+import { reserveNonce } from "./nonce.js";
 
 export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
+
+// Successful activation checks are immutable for the lifetime of a process:
+// NEAR protocol versions only move forward. Failed checks are deliberately not
+// cached so a long-running process can start using the feature after an upgrade.
+const mlDsa65SupportedRpcUrls = new Set<string>();
+
+function isMlDsa65Key(value: unknown): value is `ml-dsa-65:${string}` {
+  return typeof value === "string" && value.startsWith("ml-dsa-65:");
+}
+
+function inspectAction(action: any): boolean {
+  const type = action?.type;
+  if (type === "Stake") {
+    assertNearValidatorPublicKey(action.publicKey);
+  } else if (type === "AddKey" || type === "DeleteKey") {
+    decodeNearPublicKey(action.publicKey);
+  }
+  let usesMlDsa = isMlDsa65Key(action?.publicKey) ||
+    isMlDsa65Key(action?.signature);
+  if (type === "SignedDelegate") {
+    const delegate = action.delegateAction;
+    decodeNearPublicKey(delegate?.publicKey);
+    usesMlDsa ||= isMlDsa65Key(delegate.publicKey);
+    if (action.publicKey !== undefined && action.publicKey !== delegate.publicKey) {
+      throw new Error("SignedDelegate publicKey must match delegateAction.publicKey");
+    }
+    usesMlDsa = inspectActions(delegate.actions) || usesMlDsa;
+  }
+  return usesMlDsa;
+}
+
+function inspectActions(actions: readonly any[]): boolean {
+  return actions.reduce(
+    (usesMlDsa, action) => inspectAction(action) || usesMlDsa,
+    false,
+  );
+}
 
 function normalizeActionParams(action: any): Record<string, any> {
   if (!action || typeof action !== "object") {
@@ -110,7 +168,7 @@ function looksRetryable(message: string, code: string | number | null, kind: Exp
   if (kind === "transport_error") {
     return true;
   }
-  if (typeof code === "number" && [408, 429, 500, 502, 503, 504, -32000].includes(code)) {
+  if (typeof code === "number" && ([...RETRYABLE_HTTP_STATUSES, ...RETRYABLE_RPC_CODES] as number[]).includes(code)) {
     return true;
   }
   return /timeout|temporar|temporarily|rate limit|unavailable|network|gateway/i.test(message);
@@ -212,20 +270,9 @@ function omitUndefinedEntries<T extends Record<string, any>>(value?: T): T | und
   ) as T;
 }
 
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
-
-function trimLeadingSlash(value: string): string {
-  return value.replace(/^\/+/, "");
-}
-
-function appendQueryParams(url: URL, query?: Record<string, any>): URL {
-  if (!query) {
-    return url;
-  }
-
-  for (const [key, value] of Object.entries(query)) {
+function buildUrl(baseUrl: string, path: string, query?: Record<string, any>): string {
+  const url = new URL(path.replace(/^\/+/, ""), `${baseUrl.replace(/\/+$/, "")}/`);
+  for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) {
       continue;
     }
@@ -239,37 +286,7 @@ function appendQueryParams(url: URL, query?: Record<string, any>): URL {
     }
     url.searchParams.set(key, String(value));
   }
-
-  return url;
-}
-
-function buildUrl(baseUrl: string, path: string, query?: Record<string, any>): string {
-  const url = new URL(trimLeadingSlash(path), `${trimTrailingSlash(baseUrl)}/`);
-  return appendQueryParams(url, query).toString();
-}
-
-async function parseResponsePayload(response: Response) {
-  const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function buildHttpError(service: ServiceFamily, response: Response, payload: any): Error {
-  return new Error(
-    JSON.stringify({
-      code: response.status,
-      name: `${service}.http_error`,
-      message: `${service} request failed with ${response.status} ${response.statusText}`,
-      data: payload,
-    })
-  );
+  return url.toString();
 }
 
 // Resolve the config to use for a per-call override. Without an
@@ -285,34 +302,18 @@ function resolveConfigForCall(network?: FastNearNetworkId): NetworkConfig {
   if (!network || network === active.networkId) {
     return active;
   }
-  return resolveConfig({ apiKey: active.apiKey ?? null }, NETWORKS[network]);
+  return resolveConfig({ apiKey: active.apiKey ?? null, retry: active.retry }, NETWORKS[network]);
 }
 
 function resolveServiceBaseUrl(family: Exclude<ServiceFamily, "rpc">, config: NetworkConfig): string {
-  let baseUrl: string | null | undefined;
-
-  switch (family) {
-    case "api":
-      baseUrl = config.services?.api?.baseUrl;
-      break;
-    case "tx":
-      baseUrl = config.services?.tx?.baseUrl;
-      break;
-    case "transfers":
-      baseUrl = config.services?.transfers?.baseUrl;
-      break;
-    case "neardata":
-      baseUrl = config.services?.neardata?.baseUrl;
-      break;
-    case "fastdata.kv":
-      baseUrl = config.services?.fastdata?.kvBaseUrl;
-      break;
-  }
+  const baseUrl = family === "fastdata.kv"
+    ? config.services?.fastdata?.kvBaseUrl
+    : config.services?.[family]?.baseUrl;
 
   if (!baseUrl) {
     if (family === "transfers" && config.networkId === "testnet") {
       throw new Error(
-        "fastnear: transfers service is not configured for testnet. Provide near.config({ services: { transfers: { baseUrl: \"https://...\" } } }) to override."
+        "fastnear: transfers service is not configured for testnet; set services.transfers.baseUrl",
       );
     }
     throw new Error(`fastnear: ${family} service is not configured for ${config.networkId}.`);
@@ -363,6 +364,8 @@ async function sendServiceRequest<T = any>({
 }: ServiceRequestOptions): Promise<T> {
   const config = resolveConfigForCall(network);
   const authStyle = SERVICE_AUTH_STYLES[family];
+  // Build the URL up front so a service misconfiguration (e.g. transfers on
+  // testnet) still throws synchronously, with zero fetch attempts.
   const url = buildAuthedUrl(family, resolveServiceBaseUrl(family, config), path, query, config);
   const requestHeaders: Record<string, string> = { ...headers };
 
@@ -376,18 +379,14 @@ async function sendServiceRequest<T = any>({
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(url, {
-    method,
-    headers: requestHeaders,
-    body: requestBody,
-  });
-  const payload = await parseResponsePayload(response);
-
-  if (!response.ok) {
-    throw buildHttpError(family, response, payload);
+  const cfg = (config.retry as ResolvedRetryConfig) ?? DEFAULT_RETRY;
+  const outcome = await runWithRetry(cfg, false, (signal) =>
+    serviceSend(family, url, method, requestHeaders, requestBody, signal),
+  );
+  if (outcome.kind === "ok") {
+    return outcome.value as T;
   }
-
-  return payload as T;
+  throw outcomeError(outcome);
 }
 
 export interface RpcRouteOptions {
@@ -406,32 +405,89 @@ export interface RpcRouteOptions {
   network?: FastNearNetworkId;
 }
 
+// Write RPCs must never be batched, and retry only per the config's
+// writePolicy (default: pre-response transport failures only).
+const WRITE_METHODS = new Set<string>([
+  "send_tx",
+  "send_tx_async",
+  "broadcast_tx_commit",
+  "broadcast_tx_async",
+]);
+
+// Resolve a call's full route: the authed POST URL (which folds in network,
+// archival, rpcUrl and apiKey) plus the resolved retry policy.
+function resolveRpcRoute(options?: RpcRouteOptions): RpcRoute {
+  const config = resolveConfigForCall(options?.network);
+  const useArchival = !!options?.useArchival;
+  const baseUrl = useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
+  const url = buildAuthedUrl("rpc", baseUrl, "", undefined, config);
+  return {
+    url,
+    networkId: config.networkId,
+    useArchival,
+    retry: (config.retry as ResolvedRetryConfig) ?? DEFAULT_RETRY,
+  };
+}
+
 export async function sendRpc<T = any>(
   method: string,
   params: Record<string, any> | any[],
   options?: RpcRouteOptions,
 ): Promise<T> {
-  const config = resolveConfigForCall(options?.network);
-  const baseUrl = options?.useArchival ? resolveArchivalUrl(config) : resolveRpcUrl(config);
-  const response = await fetch(buildAuthedUrl("rpc", baseUrl, "", undefined, config), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: `fastnear-${Date.now()}`,
-      method,
-      params,
-    }),
-  });
-  const result = await parseResponsePayload(response);
-  if (!response.ok) {
-    throw buildHttpError("rpc", response, result);
+  const route = resolveRpcRoute(options);
+  // Serialize once so every retry attempt sends byte-identical bytes
+  // (write-safe: resending the same signed tx is deduped by hash).
+  const bodyStr = JSON.stringify({ jsonrpc: "2.0", id: nextRpcId(), method, params });
+  const isWrite = WRITE_METHODS.has(method);
+  const outcome = await runWithRetry<T>(route.retry, isWrite, (signal) =>
+    rpcSend(route, bodyStr, signal),
+  );
+  if (outcome.kind === "ok") {
+    return outcome.value as T;
   }
-  if (result && typeof result === "object" && "error" in result && (result as any).error) {
-    throw new Error(JSON.stringify(result.error));
-  }
-  return result as T;
+  throw outcomeError(outcome);
 }
+
+export interface BatchRequest {
+  method: string;
+  params: Record<string, any> | any[];
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}
+
+export type BatchItemResult<T = any> =
+  | { status: "ok"; result: T }
+  | { status: "error"; kind: RpcErrorKind | "unknown"; error: any };
+
+// Tag each settled error with its category so callers can tell an application
+// (smart-contract) failure from an infra one without re-parsing the error.
+const errorKind = (error: unknown): RpcErrorKind | "unknown" =>
+  error instanceof FastNearRpcError ? error.kind : "unknown";
+
+/**
+ * Explicit bulk API: run many RPC calls, each as its own retried request, with
+ * at most `batch.maxConcurrency` (default 30) in flight — the lever that curbs
+ * 429s without bursting. (NEAR RPC has no array batching, so calls can't be
+ * collapsed into one request.) Returns settled results in input order — one
+ * failing call never rejects the whole set. Write methods (`send_tx` /
+ * `broadcast_tx_*`) are rejected per-item.
+ */
+export const batch = async (requests: BatchRequest[]): Promise<BatchItemResult[]> => {
+  const { maxConcurrency } = resolveBatchConfig(getConfig());
+  return mapWithConcurrency(requests, maxConcurrency, async (req): Promise<BatchItemResult> => {
+    // Everything in the try, so a malformed item settles as an error instead of
+    // rejecting the whole set.
+    try {
+      if (WRITE_METHODS.has(req.method)) {
+        return { status: "error", kind: "unknown", error: new Error(`fastnear: method "${req.method}" cannot be batched`) };
+      }
+      const result = await sendRpc(req.method, req.params, { useArchival: req.useArchival, network: req.network });
+      return { status: "ok", result };
+    } catch (error) {
+      return { status: "error", kind: errorKind(error), error };
+    }
+  });
+};
 
 export function afterTxSent(txId: string, network?: FastNearNetworkId) {
   const txHistory = getTxHistory();
@@ -605,15 +661,35 @@ export const requestSignIn = async ({
   return result;
 };
 
-export const view = async ({
-                             contractId,
-                             methodName,
-                             args,
-                             argsBase64,
-                             blockId,
-                             useArchival,
-                             network,
-                           }: {
+// Shared JSON-RPC `query`/`call_function` params builder for `view`/`view.many`.
+function buildViewParams(spec: {
+  contractId: string;
+  methodName: string;
+  args?: any;
+  argsBase64?: string;
+  blockId?: string;
+}): Record<string, any> {
+  const encodedArgs = spec.argsBase64 || (spec.args ? toBase64(JSON.stringify(spec.args)) : "");
+  return withBlockId(
+    {
+      request_type: "call_function",
+      account_id: spec.contractId,
+      method_name: spec.methodName,
+      args_base64: encodedArgs,
+    },
+    spec.blockId,
+  );
+}
+
+const viewImpl = async ({
+                          contractId,
+                          methodName,
+                          args,
+                          argsBase64,
+                          blockId,
+                          useArchival,
+                          network,
+                        }: {
   contractId: string;
   methodName: string;
   args?: any;
@@ -622,23 +698,46 @@ export const view = async ({
   useArchival?: boolean;
   network?: FastNearNetworkId;
 }) => {
-  const encodedArgs = argsBase64 || (args ? toBase64(JSON.stringify(args)) : "");
   const queryResult = await sendRpc(
     "query",
-    withBlockId(
-      {
-        request_type: "call_function",
-        account_id: contractId,
-        method_name: methodName,
-        args_base64: encodedArgs,
-      },
-      blockId
-    ),
+    buildViewParams({ contractId, methodName, args, argsBase64, blockId }),
     { useArchival, network },
   );
 
   return parseJsonFromBytes(queryResult.result.result);
 };
+
+export interface ViewManySpec {
+  contractId: string;
+  methodName: string;
+  args?: any;
+  argsBase64?: string;
+  blockId?: string;
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}
+
+// `view.many`: run many contract view calls as a concurrency-limited fan-out
+// (at most `batch.maxConcurrency` in flight), decoding each ok result exactly
+// like `view`. NEAR RPC has no array batching, so calls aren't merged into one
+// request.
+async function viewMany(specs: ViewManySpec[]): Promise<BatchItemResult[]> {
+  const { maxConcurrency } = resolveBatchConfig(getConfig());
+  // Build + call + decode all happen inside `viewImpl`, wrapped per item, so a
+  // malformed spec or a bad/decode-failing response settles as an error rather
+  // than rejecting the whole set.
+  return mapWithConcurrency(specs, maxConcurrency, async (spec): Promise<BatchItemResult> => {
+    try {
+      const result = await viewImpl(spec);
+      return { status: "ok", result };
+    } catch (error) {
+      return { status: "error", kind: errorKind(error), error };
+    }
+  });
+}
+
+// `view(...)` stays callable exactly as before; `.many([...])` is the bulk form.
+export const view = Object.assign(viewImpl, { many: viewMany });
 
 export const queryAccount = async ({
                                 accountId,
@@ -683,6 +782,39 @@ export const queryAccessKey = async ({
     ),
     { useArchival, network },
   );
+};
+
+export const queryAccessKeyList = async ({
+                                      accountId,
+                                      blockId,
+                                      useArchival,
+                                      network,
+                                    }: {
+  accountId: string;
+  blockId?: string;
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}): Promise<AccessKeyListResponse> => {
+  return sendRpc(
+    "query",
+    withBlockId(
+      { request_type: "view_access_key_list", account_id: accountId },
+      blockId,
+    ),
+    { useArchival, network },
+  );
+};
+
+/** Return the active protocol version reported by the selected RPC. */
+export const queryProtocolVersion = async ({
+  network,
+}: { network?: FastNearNetworkId } = {}): Promise<number> => {
+  const status = await sendRpc<RpcStatusResponse>("status", [], { network });
+  const version = status?.result?.protocol_version;
+  if (!Number.isInteger(version)) {
+    throw new Error("missing protocol_version");
+  }
+  return version;
 };
 
 export const queryTx = async ({ txHash, accountId, useArchival, network }: { txHash: string; accountId: string; useArchival?: boolean; network?: FastNearNetworkId }) => {
@@ -1134,29 +1266,58 @@ export const signOut = async ({
   }
 };
 
+type SendTxCommon = {
+  receiverId: string;
+  actions: NearAction[];
+  waitUntil?: string;
+  network?: FastNearNetworkId;
+};
+
+export type SendTxParams = SendTxCommon & (
+  | { signer?: never; signerId?: never }
+  | { signer: TransactionSigner; signerId: string }
+);
+
 export const sendTx = async ({
                                receiverId,
                                actions,
                                waitUntil,
                                network,
-                             }: {
-  receiverId: string;
-  actions: any[];
-  waitUntil?: string;
-  network?: FastNearNetworkId;
-}) => {
+                               signer: suppliedSigner,
+                               signerId: suppliedSignerId,
+                             }: SendTxParams) => {
+  const explicitSigner = suppliedSigner !== undefined;
+  if (explicitSigner !== (suppliedSignerId !== undefined)) {
+    throw new Error("signer and signerId must be paired");
+  }
+
   const targetNetwork = network ?? getConfig().networkId;
   const slot = getAccountState(targetNetwork);
-  const signerId = slot.accountId;
+  const signerId = suppliedSignerId ?? slot.accountId;
   if (!signerId) throw new Error("Must sign in");
 
-  const pubKey = slot.publicKey ?? "";
+  const pubKey = suppliedSigner?.publicKey ?? slot.publicKey ?? "";
   const privKey = slot.privateKey;
   const txId = generateTxId();
+  if (pubKey) decodeNearPublicKey(pubKey);
+  const actionUsesMlDsa = inspectActions(actions);
+  if (isMlDsa65Key(pubKey) || actionUsesMlDsa) {
+    const rpcUrl = resolveRpcUrl(resolveConfigForCall(targetNetwork));
+    if (!mlDsa65SupportedRpcUrls.has(rpcUrl)) {
+      const protocolVersion = await queryProtocolVersion({ network: targetNetwork });
+      if (protocolVersion < 85) {
+        throw new Error(`ML-DSA-65 requires v85+; got ${protocolVersion}`);
+      }
+      mlDsa65SupportedRpcUrls.add(rpcUrl);
+    }
+  }
 
   // If no local private key, or the receiver doesn't match the access key contract,
   // or the actions aren't signable with a limited access key, delegate to the wallet
-  if (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions)) {
+  if (
+    !explicitSigner &&
+    (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions))
+  ) {
     const jsonTx = { signerId, receiverId, actions };
     updateTxHistory({ status: "Pending", txId, tx: jsonTx, finalState: false });
 
@@ -1200,71 +1361,83 @@ export const sendTx = async ({
     }
   }
 
-  // Local signing path (limited access key). The RPC helpers and the
-  // `nonce`/`block` caches are now per-network too, so a sendTx on a
-  // non-active network signs against that network's RPC and caches the
-  // nonce/block under the right key.
-  const nonceKey = `nonce.${targetNetwork}`;
+  const localSigner = suppliedSigner ?? signerFromPrivateKey(privKey as string);
+  const validatedPublicKey = pubKey as NearPublicKey;
+
+  // Local signing path: caches are scoped to the target network.
   const blockKey = `block.${targetNetwork}`;
 
-  let nonce = lsGet(nonceKey) as number | null;
-  if (nonce == null) {
-    const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
-    if (accessKey.result.error) {
-      throw new Error(`Access key error: ${accessKey.result.error} when attempting to get nonce for ${signerId} for public key ${pubKey}`);
-    }
-    nonce = accessKey.result.nonce;
-    lsSet(nonceKey, nonce);
-  }
+  // Hold the per-key slot through submission so N+1 cannot land before N.
+  const keyFingerprint = toBase58(sha256(new TextEncoder().encode(pubKey)));
+  const nonceScope = `${targetNetwork}.${signerId}.${keyFingerprint}`;
+  return reserveNonce(
+    nonceScope,
+    async () => {
+      const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
+      if (accessKey.result.error) {
+        throw new Error(`Access key error for ${signerId}: ${accessKey.result.error}`);
+      }
+      const permission = accessKey.result.permission;
+      if (permission !== "FullAccess") {
+        const functionCall = permission?.FunctionCall;
+        if (!functionCall || !canSignWithLAK(actions) ||
+          receiverId !== functionCall.receiver_id ||
+          (functionCall.method_names.length > 0 &&
+            !functionCall.method_names.includes((actions[0] as any).methodName))) {
+          throw new Error(`fastnear: signer key is not permitted for ${receiverId}`);
+        }
+      }
+      return accessKey.result.nonce;
+    },
+    async (nonce) => {
+      let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
+      if (
+        !lastKnownBlock ||
+        parseFloat(lastKnownBlock.header.timestamp_nanosec) / 1e6 + MaxBlockDelayMs < Date.now()
+      ) {
+        const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
+        lastKnownBlock = {
+          header: {
+            hash: latestBlock.result.header.hash,
+            timestamp_nanosec: latestBlock.result.header.timestamp_nanosec,
+          },
+        };
+        lsSet(blockKey, lastKnownBlock);
+      }
 
-  let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
-  if (
-    !lastKnownBlock ||
-    parseFloat(lastKnownBlock.header.timestamp_nanosec) / 1e6 + MaxBlockDelayMs < Date.now()
-  ) {
-    const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
-    lastKnownBlock = {
-      header: {
-        hash: latestBlock.result.header.hash,
-        timestamp_nanosec: latestBlock.result.header.timestamp_nanosec,
-      },
-    };
-    lsSet(blockKey, lastKnownBlock);
-  }
+      const blockHash = lastKnownBlock.header.hash;
 
-  nonce += 1;
-  lsSet(nonceKey, nonce);
+      const plainTransactionObj: PlainTransaction = {
+        signerId,
+        publicKey: validatedPublicKey,
+        nonce,
+        receiverId,
+        blockHash,
+        actions,
+      };
 
-  const blockHash = lastKnownBlock.header.hash;
+      const txBytes = serializeTransaction(plainTransactionObj);
+      const txHashBytes = sha256(txBytes);
+      const txHash58 = toBase58(txHashBytes);
 
-  const plainTransactionObj: PlainTransaction = {
-    signerId,
-    publicKey: pubKey,
-    nonce,
-    receiverId,
-    blockHash,
-    actions,
-  };
+      const signatureBytes = await localSigner.signHash(txHashBytes);
+      const signatureBase58 = toBase58(signatureBytes);
+      const signedTransactionBytes = serializeSignedTransaction(plainTransactionObj, signatureBytes);
+      const signedTxBase64 = bytesToBase64(signedTransactionBytes);
 
-  const txBytes = serializeTransaction(plainTransactionObj);
-  const txHashBytes = sha256(txBytes);
-  const txHash58 = toBase58(txHashBytes);
+      updateTxHistory({
+        status: "Pending",
+        txId,
+        tx: txToJson(plainTransactionObj),
+        signature: signatureBase58,
+        signedTxBase64,
+        txHash: txHash58,
+        finalState: false,
+      });
 
-  const signatureBase58 = signHash(txHashBytes, privKey, { returnBase58: true }) as string;
-  const signedTransactionBytes = serializeSignedTransaction(plainTransactionObj, signatureBase58);
-  const signedTxBase64 = bytesToBase64(signedTransactionBytes);
-
-  updateTxHistory({
-    status: "Pending",
-    txId,
-    tx: plainTransactionObj,
-    signature: signatureBase58,
-    signedTxBase64,
-    txHash: txHash58,
-    finalState: false,
-  });
-
-  return await sendTxToRpc(signedTxBase64, waitUntil, txId, targetNetwork);
+      return sendTxToRpc(signedTxBase64, waitUntil, txId, targetNetwork);
+    },
+  );
 };
 
 /**
@@ -1354,7 +1527,7 @@ export const actions = {
     args?: Record<string, any>;
     argsBase64?: string;
   }) => ({
-    type: "FunctionCall",
+    type: "FunctionCall" as const,
     methodName,
     args,
     argsBase64,
@@ -1363,20 +1536,23 @@ export const actions = {
   }),
 
   transfer: (yoctoAmount: string) => ({
-    type: "Transfer",
+    type: "Transfer" as const,
     deposit: yoctoAmount,
   }),
 
-  stakeNEAR: ({amount, publicKey}: { amount: string; publicKey: string }) => ({
-    type: "Stake",
-    stake: amount,
-    publicKey,
-  }),
+  stakeNEAR: ({amount, publicKey}: { amount: string; publicKey: string }) => {
+    assertNearValidatorPublicKey(publicKey);
+    return {
+      type: "Stake" as const,
+      stake: amount,
+      publicKey: publicKey as NearPublicKey,
+    };
+  },
 
   addFullAccessKey: ({publicKey}: { publicKey: string }) => ({
-    type: "AddKey",
-    publicKey: publicKey,
-    accessKey: {permission: "FullAccess"},
+    type: "AddKey" as const,
+    publicKey: publicKey as NearPublicKey,
+    accessKey: {nonce: 0, permission: "FullAccess" as const},
   }),
 
   addLimitedAccessKey: ({
@@ -1390,32 +1566,34 @@ export const actions = {
     accountId: string;
     methodNames: string[];
   }) => ({
-    type: "AddKey",
-    publicKey: publicKey,
+    type: "AddKey" as const,
+    publicKey: publicKey as NearPublicKey,
     accessKey: {
-      permission: "FunctionCall",
-      allowance,
-      receiverId: accountId,
-      methodNames,
+      nonce: 0,
+      permission: {
+        allowance,
+        receiverId: accountId,
+        methodNames,
+      },
     },
   }),
 
   deleteKey: ({publicKey}: { publicKey: string }) => ({
-    type: "DeleteKey",
-    publicKey,
+    type: "DeleteKey" as const,
+    publicKey: publicKey as NearPublicKey,
   }),
 
   deleteAccount: ({beneficiaryId}: { beneficiaryId: string }) => ({
-    type: "DeleteAccount",
+    type: "DeleteAccount" as const,
     beneficiaryId,
   }),
 
   createAccount: () => ({
-    type: "CreateAccount",
+    type: "CreateAccount" as const,
   }),
 
   deployContract: ({codeBase64}: { codeBase64: string }) => ({
-    type: "DeployContract",
+    type: "DeployContract" as const,
     codeBase64,
   }),
 };

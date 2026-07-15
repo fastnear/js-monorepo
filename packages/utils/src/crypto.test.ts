@@ -3,12 +3,16 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   curveFromKey,
+  decodeNearPublicKey,
   keyFromString,
+  keyTypeFromString,
   keyToString,
+  NEAR_KEY_DESCRIPTORS,
   privateKeyFromRandom,
   publicKeyFromPrivate,
   signHash,
   signBytes,
+  signerFromPrivateKey,
   sha256,
 } from "./crypto.js";
 
@@ -29,6 +33,49 @@ describe("curveFromKey", () => {
 
   it("throws on unsupported prefix", () => {
     expect(() => curveFromKey("rsa:abc")).toThrow("Unsupported curve");
+  });
+});
+
+describe("NEAR key types", () => {
+  it("recognizes ML-DSA-65 without treating it as an elliptic curve", () => {
+    expect(keyTypeFromString("ml-dsa-65:abc")).toBe("ml-dsa-65");
+    expect(() => curveFromKey("ml-dsa-65:abc")).toThrow("Unsupported curve");
+  });
+
+  it("publishes the protocol key and signature lengths", () => {
+    expect(NEAR_KEY_DESCRIPTORS["ml-dsa-65"]).toMatchObject({
+      borshTag: 2,
+      publicKeyLength: 1952,
+      signatureLength: 3309,
+    });
+  });
+
+  it("validates full ML-DSA-65 public keys", () => {
+    const publicKey = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    expect(decodeNearPublicKey(publicKey)).toEqual({
+      keyType: "ml-dsa-65",
+      data: new Uint8Array(1952),
+    });
+  });
+
+  it("rejects malformed public-key lengths", () => {
+    const publicKey = keyToString(new Uint8Array(32), "ml-dsa-65");
+    expect(() => decodeNearPublicKey(publicKey)).toThrow(
+      "expected 1952 bytes, got 32",
+    );
+  });
+
+  it("rejects non-base58 characters instead of silently changing a key", () => {
+    const publicKey = keyToString(new Uint8Array(1952).fill(7), "ml-dsa-65");
+    const separator = publicKey.indexOf(":") + 1;
+    const malformed = `${publicKey.slice(0, separator)}!${publicKey.slice(separator + 1)}`;
+    expect(() => decodeNearPublicKey(malformed)).toThrow("Invalid base58");
+  });
+
+  it("rejects an ML-DSA hash handle where a full key is required", () => {
+    expect(() =>
+      decodeNearPublicKey(`ml-dsa-65-hash:${"1".repeat(32)}`),
+    ).toThrow("handles cannot be used");
   });
 });
 
@@ -56,13 +103,29 @@ describe("privateKeyFromRandom", () => {
   it("ed25519: prefixed, decodes to 64 bytes", () => {
     const priv = privateKeyFromRandom("ed25519");
     expect(priv.startsWith("ed25519:")).toBe(true);
-    expect(keyFromString(priv).length).toBe(64);
+    const secret = keyFromString(priv);
+    expect(secret.length).toBe(64);
+    expect(secret.slice(32)).toEqual(ed25519.getPublicKey(secret.slice(0, 32)));
   });
 
   it("secp256k1: prefixed, decodes to 32 bytes", () => {
     const priv = privateKeyFromRandom("secp256k1");
     expect(priv.startsWith("secp256k1:")).toBe(true);
     expect(keyFromString(priv).length).toBe(32);
+  });
+});
+
+describe("signerFromPrivateKey", () => {
+  it("exposes the derived public key and signs hashes", () => {
+    const privateKey = privateKeyFromRandom("ed25519");
+    const signer = signerFromPrivateKey(privateKey);
+    const hash = sha256(new TextEncoder().encode("structural signer"));
+    const signature = signer.signHash(hash) as Uint8Array;
+
+    expect(signer.publicKey).toBe(publicKeyFromPrivate(privateKey));
+    expect(ed25519.verify(signature, hash, keyFromString(signer.publicKey))).toBe(
+      true,
+    );
   });
 });
 
@@ -92,6 +155,17 @@ describe("publicKeyFromPrivate", () => {
     const priv = privateKeyFromRandom("secp256k1");
     expect(publicKeyFromPrivate(priv)).toBe(publicKeyFromPrivate(priv));
   });
+
+  it.each([31, 33, 63, 65, 100])(
+    "rejects a malformed %i-byte Ed25519 private key",
+    (length) => {
+      const privateKey = keyToString(new Uint8Array(length), "ed25519");
+      expect(() => publicKeyFromPrivate(privateKey)).toThrow(
+        "expected 32 or 64 bytes",
+      );
+    },
+  );
+
 });
 
 // ── signHash ────────────────────────────────────────────────────────

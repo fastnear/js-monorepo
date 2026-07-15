@@ -6,11 +6,19 @@ Primary packages:
 - @fastnear/api
 - @fastnear/wallet
 - @fastnear/utils
+- @fastnear/ml-dsa-65
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
+- near.config({ retry, batch }) — auto 429/transient retry + bulk-read concurrency cap, both on by default
 - near.view
+- near.view.many — bulk views, settled results, concurrency-capped
+- near.batch — bulk RPC, settled results, per-item error kind (transport/http/rpc/contract)
 - near.queryAccount
+- near.queryAccessKey
+- near.queryAccessKeyList
+- near.queryProtocolVersion
+- near.sendTx({ signer, signerId, ... })
 - near.tx.transactions
 - near.api.v1.accountFull
 - near.transfers.query
@@ -28,6 +36,16 @@ Low-level-first runtime surfaces:
 - near.explain.action
 - near.explain.tx
 - near.explain.error
+
+ML-DSA-65 account-key surface:
+- @fastnear/ml-dsa-65 generateSigner / signerFromSeed / signerFromSecretKey
+- Protocol activation: active RPC protocol_version >= 85
+- Exact wire sizes: 1952-byte public key; 3309-byte signature
+- Verification charge: 100 Ggas per outer or delegated verification
+- Full access-key form: ml-dsa-65:<base58 public key>
+- Access-key-list form: ml-dsa-65-hash:<base58 SHA3-256 digest>
+- Handle domain tag: near:ml-dsa-65-pubkey-hash:v1
+- Quickstarts: ml-dsa-65-generate, ml-dsa-65-explicit-send, ml-dsa-65-enroll-delete, ml-dsa-65-reconcile
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })
