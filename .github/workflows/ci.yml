@@ -39,5 +39,11 @@ jobs:
       - name: Build workspaces
         run: yarn build
 
+      - name: Smoke package formats
+        run: yarn test:formats
+
+      - name: Check browser bundle budgets
+        run: yarn check:bundles
+
       - name: Run tests
         run: yarn test

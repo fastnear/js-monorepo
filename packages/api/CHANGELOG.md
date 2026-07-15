@@ -1,3 +1,9 @@
+# 1.4.0
+
+- Metadata-only synchronized release for `@fastnear/api`.
+- Released alongside the timeout-aware delegate-signing bridge in
+  `@fastnear/wallet` and `@fastnear/wallet-adapter`.
+
 # 1.1.4
 
 - Metadata-only release for `@fastnear/api` itself — no source changes.
