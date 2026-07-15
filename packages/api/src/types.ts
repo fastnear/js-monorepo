@@ -1,10 +1,45 @@
-import type { NEP413Message } from "@fastnear/utils";
+import type { NEP413Message, NearPublicKeyHandle } from "@fastnear/utils";
 
 export interface AccessKeyWithError {
   result: {
-    nonce: number;
-    permission?: any;
+    nonce: number | string;
+    permission?: AccessKeyPermissionView;
     error?: string;
+  };
+}
+
+export type AccessKeyPermissionView =
+  | "FullAccess"
+  | {
+      FunctionCall: {
+        allowance: string | null;
+        receiver_id: string;
+        method_names: string[];
+      };
+    };
+
+export interface AccessKeyInfoView {
+  /** Full classical key, or an ml-dsa-65-hash: handle for ML-DSA-65. */
+  public_key: NearPublicKeyHandle;
+  access_key: {
+    nonce: number | string;
+    permission: AccessKeyPermissionView;
+  };
+}
+
+export interface AccessKeyListResponse {
+  result: {
+    keys: AccessKeyInfoView[];
+    block_height?: number;
+    block_hash?: string;
+  };
+}
+
+export interface RpcStatusResponse {
+  result: {
+    protocol_version: number;
+    latest_protocol_version?: number;
+    [key: string]: any;
   };
 }
 

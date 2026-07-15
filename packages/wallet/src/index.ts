@@ -18,6 +18,6 @@ export {
   switchNetwork,
   addFunctionCallKey,
   signDelegateActions
-} from "./connector";
+} from "./connector.js";
 
-export type { ConnectOptions, ConnectResult, WalletManifest, SignDelegateActionsParams, SignDelegateActionResult, SignDelegateActionsResponse } from "./connector";
+export type { ConnectOptions, ConnectResult, WalletManifest, SignDelegateActionsParams, SignDelegateActionResult, SignDelegateActionsResponse } from "./connector.js";

@@ -5,14 +5,25 @@ import {
   fromBase64,
   toBase64,
   canSignWithLAK,
+  assertNearValidatorPublicKey,
+  decodeNearPublicKey,
+  sha256,
   toBase58,
   parseJsonFromBytes,
-  signHash,
+  signerFromPrivateKey,
   serializeTransaction,
-  serializeSignedTransaction, bytesToBase64, PlainTransaction,
+  serializeSignedTransaction,
+  txToJson,
+  bytesToBase64,
+  PlainTransaction,
 } from "@fastnear/utils";
 
-import type { NEP413Message } from "@fastnear/utils";
+import type {
+  NEP413Message,
+  NearAction,
+  NearPublicKey,
+  TransactionSigner,
+} from "@fastnear/utils";
 
 import {
   _state,
@@ -33,6 +44,7 @@ import type { WalletProvider, FastNearNetworkId } from "./state.js";
 import type { NetworkConfig } from "./state.js";
 import type {
   AccessKeyWithError,
+  AccessKeyListResponse,
   BlockView,
   ExplainedAction,
   ExplainedError,
@@ -80,6 +92,7 @@ import type {
   RecipeTransferParams,
   RecipeViewAccountParams,
   RecipeViewContractParams,
+  RpcStatusResponse,
 } from "./types.js";
 
 import {
@@ -89,12 +102,48 @@ import {
   resolveConfig,
 } from "./state.js";
 
-import { sha256 } from "@noble/hashes/sha2.js";
 import * as reExportAllUtils from "@fastnear/utils";
 import * as stateExports from "./state.js";
 import { reserveNonce } from "./nonce.js";
 
 export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
+
+// Successful activation checks are immutable for the lifetime of a process:
+// NEAR protocol versions only move forward. Failed checks are deliberately not
+// cached so a long-running process can start using the feature after an upgrade.
+const mlDsa65SupportedRpcUrls = new Set<string>();
+
+function isMlDsa65Key(value: unknown): value is `ml-dsa-65:${string}` {
+  return typeof value === "string" && value.startsWith("ml-dsa-65:");
+}
+
+function inspectAction(action: any): boolean {
+  const type = action?.type;
+  if (type === "Stake") {
+    assertNearValidatorPublicKey(action.publicKey);
+  } else if (type === "AddKey" || type === "DeleteKey") {
+    decodeNearPublicKey(action.publicKey);
+  }
+  let usesMlDsa = isMlDsa65Key(action?.publicKey) ||
+    isMlDsa65Key(action?.signature);
+  if (type === "SignedDelegate") {
+    const delegate = action.delegateAction;
+    decodeNearPublicKey(delegate?.publicKey);
+    usesMlDsa ||= isMlDsa65Key(delegate.publicKey);
+    if (action.publicKey !== undefined && action.publicKey !== delegate.publicKey) {
+      throw new Error("SignedDelegate publicKey must match delegateAction.publicKey");
+    }
+    usesMlDsa = inspectActions(delegate.actions) || usesMlDsa;
+  }
+  return usesMlDsa;
+}
+
+function inspectActions(actions: readonly any[]): boolean {
+  return actions.reduce(
+    (usesMlDsa, action) => inspectAction(action) || usesMlDsa,
+    false,
+  );
+}
 
 function normalizeActionParams(action: any): Record<string, any> {
   if (!action || typeof action !== "object") {
@@ -213,20 +262,9 @@ function omitUndefinedEntries<T extends Record<string, any>>(value?: T): T | und
   ) as T;
 }
 
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
-
-function trimLeadingSlash(value: string): string {
-  return value.replace(/^\/+/, "");
-}
-
-function appendQueryParams(url: URL, query?: Record<string, any>): URL {
-  if (!query) {
-    return url;
-  }
-
-  for (const [key, value] of Object.entries(query)) {
+function buildUrl(baseUrl: string, path: string, query?: Record<string, any>): string {
+  const url = new URL(path.replace(/^\/+/, ""), `${baseUrl.replace(/\/+$/, "")}/`);
+  for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) {
       continue;
     }
@@ -240,26 +278,12 @@ function appendQueryParams(url: URL, query?: Record<string, any>): URL {
     }
     url.searchParams.set(key, String(value));
   }
-
-  return url;
-}
-
-function buildUrl(baseUrl: string, path: string, query?: Record<string, any>): string {
-  const url = new URL(trimLeadingSlash(path), `${trimTrailingSlash(baseUrl)}/`);
-  return appendQueryParams(url, query).toString();
+  return url.toString();
 }
 
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
+  return text ? tryParseJson(text) : null;
 }
 
 function buildHttpError(service: ServiceFamily, response: Response, payload: any): Error {
@@ -290,30 +314,14 @@ function resolveConfigForCall(network?: FastNearNetworkId): NetworkConfig {
 }
 
 function resolveServiceBaseUrl(family: Exclude<ServiceFamily, "rpc">, config: NetworkConfig): string {
-  let baseUrl: string | null | undefined;
-
-  switch (family) {
-    case "api":
-      baseUrl = config.services?.api?.baseUrl;
-      break;
-    case "tx":
-      baseUrl = config.services?.tx?.baseUrl;
-      break;
-    case "transfers":
-      baseUrl = config.services?.transfers?.baseUrl;
-      break;
-    case "neardata":
-      baseUrl = config.services?.neardata?.baseUrl;
-      break;
-    case "fastdata.kv":
-      baseUrl = config.services?.fastdata?.kvBaseUrl;
-      break;
-  }
+  const baseUrl = family === "fastdata.kv"
+    ? config.services?.fastdata?.kvBaseUrl
+    : config.services?.[family]?.baseUrl;
 
   if (!baseUrl) {
     if (family === "transfers" && config.networkId === "testnet") {
       throw new Error(
-        "fastnear: transfers service is not configured for testnet. Provide near.config({ services: { transfers: { baseUrl: \"https://...\" } } }) to override."
+        "fastnear: transfers service is not configured for testnet; set services.transfers.baseUrl",
       );
     }
     throw new Error(`fastnear: ${family} service is not configured for ${config.networkId}.`);
@@ -684,6 +692,39 @@ export const queryAccessKey = async ({
     ),
     { useArchival, network },
   );
+};
+
+export const queryAccessKeyList = async ({
+                                      accountId,
+                                      blockId,
+                                      useArchival,
+                                      network,
+                                    }: {
+  accountId: string;
+  blockId?: string;
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}): Promise<AccessKeyListResponse> => {
+  return sendRpc(
+    "query",
+    withBlockId(
+      { request_type: "view_access_key_list", account_id: accountId },
+      blockId,
+    ),
+    { useArchival, network },
+  );
+};
+
+/** Return the active protocol version reported by the selected RPC. */
+export const queryProtocolVersion = async ({
+  network,
+}: { network?: FastNearNetworkId } = {}): Promise<number> => {
+  const status = await sendRpc<RpcStatusResponse>("status", [], { network });
+  const version = status?.result?.protocol_version;
+  if (!Number.isInteger(version)) {
+    throw new Error("missing protocol_version");
+  }
+  return version;
 };
 
 export const queryTx = async ({ txHash, accountId, useArchival, network }: { txHash: string; accountId: string; useArchival?: boolean; network?: FastNearNetworkId }) => {
@@ -1135,29 +1176,58 @@ export const signOut = async ({
   }
 };
 
+type SendTxCommon = {
+  receiverId: string;
+  actions: NearAction[];
+  waitUntil?: string;
+  network?: FastNearNetworkId;
+};
+
+export type SendTxParams = SendTxCommon & (
+  | { signer?: never; signerId?: never }
+  | { signer: TransactionSigner; signerId: string }
+);
+
 export const sendTx = async ({
                                receiverId,
                                actions,
                                waitUntil,
                                network,
-                             }: {
-  receiverId: string;
-  actions: any[];
-  waitUntil?: string;
-  network?: FastNearNetworkId;
-}) => {
+                               signer: suppliedSigner,
+                               signerId: suppliedSignerId,
+                             }: SendTxParams) => {
+  const explicitSigner = suppliedSigner !== undefined;
+  if (explicitSigner !== (suppliedSignerId !== undefined)) {
+    throw new Error("signer and signerId must be paired");
+  }
+
   const targetNetwork = network ?? getConfig().networkId;
   const slot = getAccountState(targetNetwork);
-  const signerId = slot.accountId;
+  const signerId = suppliedSignerId ?? slot.accountId;
   if (!signerId) throw new Error("Must sign in");
 
-  const pubKey = slot.publicKey ?? "";
+  const pubKey = suppliedSigner?.publicKey ?? slot.publicKey ?? "";
   const privKey = slot.privateKey;
   const txId = generateTxId();
+  if (pubKey) decodeNearPublicKey(pubKey);
+  const actionUsesMlDsa = inspectActions(actions);
+  if (isMlDsa65Key(pubKey) || actionUsesMlDsa) {
+    const rpcUrl = resolveRpcUrl(resolveConfigForCall(targetNetwork));
+    if (!mlDsa65SupportedRpcUrls.has(rpcUrl)) {
+      const protocolVersion = await queryProtocolVersion({ network: targetNetwork });
+      if (protocolVersion < 85) {
+        throw new Error(`ML-DSA-65 requires v85+; got ${protocolVersion}`);
+      }
+      mlDsa65SupportedRpcUrls.add(rpcUrl);
+    }
+  }
 
   // If no local private key, or the receiver doesn't match the access key contract,
   // or the actions aren't signable with a limited access key, delegate to the wallet
-  if (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions)) {
+  if (
+    !explicitSigner &&
+    (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions))
+  ) {
     const jsonTx = { signerId, receiverId, actions };
     updateTxHistory({ status: "Pending", txId, tx: jsonTx, finalState: false });
 
@@ -1201,73 +1271,83 @@ export const sendTx = async ({
     }
   }
 
-  // Local signing path (limited access key). The RPC helpers and the
-  // `nonce`/`block` caches are now per-network too, so a sendTx on a
-  // non-active network signs against that network's RPC and caches the
-  // nonce/block under the right key.
+  const localSigner = suppliedSigner ?? signerFromPrivateKey(privKey as string);
+  const validatedPublicKey = pubKey as NearPublicKey;
+
+  // Local signing path: caches are scoped to the target network.
   const blockKey = `block.${targetNetwork}`;
 
-  // Reserve a unique nonce under a per-network in-process lock. Concurrent
-  // sendTx calls on a cold `nonce.<network>` cache (the first burst after
-  // connect) would otherwise each read the same value and sign the same nonce —
-  // one lands, the rest fail InvalidNonce. The cold access-key fetch runs once,
-  // inside the lock; later waiters reuse the warmed cache. See reserveNonce.
-  const nonce = await reserveNonce(targetNetwork, async () => {
-    const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
-    if (accessKey.result.error) {
-      throw new Error(`Access key error: ${accessKey.result.error} when attempting to get nonce for ${signerId} for public key ${pubKey}`);
-    }
-    return accessKey.result.nonce;
-  });
+  // Hold the per-key slot through submission so N+1 cannot land before N.
+  const keyFingerprint = toBase58(sha256(new TextEncoder().encode(pubKey)));
+  const nonceScope = `${targetNetwork}.${signerId}.${keyFingerprint}`;
+  return reserveNonce(
+    nonceScope,
+    async () => {
+      const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
+      if (accessKey.result.error) {
+        throw new Error(`Access key error for ${signerId}: ${accessKey.result.error}`);
+      }
+      const permission = accessKey.result.permission;
+      if (permission !== "FullAccess") {
+        const functionCall = permission?.FunctionCall;
+        if (!functionCall || !canSignWithLAK(actions) ||
+          receiverId !== functionCall.receiver_id ||
+          (functionCall.method_names.length > 0 &&
+            !functionCall.method_names.includes((actions[0] as any).methodName))) {
+          throw new Error(`fastnear: signer key is not permitted for ${receiverId}`);
+        }
+      }
+      return accessKey.result.nonce;
+    },
+    async (nonce) => {
+      let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
+      if (
+        !lastKnownBlock ||
+        parseFloat(lastKnownBlock.header.timestamp_nanosec) / 1e6 + MaxBlockDelayMs < Date.now()
+      ) {
+        const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
+        lastKnownBlock = {
+          header: {
+            hash: latestBlock.result.header.hash,
+            timestamp_nanosec: latestBlock.result.header.timestamp_nanosec,
+          },
+        };
+        lsSet(blockKey, lastKnownBlock);
+      }
 
-  // The block hash is independent of the nonce, so it stays outside the lock;
-  // its own cache and 6h staleness window make a rare concurrent double-fetch
-  // harmless (each tx still signs against a valid recent block).
-  let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
-  if (
-    !lastKnownBlock ||
-    parseFloat(lastKnownBlock.header.timestamp_nanosec) / 1e6 + MaxBlockDelayMs < Date.now()
-  ) {
-    const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
-    lastKnownBlock = {
-      header: {
-        hash: latestBlock.result.header.hash,
-        timestamp_nanosec: latestBlock.result.header.timestamp_nanosec,
-      },
-    };
-    lsSet(blockKey, lastKnownBlock);
-  }
+      const blockHash = lastKnownBlock.header.hash;
 
-  const blockHash = lastKnownBlock.header.hash;
+      const plainTransactionObj: PlainTransaction = {
+        signerId,
+        publicKey: validatedPublicKey,
+        nonce,
+        receiverId,
+        blockHash,
+        actions,
+      };
 
-  const plainTransactionObj: PlainTransaction = {
-    signerId,
-    publicKey: pubKey,
-    nonce,
-    receiverId,
-    blockHash,
-    actions,
-  };
+      const txBytes = serializeTransaction(plainTransactionObj);
+      const txHashBytes = sha256(txBytes);
+      const txHash58 = toBase58(txHashBytes);
 
-  const txBytes = serializeTransaction(plainTransactionObj);
-  const txHashBytes = sha256(txBytes);
-  const txHash58 = toBase58(txHashBytes);
+      const signatureBytes = await localSigner.signHash(txHashBytes);
+      const signatureBase58 = toBase58(signatureBytes);
+      const signedTransactionBytes = serializeSignedTransaction(plainTransactionObj, signatureBytes);
+      const signedTxBase64 = bytesToBase64(signedTransactionBytes);
 
-  const signatureBase58 = signHash(txHashBytes, privKey, { returnBase58: true }) as string;
-  const signedTransactionBytes = serializeSignedTransaction(plainTransactionObj, signatureBase58);
-  const signedTxBase64 = bytesToBase64(signedTransactionBytes);
+      updateTxHistory({
+        status: "Pending",
+        txId,
+        tx: txToJson(plainTransactionObj),
+        signature: signatureBase58,
+        signedTxBase64,
+        txHash: txHash58,
+        finalState: false,
+      });
 
-  updateTxHistory({
-    status: "Pending",
-    txId,
-    tx: plainTransactionObj,
-    signature: signatureBase58,
-    signedTxBase64,
-    txHash: txHash58,
-    finalState: false,
-  });
-
-  return await sendTxToRpc(signedTxBase64, waitUntil, txId, targetNetwork);
+      return sendTxToRpc(signedTxBase64, waitUntil, txId, targetNetwork);
+    },
+  );
 };
 
 /**
@@ -1357,7 +1437,7 @@ export const actions = {
     args?: Record<string, any>;
     argsBase64?: string;
   }) => ({
-    type: "FunctionCall",
+    type: "FunctionCall" as const,
     methodName,
     args,
     argsBase64,
@@ -1366,20 +1446,23 @@ export const actions = {
   }),
 
   transfer: (yoctoAmount: string) => ({
-    type: "Transfer",
+    type: "Transfer" as const,
     deposit: yoctoAmount,
   }),
 
-  stakeNEAR: ({amount, publicKey}: { amount: string; publicKey: string }) => ({
-    type: "Stake",
-    stake: amount,
-    publicKey,
-  }),
+  stakeNEAR: ({amount, publicKey}: { amount: string; publicKey: string }) => {
+    assertNearValidatorPublicKey(publicKey);
+    return {
+      type: "Stake" as const,
+      stake: amount,
+      publicKey: publicKey as NearPublicKey,
+    };
+  },
 
   addFullAccessKey: ({publicKey}: { publicKey: string }) => ({
-    type: "AddKey",
-    publicKey: publicKey,
-    accessKey: {permission: "FullAccess"},
+    type: "AddKey" as const,
+    publicKey: publicKey as NearPublicKey,
+    accessKey: {nonce: 0, permission: "FullAccess" as const},
   }),
 
   addLimitedAccessKey: ({
@@ -1393,32 +1476,34 @@ export const actions = {
     accountId: string;
     methodNames: string[];
   }) => ({
-    type: "AddKey",
-    publicKey: publicKey,
+    type: "AddKey" as const,
+    publicKey: publicKey as NearPublicKey,
     accessKey: {
-      permission: "FunctionCall",
-      allowance,
-      receiverId: accountId,
-      methodNames,
+      nonce: 0,
+      permission: {
+        allowance,
+        receiverId: accountId,
+        methodNames,
+      },
     },
   }),
 
   deleteKey: ({publicKey}: { publicKey: string }) => ({
-    type: "DeleteKey",
-    publicKey,
+    type: "DeleteKey" as const,
+    publicKey: publicKey as NearPublicKey,
   }),
 
   deleteAccount: ({beneficiaryId}: { beneficiaryId: string }) => ({
-    type: "DeleteAccount",
+    type: "DeleteAccount" as const,
     beneficiaryId,
   }),
 
   createAccount: () => ({
-    type: "CreateAccount",
+    type: "CreateAccount" as const,
   }),
 
   deployContract: ({codeBase64}: { codeBase64: string }) => ({
-    type: "DeployContract",
+    type: "DeployContract" as const,
     codeBase64,
   }),
 };

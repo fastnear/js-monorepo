@@ -11,10 +11,16 @@ export const nearChainSchema = new (class BorshSchema {
       data: { array: { type: "u8", len: 65 } },
     },
   };
+  MlDsa65Signature: Schema = {
+    struct: {
+      data: { array: { type: "u8", len: 3309 } },
+    },
+  };
   Signature: Schema = {
     enum: [
       { struct: { ed25519Signature: this.Ed25519Signature } },
       { struct: { secp256k1Signature: this.Secp256k1Signature } },
+      { struct: { mlDsa65Signature: this.MlDsa65Signature } },
     ],
   };
   Ed25519Data: Schema = {
@@ -27,10 +33,16 @@ export const nearChainSchema = new (class BorshSchema {
       data: { array: { type: "u8", len: 64 } },
     },
   };
+  MlDsa65Data: Schema = {
+    struct: {
+      data: { array: { type: "u8", len: 1952 } },
+    },
+  };
   PublicKey: Schema = {
     enum: [
       { struct: { ed25519Key: this.Ed25519Data } },
       { struct: { secp256k1Key: this.Secp256k1Data } },
+      { struct: { mlDsa65Key: this.MlDsa65Data } },
     ],
   };
   FunctionCallPermission: Schema = {

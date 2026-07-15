@@ -3,6 +3,6 @@ import { createFastNearTsupConfig } from "../../scripts/tsup-config";
 
 export default createFastNearTsupConfig({
   manifest: pkg,
-  bannerName: "Utils",
-  globalName: "NearUtils",
+  bannerName: "ML-DSA-65",
+  globalName: "NearMlDsa65",
 });

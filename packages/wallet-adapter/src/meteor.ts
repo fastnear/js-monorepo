@@ -1,7 +1,15 @@
 import { serialize as borshSerialize } from "@fastnear/borsh";
-import { privateKeyFromRandom, publicKeyFromPrivate, bytesToBase64, mapTransaction, SCHEMA } from "@fastnear/utils";
-import type { PlainTransaction } from "@fastnear/utils";
+import {
+  privateKeyFromRandom,
+  publicKeyFromPrivate,
+  bytesToBase64,
+  decodeNearPublicKey,
+  mapTransaction,
+  SCHEMA,
+} from "@fastnear/utils";
+import type { NearPublicKey, PlainTransaction } from "@fastnear/utils";
 import { connectorActionsToFastnearActions } from "./actions.js";
+import { firstClassicalPublicKey } from "./key-selection.js";
 import { createRpcFactory } from "./rpc.js";
 import { TransportError, UserRejectedError } from "./errors.js";
 import { createDefaultStorage, readJson, writeJson } from "./storage.js";
@@ -333,14 +341,16 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
   const findSignerPublicKey = async (network: WalletNetwork, accountId: string, preferredKeys: string[]): Promise<string> => {
     const rpc = rpcForNetwork(network);
     for (const key of preferredKeys) {
+      const classicalKey = firstClassicalPublicKey([key]);
+      if (classicalKey == null) continue;
       try {
         await rpc.query({
           request_type: "view_access_key",
           finality: "optimistic",
           account_id: accountId,
-          public_key: key,
+          public_key: classicalKey,
         });
-        return key;
+        return classicalKey;
       } catch {
         // Ignore and continue probing candidate keys.
       }
@@ -356,7 +366,16 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
       throw new TransportError("NO_ACCESS_KEYS", `No access keys found for account ${accountId}`);
     }
 
-    return accessKeyList.keys[0].public_key;
+    const classicalKey = firstClassicalPublicKey(
+      accessKeyList.keys.map((accessKey) => accessKey.public_key),
+    );
+    if (classicalKey == null) {
+      throw new TransportError(
+        "NO_CLASSICAL_ACCESS_KEYS",
+        `No full classical access keys found for account ${accountId}`,
+      );
+    }
+    return classicalKey;
   };
 
   const prepareMeteorTransactions = async (
@@ -368,6 +387,8 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
     const rpc = rpcForNetwork(network);
     const block = await rpc.block({ finality: "final" });
     const publicKey = await findSignerPublicKey(network, signerId, preferredKeys);
+    decodeNearPublicKey(publicKey);
+    const validatedPublicKey = publicKey as NearPublicKey;
     const accessKey = await rpc.query<{ nonce: number }>({
       request_type: "view_access_key",
       finality: "optimistic",
@@ -377,7 +398,7 @@ export const createMeteorAdapter = (options: MeteorAdapterOptions = {}) => {
 
     return transactions.map((tx, index) => ({
       signerId,
-      publicKey,
+      publicKey: validatedPublicKey,
       nonce: BigInt(accessKey.nonce) + BigInt(index + 1),
       receiverId: tx.receiverId,
       blockHash: block.header.hash,

@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/borsh",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Lean borsh serializer/deserializer for NEAR Protocol",
   "license": "MIT",
   "type": "module",

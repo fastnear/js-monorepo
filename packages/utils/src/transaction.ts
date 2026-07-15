@@ -1,15 +1,111 @@
-import { serialize as borshSerialize, deserialize as borshDeserialize, type Schema } from "@fastnear/borsh";
-import { curveFromKey, keyFromString } from "./crypto.js";
-import {base64ToBytes, fromBase58, fromBase64, toBase64} from "./misc.js";
+import { serialize as borshSerialize } from "@fastnear/borsh";
+import {
+  assertNearValidatorPublicKey,
+  decodeNearPublicKey,
+  keyFromString,
+  keyTypeFromString,
+  NEAR_KEY_DESCRIPTORS,
+  type NearPublicKey,
+} from "./crypto.js";
+import { base64ToBytes, fromBase58 } from "./misc.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
+
+export type NearInteger = string | bigint | number;
+
+export interface NearCreateAccountAction {
+  type: "CreateAccount";
+}
+
+export interface NearDeployContractAction {
+  type: "DeployContract";
+  codeBase64: string;
+}
+
+export interface NearFunctionCallAction {
+  type: "FunctionCall";
+  methodName: string;
+  args?: unknown;
+  argsBase64?: string | null;
+  gas?: NearInteger;
+  deposit?: NearInteger;
+}
+
+export interface NearTransferAction {
+  type: "Transfer";
+  deposit: NearInteger;
+}
+
+export interface NearStakeAction {
+  type: "Stake";
+  stake: NearInteger;
+  publicKey: NearPublicKey;
+}
+
+export interface NearFunctionCallPermission {
+  receiverId: string;
+  methodNames?: string[];
+  allowance?: NearInteger | null;
+}
+
+export interface NearAccessKey {
+  nonce?: NearInteger;
+  permission: "FullAccess" | "FunctionCall" | NearFunctionCallPermission;
+  receiverId?: string;
+  methodNames?: string[];
+  allowance?: NearInteger | null;
+}
+
+export interface NearAddKeyAction {
+  type: "AddKey";
+  publicKey: NearPublicKey;
+  accessKey: NearAccessKey;
+}
+
+export interface NearDeleteKeyAction {
+  type: "DeleteKey";
+  publicKey: NearPublicKey;
+}
+
+export interface NearDeleteAccountAction {
+  type: "DeleteAccount";
+  beneficiaryId: string;
+}
+
+export type NearClassicAction =
+  | NearCreateAccountAction
+  | NearDeployContractAction
+  | NearFunctionCallAction
+  | NearTransferAction
+  | NearStakeAction
+  | NearAddKeyAction
+  | NearDeleteKeyAction
+  | NearDeleteAccountAction;
+
+export interface NearDelegateAction {
+  senderId: string;
+  receiverId: string;
+  actions: NearClassicAction[];
+  nonce: NearInteger;
+  maxBlockHeight: NearInteger;
+  publicKey: NearPublicKey;
+}
+
+export interface NearSignedDelegateAction {
+  type: "SignedDelegate";
+  delegateAction: NearDelegateAction;
+  signature: string | Uint8Array;
+  publicKey?: NearPublicKey;
+}
+
+export type NearAction = NearClassicAction | NearSignedDelegateAction;
 
 export interface PlainTransaction {
   signerId: string;
-  publicKey: string;
-  nonce: string | bigint | number;
+  publicKey: NearPublicKey;
+  nonce: NearInteger;
   receiverId: string;
   blockHash: string;
-  actions: Array<any>;
+  actions: NearAction[];
 }
 
 export interface PlainSignedTransaction {
@@ -19,30 +115,49 @@ export interface PlainSignedTransaction {
 
 // Function to return a JSON-ready version of the transaction
 export const txToJson = (tx: PlainTransaction): Record<string, any> => {
-  return JSON.parse(JSON.stringify(tx, (key, value) =>
-    typeof value === 'bigint' ? value.toString() : value
-  ));
+  return JSON.parse(
+    JSON.stringify(tx, (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    ),
+  );
 };
 
 // Return a compact JSON string of the transaction (for display/logging)
 export const txToJsonStringified = (tx: PlainTransaction): string => {
   return JSON.stringify(txToJson(tx));
-}
+};
 
 function mapPublicKey(keyString: string) {
-  const curve = curveFromKey(keyString);
-  const data = keyFromString(keyString);
-  return curve === "secp256k1"
-    ? { secp256k1Key: { data } }
-    : { ed25519Key: { data } };
+  const { keyType, data } = decodeNearPublicKey(keyString);
+  return { [NEAR_KEY_DESCRIPTORS[keyType].publicKeyVariant]: { data } };
 }
 
-function mapSignature(sigBase58: string, signerKeyString: string) {
-  const curve = curveFromKey(signerKeyString);
-  const data = fromBase58(sigBase58);
-  return curve === "secp256k1"
-    ? { secp256k1Signature: { data } }
-    : { ed25519Signature: { data } };
+function mapSignature(signature: string | Uint8Array, signerKeyString: string) {
+  const keyType = keyTypeFromString(signerKeyString);
+  let data: Uint8Array;
+  if (typeof signature === "string") {
+    if (signature.includes(":")) {
+      const signatureKeyType = keyTypeFromString(signature);
+      if (signatureKeyType !== keyType) {
+        throw new Error(
+          `Signature key type ${signatureKeyType} does not match signer key type ${keyType}`,
+        );
+      }
+      data = keyFromString(signature);
+    } else {
+      data = keyFromString(`${keyType}:${signature}`);
+    }
+  } else {
+    data = signature;
+  }
+  const expected = NEAR_KEY_DESCRIPTORS[keyType].signatureLength;
+  if (data.length !== expected) {
+    throw new Error(
+      `Invalid ${keyType} signature length: expected ${expected} bytes, got ${data.length}`,
+    );
+  }
+
+  return { [NEAR_KEY_DESCRIPTORS[keyType].signatureVariant]: { data } };
 }
 
 export function mapTransaction(jsonTransaction: PlainTransaction) {
@@ -52,7 +167,7 @@ export function mapTransaction(jsonTransaction: PlainTransaction) {
     nonce: BigInt(jsonTransaction.nonce),
     receiverId: jsonTransaction.receiverId,
     blockHash: fromBase58(jsonTransaction.blockHash),
-    actions: jsonTransaction.actions.map(mapAction)
+    actions: jsonTransaction.actions.map(mapAction),
   };
 }
 
@@ -61,7 +176,10 @@ export function serializeTransaction(jsonTransaction: PlainTransaction) {
   return borshSerialize(SCHEMA.Transaction, transaction);
 }
 
-export function serializeSignedTransaction(jsonTransaction: PlainTransaction, signature: string) {
+export function serializeSignedTransaction(
+  jsonTransaction: PlainTransaction,
+  signature: string | Uint8Array,
+) {
   const mappedSignedTx = mapTransaction(jsonTransaction);
 
   const plainSignedTransaction: PlainSignedTransaction = {
@@ -72,7 +190,7 @@ export function serializeSignedTransaction(jsonTransaction: PlainTransaction, si
   return borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
 }
 
-export function mapAction(action: any): object {
+export function mapAction(action: NearAction): object {
   switch (action.type) {
     case "CreateAccount": {
       return {
@@ -90,9 +208,10 @@ export function mapAction(action: any): object {
       return {
         functionCall: {
           methodName: action.methodName,
-          args: (action.argsBase64 !== null && action.argsBase64 !== undefined) ?
-            base64ToBytes(action.argsBase64) :
-            (new TextEncoder().encode(JSON.stringify(action.args))),
+          args:
+            action.argsBase64 !== null && action.argsBase64 !== undefined
+              ? base64ToBytes(action.argsBase64)
+              : new TextEncoder().encode(JSON.stringify(action.args ?? {})),
           gas: BigInt(action.gas ?? "300000000000000"),
           deposit: BigInt(action.deposit ?? "0"),
         },
@@ -106,6 +225,7 @@ export function mapAction(action: any): object {
       };
     }
     case "Stake": {
+      assertNearValidatorPublicKey(action.publicKey);
       return {
         stake: {
           stake: BigInt(action.stake),
@@ -114,21 +234,38 @@ export function mapAction(action: any): object {
       };
     }
     case "AddKey": {
+      const permission = action.accessKey.permission;
+      if (
+        permission !== "FullAccess" &&
+        permission !== "FunctionCall" &&
+        (permission == null || typeof permission !== "object")
+      ) {
+        throw new Error(`Unsupported access-key permission: ${String(permission)}`);
+      }
+      const functionCall =
+        typeof permission === "object" ? permission : action.accessKey;
+      if (
+        permission !== "FullAccess" &&
+        typeof functionCall.receiverId !== "string"
+      ) {
+        throw new Error("Function-call access keys require a receiverId");
+      }
+
       return {
         addKey: {
           publicKey: mapPublicKey(action.publicKey),
           accessKey: {
-            nonce: BigInt(action.accessKey.nonce),
+            nonce: BigInt(action.accessKey.nonce ?? 0),
             permission:
-              action.accessKey.permission === "FullAccess"
+              permission === "FullAccess"
                 ? { fullAccess: {} }
                 : {
                   functionCall: {
-                    allowance: action.accessKey.allowance
-                      ? BigInt(action.accessKey.allowance)
+                    allowance: functionCall.allowance != null
+                      ? BigInt(functionCall.allowance)
                       : null,
-                    receiverId: action.accessKey.receiverId,
-                    methodNames: action.accessKey.methodNames,
+                    receiverId: functionCall.receiverId,
+                    methodNames: functionCall.methodNames ?? [],
                   },
                 },
           },
@@ -150,15 +287,30 @@ export function mapAction(action: any): object {
       };
     }
     case "SignedDelegate": {
+      const delegate = action.delegateAction;
+      if (action.publicKey && action.publicKey !== delegate.publicKey) {
+        throw new Error(
+          "SignedDelegate publicKey must match delegateAction.publicKey",
+        );
+      }
       return {
         signedDelegate: {
-          delegateAction: mapAction(action.delegateAction),
-          signature: mapSignature(action.signature, action.publicKey),
+          delegateAction: {
+            senderId: delegate.senderId,
+            receiverId: delegate.receiverId,
+            actions: delegate.actions.map(mapAction),
+            nonce: BigInt(delegate.nonce),
+            maxBlockHeight: BigInt(delegate.maxBlockHeight),
+            publicKey: mapPublicKey(delegate.publicKey),
+          },
+          signature: mapSignature(action.signature, delegate.publicKey),
         },
       };
     }
     default: {
-      throw new Error("Not implemented action: " + action.type);
+      throw new Error(
+        "Not implemented action: " + (action as { type?: unknown }).type,
+      );
     }
   }
 }

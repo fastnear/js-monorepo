@@ -161,7 +161,12 @@ export interface NEP413Message {
   state?: string | null;
 }
 
-export function canSignWithLAK(actions: Array<{type: string; deposit?: string}>) {
+export function canSignWithLAK(
+  actions: ReadonlyArray<{
+    type: string;
+    deposit?: string | number | bigint;
+  }>,
+) {
   return (
     actions.length === 1 &&
     actions[0].type === "FunctionCall" &&
