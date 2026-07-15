@@ -17,6 +17,7 @@
     "check:bundles": "node scripts/check-bundle-sizes.mjs",
     "bench:ml-dsa-65": "yarn workspace @fastnear/ml-dsa-65 bench",
     "smoke:ml-dsa:testnet": "yarn build && node scripts/smoke-ml-dsa-testnet.mjs",
+    "smoke:x402:testnet": "yarn build && node scripts/smoke-x402-testnet.mjs",
     "smoke:services:live": "yarn workspace @fastnear/api build && node scripts/smoke-services-live.mjs",
     "smoke:agent:published": "node scripts/smoke-published-agent-surfaces.mjs",
     "test": "vitest run && yarn test:agent"
@@ -43,10 +44,15 @@
   ],
   "dependencies": {
     "@fastnear/near-connect": "^0.12.1",
+    "@near-js/transactions": "^2.5.1",
     "@noble/curves": "=2.0.1",
     "@noble/hashes": "=2.0.1",
     "@noble/post-quantum": "=0.6.0",
+    "@noble/secp256k1": "^3.1.0",
     "@walletconnect/sign-client": "^2.23.7",
+    "@x402/core": "~2.18.0",
+    "@x402/fetch": "~2.18.0",
+    "@x402/near": "~2.18.0",
     "base58-js": "=2.0.0",
     "events": "^3.3.0",
     "js-base64": "^3.7.7"

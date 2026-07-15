@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "./dist/esm",
+    "declaration": true,
+    "declarationMap": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@fastnear/borsh": ["../borsh/src/index.ts"],
+      "@fastnear/borsh-schema": ["../borsh-schema/src/index.ts"],
+      "@fastnear/wallet": ["../wallet/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*", "../../types/*.d.ts"]
+}

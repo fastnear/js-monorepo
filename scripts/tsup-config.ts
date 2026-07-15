@@ -11,6 +11,7 @@ export interface FastNearTsupOptions {
   bannerName: string;
   globalName: string;
   footer?: string;
+  moduleEntries?: Record<string, string>;
   sourceEntries?: string[];
   iifePlatform?: Options["platform"];
 }
@@ -32,22 +33,24 @@ function banner(manifest: PackageManifest, bannerName: string, format: string): 
 
 /**
  * Standard FastNear package build:
- * - CJS bundles package-internal modules into one resolvable entry while
+ * - CJS bundles each public module entry into a resolvable entry while
  *   retaining workspace/third-party dependencies as external requires.
  * - ESM remains unbundled and tree-shakeable.
- * - IIFE bundles every dependency into one browser-ready global.
+ * - IIFE bundles every dependency reachable from the root entry into one
+ *   browser-ready global.
  */
 export function createFastNearTsupConfig({
   manifest,
   bannerName,
   globalName,
   footer = lockedGlobalFooter(globalName),
+  moduleEntries = { index: "src/index.ts" },
   sourceEntries = ["src/**/*.ts", "!src/**/*.test.ts"],
   iifePlatform,
 }: FastNearTsupOptions) {
   return defineConfig([
     {
-      entry: { index: "src/index.ts" },
+      entry: moduleEntries,
       outDir: "dist/cjs",
       format: ["cjs"],
       bundle: true,
@@ -55,7 +58,7 @@ export function createFastNearTsupConfig({
       splitting: false,
       clean: true,
       keepNames: true,
-      dts: { resolve: true, entry: "src/index.ts" },
+      dts: { resolve: true, entry: moduleEntries },
       sourcemap: true,
       minify: false,
       banner: { js: banner(manifest, bannerName, "CJS") },
@@ -69,7 +72,7 @@ export function createFastNearTsupConfig({
       clean: true,
       keepNames: true,
       shims: true,
-      dts: { resolve: true, entry: "src/index.ts" },
+      dts: { resolve: true, entry: moduleEntries },
       sourcemap: true,
       minify: false,
       banner: { js: banner(manifest, bannerName, "ESM") },

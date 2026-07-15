@@ -32,6 +32,19 @@ const exportProbes = {
   "@fastnear/utils": ["serializeSignedTransaction", "signerFromPrivateKey"],
   "@fastnear/wallet": ["connect", "sendTransaction"],
   "@fastnear/wallet-adapter": ["createMeteorAdapter", "createNearMobileAdapter"],
+  "@fastnear/x402": [
+    "createFastNearWalletSigner",
+    "createNearPaymentFetch",
+    "createNearX402Client",
+  ],
+};
+
+const subpathExportProbes = {
+  "@fastnear/x402": {
+    "/node": ["createLocalNearSigner"],
+    "/server": ["createNearResourceServer"],
+    "/facilitator": ["createNearFacilitator"],
+  },
 };
 
 const runtimes = [
@@ -41,6 +54,14 @@ const runtimes = [
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
+}
+
+function resolveExportTarget(manifest, exportPath, condition) {
+  let target = manifest.exports?.[exportPath];
+  while (target && typeof target === "object") {
+    target = target[condition] ?? target.default;
+  }
+  return typeof target === "string" ? target : undefined;
 }
 
 function run(command, args, options = {}) {
@@ -198,6 +219,7 @@ function writeConsumerProject(workspaces) {
   const packageSpecs = workspaces.map((workspace) => ({
     name: workspace.manifest.name,
     probes: exportProbes[workspace.manifest.name] ?? [],
+    subpaths: subpathExportProbes[workspace.manifest.name] ?? {},
     version: workspace.manifest.version,
   }));
 
@@ -222,22 +244,33 @@ function runtimeKeys(namespace) {
     .sort();
 }
 
-for (const packageSpec of packageSpecs) {
-  const cjs = require(packageSpec.name);
-  const esm = await import(packageSpec.name);
+async function assertModuleFormats(specifier, probes) {
+  const cjs = require(specifier);
+  const esm = await import(specifier);
   const cjsKeys = runtimeKeys(cjs);
   const esmKeys = runtimeKeys(esm);
 
-  assert.ok(cjsKeys.length > 0, packageSpec.name + " require() exposed no exports");
-  assert.ok(esmKeys.length > 0, packageSpec.name + " import exposed no exports");
-  assert.deepEqual(cjsKeys, esmKeys, packageSpec.name + " CJS/ESM export mismatch");
+  assert.ok(cjsKeys.length > 0, specifier + " require() exposed no exports");
+  assert.ok(esmKeys.length > 0, specifier + " import exposed no exports");
+  assert.deepEqual(cjsKeys, esmKeys, specifier + " CJS/ESM export mismatch");
 
-  for (const probe of packageSpec.probes) {
-    assert.notEqual(cjs[probe], undefined, packageSpec.name + " require() missed " + probe);
-    assert.notEqual(esm[probe], undefined, packageSpec.name + " import missed " + probe);
+  for (const probe of probes) {
+    assert.notEqual(cjs[probe], undefined, specifier + " require() missed " + probe);
+    assert.notEqual(esm[probe], undefined, specifier + " import missed " + probe);
+  }
+}
+
+for (const packageSpec of packageSpecs) {
+  await assertModuleFormats(packageSpec.name, packageSpec.probes);
+  for (const [subpath, probes] of Object.entries(packageSpec.subpaths)) {
+    await assertModuleFormats(packageSpec.name + subpath, probes);
   }
 
-  console.log(packageSpec.name + "@" + packageSpec.version + ": require() + import() OK");
+  const subpathCount = Object.keys(packageSpec.subpaths).length;
+  console.log(
+    packageSpec.name + "@" + packageSpec.version + ": require() + import() OK" +
+      (subpathCount === 0 ? "" : " (" + subpathCount + " subpaths)"),
+  );
 }
 
 console.log("Runtime " + process.version + ": all packed packages OK");
@@ -338,6 +371,26 @@ function verifyInstalledGraph(workspaces) {
       installedManifest.types,
     ]) {
       if (target) {
+        assert.equal(
+          existsSync(path.resolve(path.dirname(installedManifestPath), target)),
+          true,
+          `${name} tarball is missing ${target}`,
+        );
+      }
+    }
+
+    for (const subpath of Object.keys(subpathExportProbes[name] ?? {})) {
+      const exportPath = `.${subpath}`;
+      for (const condition of ["require", "import", "types"]) {
+        const target = resolveExportTarget(
+          installedManifest,
+          exportPath,
+          condition,
+        );
+        assert.ok(
+          target,
+          `${name} tarball is missing the ${condition} target for ${exportPath}`,
+        );
         assert.equal(
           existsSync(path.resolve(path.dirname(installedManifestPath), target)),
           true,
