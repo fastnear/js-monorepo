@@ -154,9 +154,11 @@
 
       if (!connection) {
         setConnected(null, null);
-        showResult(summary
+        const message = summary
           ? `No compatible wallet was connected. Candidate wallets: ${summary}. Check whether the wallet popup was closed, rejected, or blocked.`
-          : 'No compatible wallet was connected. The manifest did not expose a wallet with both delegate-signing features.');
+          : 'No compatible wallet was connected. The manifest did not expose a wallet with both delegate-signing features.';
+        setStatus(`Connect failed: ${message}`);
+        showResult(message);
         return;
       }
 
@@ -174,8 +176,10 @@
       setConnected(network, accountId);
       showResult('Ready. The payment request still has not been sent.');
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       setConnected(null, null);
-      showResult(error instanceof Error ? error.message : String(error));
+      setStatus(`Connect failed: ${message}`);
+      showResult(message);
     }
   }
 
