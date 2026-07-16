@@ -5,6 +5,7 @@ import {
   SCHEMA,
   sha256,
 } from "@fastnear/utils";
+import { encodeDelegateAction } from "@near-js/transactions";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 
@@ -30,9 +31,7 @@ function readBytes(value: unknown, key: string, length: number): Uint8Array | nu
 }
 
 function verifySignature(signedDelegate: any): boolean {
-  const delegateBytes = new Uint8Array(
-    serialize(SCHEMA.DelegateAction, signedDelegate.delegateAction),
-  );
+  const delegateBytes = encodeDelegateAction(signedDelegate.delegateAction);
   const digest = sha256(delegateBytes);
   const edPublicKey = readBytes(signedDelegate.delegateAction?.publicKey, "ed25519Key", 32);
   const edSignature = readBytes(signedDelegate.signature, "ed25519Signature", 64);

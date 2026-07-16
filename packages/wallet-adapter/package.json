@@ -43,6 +43,7 @@
     "@fastnear/borsh": "workspace:*",
     "@fastnear/borsh-schema": "workspace:*",
     "@fastnear/utils": "workspace:*",
+    "@near-js/transactions": "*",
     "@noble/curves": "*"
   },
   "devDependencies": {
