@@ -112,20 +112,38 @@
     }
 
     const network = selectedNetwork();
+    const walletFeatures = {
+      signDelegateActions: true,
+      signDelegateActionsWithTtl: true,
+    };
+    const connectOptions = {
+      network,
+      ...(smokeConfig && smokeConfig.manifest ? { manifest: smokeConfig.manifest } : {}),
+      features: walletFeatures,
+    };
     try {
-      setStatus('Opening the compatible-wallet picker...');
+      setStatus('Checking compatible wallets...');
+      const wallets = typeof nearWallet.availableWallets === 'function'
+        ? await nearWallet.availableWallets(connectOptions)
+        : [];
+      const walletSummary = wallets.map((wallet) => `${wallet.name || wallet.id} (${wallet.id})`).join(', ');
+      if (smokeConfig && wallets.length !== 1) {
+        throw new Error(`Expected exactly one candidate wallet; found ${wallets.length}${walletSummary ? `: ${walletSummary}` : ''}.`);
+      }
+
+      setStatus(smokeConfig
+        ? `Opening ${wallets[0].name || wallets[0].id}...`
+        : 'Opening the compatible-wallet picker...');
       const connection = await nearWallet.connect({
-        network,
-        ...(smokeConfig && smokeConfig.manifest ? { manifest: smokeConfig.manifest } : {}),
-        features: {
-          signDelegateActions: true,
-          signDelegateActionsWithTtl: true,
-        },
+        ...connectOptions,
+        ...(smokeConfig && wallets[0]?.id ? { walletId: wallets[0].id } : {}),
       });
 
       if (!connection) {
         setConnected(null, null);
-        showResult('No compatible wallet was connected.');
+        showResult(walletSummary
+          ? `No compatible wallet was connected. Candidate wallets: ${walletSummary}. Check whether the wallet popup was closed, rejected, or blocked.`
+          : 'No compatible wallet was connected. The manifest did not expose a wallet with both delegate-signing features.');
         return;
       }
 
