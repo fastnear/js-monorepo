@@ -652,7 +652,6 @@ __metadata:
     "@fastnear/borsh": "workspace:*"
     "@fastnear/borsh-schema": "workspace:*"
     "@fastnear/utils": "workspace:*"
-    "@near-js/transactions": "npm:*"
     "@noble/curves": "npm:*"
     rimraf: "npm:*"
     tsup: "npm:^8.3.6"
