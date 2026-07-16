@@ -1980,7 +1980,7 @@ export const x402Surface = {
     paymentAsset: "NEP-141 fungible tokens",
   },
   browserGlobal: "nearX402",
-  browserStatus: "Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.",
+  browserStatus: "Beta: requires @fastnear/near-connect 0.13+ and a wallet that advertises both timeout-aware delegate-signing capabilities; production wallet manifest activation remains QA-gated.",
   walletFeatures: ["signDelegateActions", "signDelegateActionsWithTtl"],
   chooseByTask: [
     {
@@ -1993,7 +1993,7 @@ export const x402Surface = {
       task: "Pay an x402 URL from a browser wallet",
       use: ["createFastNearWalletSigner", "createNearPaymentFetch"],
       imports: ["@fastnear/wallet", "@fastnear/x402"],
-      status: "preview until the timeout-aware wallet bridge ships",
+      status: "beta until Intear and Meteor production wallet QA pass",
     },
     {
       task: "Protect a seller resource",

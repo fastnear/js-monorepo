@@ -311,14 +311,14 @@ printf 'block_hash=%s\nstorage_usage=%s\n' "$BLOCK_HASH" "$STORAGE_USAGE"
 - Authorization: NEP-366 SignedDelegate; asset: NEP-141 fungible tokens.
 - Browser global: `nearX402`.
 - Runtime: Package-only; not included in agents.js or near.js.
-- Browser status: Preview: requires a compatible upcoming near-connect release and a wallet that advertises timeout-aware delegate signing; the currently published wallet bridge is not production-compatible.
+- Browser status: Beta: requires @fastnear/near-connect 0.13+ and a wallet that advertises both timeout-aware delegate-signing capabilities; production wallet manifest activation remains QA-gated.
 - Required wallet features: `signDelegateActions` and `signDelegateActionsWithTtl`.
 - Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md).
 
 ### Choose by task
 
 - Pay an x402 URL from Node.js: `createLocalNearSigner` + `createNearPaymentFetch` from `@fastnear/x402/node` and `@fastnear/x402` — stable core path.
-- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — preview until the timeout-aware wallet bridge ships.
+- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — beta until Intear and Meteor production wallet QA pass.
 - Protect a seller resource: `createNearResourceServer` from `@fastnear/x402/server` — requires an explicit facilitator.
 - Operate a NEAR facilitator: `createNearFacilitator` from `@fastnear/x402/facilitator` — HTTP framework and secret storage are operator choices.
 - Integrate below the paid-fetch helper: `createNearX402Client` from `@fastnear/x402` — lower-level client path.

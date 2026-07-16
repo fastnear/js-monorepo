@@ -365,7 +365,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - ` + "`near.explain.*`" + ` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: ` + "`near.view`" + `, ` + "`near.queryAccount`" + `, ` + "`near.queryTx`" + `, ` + "`near.sendTx`" + `, ` + "`near.requestSignIn`" + `, and ` + "`near.signMessage`" + `.
 - ` + "`near.batch(...)`" + ` and ` + "`near.view.many(...)`" + ` fan out many reads with settled, concurrency-capped results, and ` + "`near.config({ retry, batch })`" + ` tunes automatic 429/transient retry — both on by default. See the API package README for details.
-- ` + "`@fastnear/x402`" + ` provides opt-in x402 v2 NEAR payment clients plus focused ` + "`/node`" + `, ` + "`/server`" + `, and ` + "`/facilitator`" + ` entrypoints; its browser-wallet path is a preview pending the timeout-aware wallet bridge.
+- ` + "`@fastnear/x402`" + ` provides opt-in x402 v2 NEAR payment clients plus focused ` + "`/node`" + `, ` + "`/server`" + `, and ` + "`/facilitator`" + ` entrypoints; its browser-wallet path is beta while wallet production manifests remain QA-gated.
 
 ### Hosted agent entrypoint
 

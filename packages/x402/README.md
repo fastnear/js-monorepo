@@ -4,7 +4,7 @@ Adapters for using the official [`@x402/near`](https://www.npmjs.com/package/@x4
 
 This package does not implement a second x402 wire format. It uses x402 v2, NEP-366 signed delegate actions, and the Foundation's NEAR verifier and settlement code.
 
-> **Browser-wallet preview:** the wallet path requires a compatible `@fastnear/near-connect` release and a wallet that advertises both `signDelegateActions` and `signDelegateActionsWithTtl`. That bridge is not yet available in the currently published wallet stack. Until those releases land, use the local-key client for integration work and do not present the browser example as production-ready.
+> **Browser-wallet beta:** the wallet path requires `@fastnear/near-connect@0.13.0` or later and a wallet that advertises both `signDelegateActions` and `signDelegateActionsWithTtl`. Keep production rollout gated on successful Intear and Meteor testnet settlement QA; the local-key client is the stable integration path today.
 
 ## Install
 
@@ -71,7 +71,7 @@ Use `network: "near:*"` (the default) when the client should accept either canon
 
 ### Browser script
 
-The IIFE bundle exports `window.nearX402`. The `@next` URLs below intentionally describe the preview channel; pin released versions before production use.
+The IIFE bundle exports `window.nearX402`. The `@next` URLs below intentionally describe the beta channel; pin exact released versions before production use.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@next/dist/umd/browser.global.js"></script>
@@ -289,9 +289,9 @@ This is an in-process trust boundary: isolate the facilitator behind authenticat
 
 ## Release gate
 
-The browser path must be released in dependency order. From the current `1.3.x` line, first publish the Meteor bridge in the synchronized FastNEAR `1.4.0` release without publishing `@fastnear/x402`. Then publish `@fastnear/near-connect@0.13.0` with the Meteor executor, Intear TTL forwarding, and both capability flags. Only after `@fastnear/wallet` consumes that release should this package enter the synchronized `1.5.0-beta.0` prerelease.
+The browser path is released in dependency order. FastNEAR `1.4.0` shipped the timeout-aware wallet prerequisite without `@fastnear/x402`; `@fastnear/near-connect@0.13.0` now carries the Meteor executor, Intear TTL forwarding, and shared delegate-signing capability types. The synchronized `1.5.0-beta.0` prerelease consumes that bridge and adds `@fastnear/x402`.
 
-Promote the beta only after real testnet approval and settlement succeed through both Intear and Meteor, an automated local-key testnet flow succeeds, packed CJS/ESM subpath imports pass, and the jsDelivr IIFE exposes the locked `nearX402` global. If repository versions move first, use the next two synchronized minor versions in the same prerequisite-then-feature order.
+Promote the beta only after real testnet approval and settlement succeed through both Intear and Meteor production wallet paths, an automated local-key testnet flow succeeds, packed CJS/ESM subpath imports pass, and the jsDelivr IIFE exposes the locked `nearX402` global. If repository versions move first, use the next two synchronized minor versions in the same prerequisite-then-feature order.
 
 Repository maintainers should use the [guarded testnet QA guide](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/TESTNET_QA.md) for the shared local-key and browser-wallet release harness.
 

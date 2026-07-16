@@ -7,10 +7,10 @@
   <meta name="theme-color" content="#0d102d" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="assets/favicon.ico">
   <link rel="apple-touch-icon" href="assets/fastnear_logo_black.png">
-  <title>x402 payments — @fastnear preview</title>
+  <title>x402 payments — @fastnear beta</title>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="x402 payments — @fastnear preview">
-  <meta property="og:description" content="Preview an x402 NEP-141 payment with a compatible FastNEAR wallet.">
+  <meta property="og:title" content="x402 payments — @fastnear beta">
+  <meta property="og:description" content="Try an x402 NEP-141 payment with a compatible FastNEAR wallet.">
   <meta property="og:image" content="assets/fastnear_logo_black.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Preview channel: pin released versions before production use. -->
+  <!-- Beta channel: pin exact released versions before production use. -->
   <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@next/dist/umd/browser.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@next/dist/umd/browser.global.js"></script>
 </head>
@@ -29,14 +29,14 @@
     <hr class="brand-divider">
   </header>
 
-  <h1>x402 NEAR payment preview</h1>
+  <h1>x402 NEAR payment beta</h1>
   <p class="subtitle">
     Pay an x402-protected endpoint with an NEP-141 token
     &nbsp;·&nbsp; <a href="index.html">back</a>
   </p>
 
   <div class="status-bar" id="status-bar">
-    Preview only — the timeout-aware wallet bridge is not yet available in the published wallet stack.
+    Beta only — requires a wallet that advertises both timeout-aware delegate-signing capabilities.
   </div>
 
   <section>
@@ -49,7 +49,7 @@
     <button id="btn-disconnect" class="danger" onclick="handleDisconnect()" disabled>Disconnect</button>
     <p class="note">
       The wallet picker requests both <code>signDelegateActions</code> and
-      <code>signDelegateActionsWithTtl</code>. Intear and Meteor support are release gates for this preview.
+      <code>signDelegateActionsWithTtl</code>. Intear and Meteor production manifests remain QA-gated.
     </p>
   </section>
 
@@ -107,7 +107,7 @@
 
   async function handleConnect() {
     if (!globalThis.nearWallet || !globalThis.nearX402) {
-      showResult('Preview bundles are unavailable. Publish/install the compatible @next releases first.');
+      showResult('Beta bundles are unavailable. Publish/install the compatible @next releases first.');
       return;
     }
 
