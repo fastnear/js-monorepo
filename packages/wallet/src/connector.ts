@@ -485,7 +485,11 @@ export function getActiveNetwork(): Network {
 export function walletName(opts?: { network?: Network }): string | null {
   const s = stateFor(opts?.network);
   if (!s.connectedWallet) return null;
-  return (s.connectedWallet as NearWalletBase & { metadata?: { name?: string } }).metadata?.name ?? null;
+  const wallet = s.connectedWallet as NearWalletBase & {
+    manifest?: { name?: string };
+    metadata?: { name?: string };
+  };
+  return wallet.metadata?.name ?? wallet.manifest?.name ?? null;
 }
 
 /**
