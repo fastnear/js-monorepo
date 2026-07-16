@@ -5,6 +5,7 @@ import {
   SCHEMA,
   sha256,
 } from "@fastnear/utils";
+import { encodeDelegateAction } from "@near-js/transactions";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { validateSignedDelegate } from "./delegate-validation.js";
@@ -53,9 +54,7 @@ function signDelegateAction(
   };
   delegateAction.nonce = 1n;
   mutate?.(delegateAction);
-  const digest = sha256(
-    new Uint8Array(serialize(SCHEMA.DelegateAction, delegateAction)),
-  );
+  const digest = sha256(encodeDelegateAction(delegateAction));
   const signedDelegate = {
     delegateAction,
     signature: {

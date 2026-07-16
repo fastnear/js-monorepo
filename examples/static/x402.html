@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d102d" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/fastnear_logo_black.png">
+  <title>x402 payments — @fastnear</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="x402 payments — @fastnear">
+  <meta property="og:description" content="Try an x402 NEP-141 payment with a compatible FastNEAR wallet.">
+  <meta property="og:image" content="assets/fastnear_logo_black.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Pin exact released versions for production use. -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.5.0/dist/umd/browser.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@1.5.0/dist/umd/browser.global.js"></script>
+</head>
+<body>
+<div class="container">
+  <header class="brand-header">
+    <a class="brand-wordmark" href="index.html">FastNear</a>
+    <hr class="brand-divider">
+  </header>
+
+  <h1>x402 NEAR payment</h1>
+  <p class="subtitle">
+    Pay an x402-protected endpoint with an NEP-141 token
+    &nbsp;·&nbsp; <a href="index.html">back</a>
+  </p>
+
+  <div class="status-bar" id="status-bar">
+    Requires a wallet that advertises both timeout-aware delegate-signing capabilities.
+  </div>
+
+  <section>
+    <h2>1. Choose the challenge network</h2>
+    <select id="network" style="width: 100%; padding: 8px 12px; margin-bottom: 8px;">
+      <option value="testnet" selected>NEAR testnet</option>
+      <option value="mainnet">NEAR mainnet</option>
+    </select>
+    <button id="btn-connect" class="primary" onclick="handleConnect()">Connect compatible wallet</button>
+    <button id="btn-disconnect" class="danger" onclick="handleDisconnect()" disabled>Disconnect</button>
+    <p class="note">
+      The wallet picker requests both <code>signDelegateActions</code> and
+      <code>signDelegateActionsWithTtl</code>. Meteor Wallet is the tested production path.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. Enter an x402-protected URL</h2>
+    <input id="target-url" type="text" value="http://localhost:4021/weather" aria-label="Protected URL">
+    <button id="btn-pay" class="accent" onclick="handlePaidFetch()" disabled>Pay and fetch</button>
+    <p class="note">
+      No request or payment happens until you click this button. The endpoint must allow this page's origin through CORS.
+    </p>
+  </section>
+
+  <section id="smoke-fixture" hidden>
+    <h2>Locked testnet fixture</h2>
+    <div id="smoke-fixture-details" class="log"></div>
+    <p class="note">
+      The local smoke server fixes the payer, token, amount, recipient, and endpoint.
+      It accepts one settlement and then shuts down.
+    </p>
+  </section>
+
+  <section>
+    <h2>Result</h2>
+    <div id="result" class="log">(connect a compatible wallet, then click Pay and fetch)</div>
+  </section>
+</div>
+
+<script>
+  let connectedNetwork = null;
+  let connectedWalletName = null;
+  const smokeConfig = globalThis.__FASTNEAR_X402_SMOKE__ || null;
+  const requiredWalletFeatures = {
+    signDelegateActions: true,
+    signDelegateActionsWithTtl: true,
+  };
+
+  function selectedNetwork() {
+    return document.getElementById('network').value;
+  }
+
+  function setStatus(message) {
+    document.getElementById('status-bar').textContent = message;
+  }
+
+  function showResult(message) {
+    document.getElementById('result').textContent = message;
+  }
+
+  function connectOptionsFor(network) {
+    return {
+      network,
+      ...(smokeConfig && smokeConfig.manifest ? { manifest: smokeConfig.manifest } : {}),
+      features: requiredWalletFeatures,
+    };
+  }
+
+  function walletSummary(wallets) {
+    return wallets.map((wallet) => `${wallet.name || wallet.id} (${wallet.id})`).join(', ');
+  }
+
+  async function availableCompatibleWallets(network) {
+    const connectOptions = connectOptionsFor(network);
+    return typeof nearWallet.availableWallets === 'function'
+      ? await nearWallet.availableWallets(connectOptions)
+      : [];
+  }
+
+  function setConnected(network, accountId) {
+    connectedNetwork = network;
+    document.getElementById('network').disabled = Boolean(accountId);
+    document.getElementById('btn-connect').disabled = Boolean(accountId);
+    document.getElementById('btn-disconnect').disabled = !accountId;
+    document.getElementById('btn-pay').disabled = !accountId;
+    setStatus(accountId
+      ? `Connected to ${connectedWalletName || 'wallet'} as ${accountId} on ${network}`
+      : 'Not connected');
+  }
+
+  async function handleConnect() {
+    if (!globalThis.nearWallet || !globalThis.nearX402) {
+      showResult('x402 bundles are unavailable. Publish/install the compatible released packages first.');
+      return;
+    }
+
+    const network = selectedNetwork();
+    const connectOptions = connectOptionsFor(network);
+    try {
+      setStatus('Checking compatible wallets...');
+      const wallets = await availableCompatibleWallets(network);
+      const summary = walletSummary(wallets);
+      if (smokeConfig && wallets.length !== 1) {
+        throw new Error(`Expected exactly one candidate wallet; found ${wallets.length}${summary ? `: ${summary}` : ''}.`);
+      }
+
+      setStatus(smokeConfig
+        ? `Opening ${wallets[0].name || wallets[0].id}...`
+        : 'Opening the compatible-wallet picker...');
+      const connection = await nearWallet.connect({
+        ...connectOptions,
+        ...(smokeConfig && wallets[0]?.id ? { walletId: wallets[0].id } : {}),
+      });
+
+      if (!connection) {
+        setConnected(null, null);
+        const message = summary
+          ? `No compatible wallet was connected. Candidate wallets: ${summary}. Check whether the wallet popup was closed, rejected, or blocked.`
+          : 'No compatible wallet was connected. The manifest did not expose a wallet with both delegate-signing features.';
+        setStatus(`Connect failed: ${message}`);
+        showResult(message);
+        return;
+      }
+
+      const accountId = nearWallet.accountId({ network }) || connection.accountId;
+      const walletName = nearWallet.walletName({ network });
+      if (smokeConfig && accountId !== smokeConfig.payer) {
+        await nearWallet.disconnect({ network });
+        throw new Error(`This smoke session requires ${smokeConfig.payer}; the wallet connected ${accountId}.`);
+      }
+      if (smokeConfig && walletName !== smokeConfig.expectedWallet) {
+        await nearWallet.disconnect({ network });
+        throw new Error(`This smoke session requires ${smokeConfig.expectedWallet}; the selected wallet reports ${walletName || 'no name'}.`);
+      }
+      connectedWalletName = walletName;
+      setConnected(network, accountId);
+      showResult('Ready. The payment request still has not been sent.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setConnected(null, null);
+      setStatus(`Connect failed: ${message}`);
+      showResult(message);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!connectedNetwork) return;
+    try {
+      await nearWallet.disconnect({ network: connectedNetwork });
+    } finally {
+      connectedWalletName = null;
+      setConnected(null, null);
+      showResult('(disconnected)');
+    }
+  }
+
+  async function handlePaidFetch() {
+    const url = document.getElementById('target-url').value.trim();
+    if (!url || !connectedNetwork) {
+      showResult('Connect a compatible wallet and enter a URL first.');
+      return;
+    }
+
+    const button = document.getElementById('btn-pay');
+    button.disabled = true;
+    let paymentCompleted = false;
+    showResult('Requesting the resource. Approve the exact token transfer if the server returns 402...');
+
+    try {
+      const signer = nearX402.createFastNearWalletSigner({ wallet: nearWallet });
+      const paidFetch = nearX402.createNearPaymentFetch({
+        signer,
+        network: `near:${connectedNetwork}`,
+      });
+      const response = await paidFetch(url, smokeConfig ? {
+        headers: { 'X-FastNear-Smoke-Wallet': connectedWalletName },
+      } : undefined);
+      const body = await response.text();
+      showResult(`HTTP ${response.status} ${response.statusText}\n\n${body}`);
+      paymentCompleted = Boolean(smokeConfig && response.ok);
+    } catch (error) {
+      showResult(error instanceof Error ? error.stack || error.message : String(error));
+    } finally {
+      button.disabled = paymentCompleted;
+    }
+  }
+
+  function applySmokeConfiguration() {
+    if (!smokeConfig) return;
+    const network = document.getElementById('network');
+    network.innerHTML = '<option value="testnet" selected>NEAR testnet</option>';
+    network.disabled = true;
+
+    const target = document.getElementById('target-url');
+    target.value = smokeConfig.endpoint;
+    target.readOnly = true;
+
+    document.getElementById('smoke-fixture').hidden = false;
+    document.getElementById('smoke-fixture-details').textContent = [
+      `Expected payer: ${smokeConfig.payer}`,
+      `Expected wallet: ${smokeConfig.expectedWallet}`,
+      `Token: ${smokeConfig.asset}`,
+      `Amount: ${smokeConfig.amount} atomic units`,
+      `Recipient: ${smokeConfig.payTo}`,
+      `Endpoint: ${smokeConfig.endpoint}`,
+    ].join('\n');
+    setStatus('One-shot testnet smoke — connect the exact expected account; no payment occurs until Pay is clicked.');
+  }
+
+  async function reportSmokeWalletCandidates() {
+    if (!smokeConfig) return;
+    if (!globalThis.nearWallet) {
+      showResult('Wallet bundle is unavailable. Check the @fastnear/wallet script URL.');
+      return;
+    }
+
+    try {
+      const wallets = await availableCompatibleWallets(selectedNetwork());
+      const summary = walletSummary(wallets);
+      if (wallets.length === 1) {
+        showResult(`Candidate wallet loaded: ${summary}. Click Connect compatible wallet to open it.`);
+      } else {
+        showResult(`Candidate wallet check found ${wallets.length}${summary ? `: ${summary}` : ''}.`);
+      }
+    } catch (error) {
+      showResult(`Candidate wallet check failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  applySmokeConfiguration();
+  reportSmokeWalletCandidates();
+</script>
+<footer class="brand-footer">&copy; 2026 FastNear · <a href="https://github.com/fastnear/js-monorepo" target="_blank" rel="noopener">GitHub</a></footer>
+</body>
+</html>

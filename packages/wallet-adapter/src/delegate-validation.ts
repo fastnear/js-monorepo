@@ -29,10 +29,21 @@ function readBytes(value: unknown, key: string, length: number): Uint8Array | nu
   return bytes.length === length ? bytes : null;
 }
 
+// NEP-366 signs delegate actions with a Borsh-serialized actionable-message
+// prefix before the DelegateAction payload. This is the same byte sequence as
+// @near-js/transactions encodeDelegateAction without bundling that package into
+// the wallet-adapter browser build.
+function encodeDelegateActionForSigning(delegateAction: unknown): Uint8Array {
+  const prefix = 2 ** 30 + 366;
+  const delegateBytes = new Uint8Array(serialize(SCHEMA.DelegateAction, delegateAction));
+  const prefixed = new Uint8Array(4 + delegateBytes.length);
+  new DataView(prefixed.buffer).setUint32(0, prefix, true);
+  prefixed.set(delegateBytes, 4);
+  return prefixed;
+}
+
 function verifySignature(signedDelegate: any): boolean {
-  const delegateBytes = new Uint8Array(
-    serialize(SCHEMA.DelegateAction, signedDelegate.delegateAction),
-  );
+  const delegateBytes = encodeDelegateActionForSigning(signedDelegate.delegateAction);
   const digest = sha256(delegateBytes);
   const edPublicKey = readBytes(signedDelegate.delegateAction?.publicKey, "ed25519Key", 32);
   const edSignature = readBytes(signedDelegate.signature, "ed25519Signature", 64);

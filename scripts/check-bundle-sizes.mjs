@@ -6,7 +6,8 @@ import { gzipSync } from "node:zlib";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Clean-HEAD IIFE baselines measured with the repository's pinned esbuild and
-// gzip level 9. Existing packages may grow by at most 2 KiB minus one byte.
+// gzip level 9. Existing packages may grow by at most 2 KiB minus one byte by
+// default; feature-specific exceptions stay explicit in the table below.
 const maxExistingGzipGrowth = 2 * 1024 - 1;
 const budgets = [
   { package: "borsh", baselineGzip: 2_496 },
@@ -14,10 +15,11 @@ const budgets = [
   { package: "utils", baselineGzip: 35_696 },
   { package: "api", baselineGzip: 49_371 },
   { package: "wallet", baselineGzip: 21_323 },
-  // The timeout-aware Meteor bridge authenticates and binds returned Borsh
-  // delegates before exposing them to applications.
+  // The timeout-aware Meteor bridge includes local Borsh/action binding and
+  // signature verification before accepting a wallet response.
   { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 4 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
+  { package: "x402", raw: 256 * 1024, gzip: 64 * 1024 },
 ];
 
 const results = [];

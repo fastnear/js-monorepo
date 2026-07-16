@@ -1,7 +1,7 @@
 {
-  "name": "@fastnear/ml-dsa-65",
+  "name": "@fastnear/x402",
   "version": "1.5.0",
-  "description": "Opt-in ML-DSA-65 access-key and transaction-signing support for NEAR Protocol",
+  "description": "FastNEAR wallet, fetch, resource-server, and facilitator adapters for x402 payments on NEAR",
   "license": "MIT",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
@@ -14,9 +14,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "yarn --cwd ../.. vitest run packages/ml-dsa-65/src/index.test.ts",
-    "bench": "node bench/benchmark.mjs",
-    "benchmark": "node bench/benchmark.mjs",
+    "test": "yarn --cwd ../.. vitest run packages/x402/src",
     "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
     "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
     "release": "node ../../scripts/publish-packed.mjs",
@@ -31,30 +29,53 @@
   },
   "keywords": [
     "near-protocol",
-    "post-quantum",
-    "ml-dsa-65",
-    "fips-204",
-    "cryptography",
+    "x402",
+    "payments",
+    "wallet",
     "fastnear",
     "web3"
   ],
   "files": [
-    "dist",
-    "bench"
+    "dist"
   ],
   "exports": {
     ".": {
       "types": "./dist/esm/index.d.ts",
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.cjs"
+    },
+    "./node": {
+      "types": "./dist/esm/node.d.ts",
+      "import": "./dist/esm/node.js",
+      "require": "./dist/cjs/node.cjs"
+    },
+    "./server": {
+      "types": "./dist/esm/server.d.ts",
+      "import": "./dist/esm/server.js",
+      "require": "./dist/cjs/server.cjs"
+    },
+    "./facilitator": {
+      "types": "./dist/esm/facilitator.d.ts",
+      "import": "./dist/esm/facilitator.js",
+      "require": "./dist/cjs/facilitator.cjs"
     }
   },
   "dependencies": {
-    "@noble/hashes": "*",
-    "@noble/post-quantum": "*",
-    "base58-js": "*"
+    "@near-js/transactions": "*",
+    "@x402/core": "*",
+    "@x402/fetch": "*",
+    "@x402/near": "*"
+  },
+  "peerDependencies": {
+    "@fastnear/wallet": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@fastnear/wallet": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@fastnear/wallet": "workspace:*",
     "rimraf": "*",
     "tsup": "^8.3.6",
     "typescript": "*"

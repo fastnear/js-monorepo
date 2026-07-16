@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "homepage": "https://js.fastnear.com",
   "source": "recipes/source.mjs",
   "catalogUrl": "https://js.fastnear.com/recipes.json",
@@ -7,7 +7,8 @@
     "@fastnear/api",
     "@fastnear/wallet",
     "@fastnear/utils",
-    "@fastnear/ml-dsa-65"
+    "@fastnear/ml-dsa-65",
+    "@fastnear/x402"
   ],
   "support": {
     "apiKeyEnvVar": "FASTNEAR_API_KEY",
@@ -1240,7 +1241,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "const cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+          "code": "const cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_borsh_base64:\n    result.signedDelegateActions[0]?.borshSerializedBase64,\n});"
         },
         {
           "id": "esm",
@@ -1248,18 +1249,19 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_hash: result.signedDelegateActions[0]?.delegateHash,\n});"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n  manifest: \"./manifest.json\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_borsh_base64:\n    result.signedDelegateActions[0]?.borshSerializedBase64,\n});"
         }
       ],
       "service": "wallet",
       "returns": "SignDelegateActionsResponse",
       "outputKeys": [
-        "signedDelegateActions[].delegateHash",
-        "signedDelegateActions[].signedDelegate"
+        "signedDelegateActions[].borshSerializedBase64"
       ],
       "responseNotes": [
+        "The canonical result is { borshSerializedBase64: string }; legacy structured delegates and bare base64 strings remain in the public union for compatibility.",
         "Returns signed delegate actions that a relayer can submit on-chain, enabling gasless transactions for the user.",
-        "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions)."
+        "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions).",
+        "Requests that include blockHeightTtl additionally require WalletFeatures.signDelegateActionsWithTtl."
       ],
       "chooseWhen": [
         "Choose this when building gasless or relay-based flows where a third party submits the transaction on the user's behalf.",
@@ -1942,6 +1944,144 @@
         "summary": "Query the full key directly, then match its locally derived hash handle against the compact list response.",
         "language": "js",
         "code": "import {\n  queryAccessKey,\n  queryAccessKeyList,\n} from \"@fastnear/api\";\nimport { publicKeyToHandle } from \"@fastnear/ml-dsa-65\";\n\nexport async function findMlDsa65AccessKey({ accountId, publicKey }) {\n  const [direct, list] = await Promise.all([\n    queryAccessKey({ accountId, publicKey, network: \"testnet\" }),\n    queryAccessKeyList({ accountId, network: \"testnet\" }),\n  ]);\n  const publicKeyHandle = publicKeyToHandle(publicKey);\n  const listed = list.result.keys.find(\n    (entry) => entry.public_key === publicKeyHandle,\n  );\n\n  return { direct: direct.result, publicKeyHandle, listed };\n}"
+      }
+    ]
+  },
+  "x402": {
+    "package": "@fastnear/x402",
+    "runtime": "Package-only; not included in agents.js or near.js.",
+    "guideUrl": "https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md",
+    "protocol": {
+      "version": 2,
+      "scheme": "exact",
+      "networks": [
+        "near:mainnet",
+        "near:testnet"
+      ],
+      "authorization": "NEP-366 SignedDelegate",
+      "paymentAsset": "NEP-141 fungible tokens"
+    },
+    "browserGlobal": "nearX402",
+    "browserStatus": "Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.",
+    "walletFeatures": [
+      "signDelegateActions",
+      "signDelegateActionsWithTtl"
+    ],
+    "chooseByTask": [
+      {
+        "task": "Pay an x402 URL from Node.js",
+        "use": [
+          "createLocalNearSigner",
+          "createNearPaymentFetch"
+        ],
+        "imports": [
+          "@fastnear/x402/node",
+          "@fastnear/x402"
+        ],
+        "status": "stable"
+      },
+      {
+        "task": "Pay an x402 URL from a browser wallet",
+        "use": [
+          "createFastNearWalletSigner",
+          "createNearPaymentFetch"
+        ],
+        "imports": [
+          "@fastnear/wallet",
+          "@fastnear/x402"
+        ],
+        "status": "stable with a compatible timeout-aware wallet; Meteor Wallet is the tested production path"
+      },
+      {
+        "task": "Protect a seller resource",
+        "use": [
+          "createNearResourceServer"
+        ],
+        "imports": [
+          "@fastnear/x402/server"
+        ],
+        "status": "requires an explicit facilitator"
+      },
+      {
+        "task": "Operate a NEAR facilitator",
+        "use": [
+          "createNearFacilitator"
+        ],
+        "imports": [
+          "@fastnear/x402/facilitator"
+        ],
+        "status": "HTTP framework and secret storage are operator choices"
+      },
+      {
+        "task": "Integrate below the paid-fetch helper",
+        "use": [
+          "createNearX402Client"
+        ],
+        "imports": [
+          "@fastnear/x402"
+        ],
+        "status": "lower-level client path"
+      }
+    ],
+    "entrypoints": [
+      {
+        "subpath": "@fastnear/x402",
+        "exports": [
+          "createFastNearWalletSigner",
+          "createNearX402Client",
+          "createNearPaymentFetch"
+        ],
+        "purpose": "injected FastNEAR wallet signer, NEAR-only x402 client, and paid fetch"
+      },
+      {
+        "subpath": "@fastnear/x402/node",
+        "exports": [
+          "createLocalNearSigner"
+        ],
+        "purpose": "official RPC-backed local full-access-key signer"
+      },
+      {
+        "subpath": "@fastnear/x402/server",
+        "exports": [
+          "createNearResourceServer"
+        ],
+        "purpose": "resource server with one or more explicitly configured facilitators"
+      },
+      {
+        "subpath": "@fastnear/x402/facilitator",
+        "exports": [
+          "createNearFacilitator"
+        ],
+        "purpose": "self-hosted facilitator registration for concrete NEAR networks"
+      }
+    ],
+    "constraints": [
+      "Only x402 v2 exact payments on near:mainnet and near:testnet are supported.",
+      "Payments use NEP-141 tokens; native NEAR is not a direct payment asset.",
+      "Wallet and local-key payers require full-access keys, and recipients need token storage registration.",
+      "Resource servers require an explicit facilitator; no x402.org or other default is selected.",
+      "Browser wallet access is injected explicitly and payment occurs only when the application calls the paid fetch function."
+    ],
+    "safeDefaults": [
+      "Pin near:testnet during development and a concrete NEAR network in production; use near:* only for an intentionally cross-network client.",
+      "Keep payer and relayer secret keys in server-side secret storage, never browser code.",
+      "String and number seller prices use the official USDC contract; wNEAR and custom tokens require an explicit { amount, asset } price.",
+      "Always configure a facilitator explicitly."
+    ],
+    "quickstarts": [
+      {
+        "id": "x402-node-paid-fetch",
+        "title": "Pay an x402 URL from Node.js",
+        "summary": "Use the upstream local full-access-key signer with the high-level paid-fetch helper.",
+        "language": "js",
+        "code": "import { createNearPaymentFetch } from \"@fastnear/x402\";\nimport { createLocalNearSigner } from \"@fastnear/x402/node\";\n\nconst { NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, X402_RESOURCE_URL } = process.env;\nif (!NEAR_PAYER_ACCOUNT_ID || !NEAR_PAYER_SECRET_KEY || !X402_RESOURCE_URL) {\n  throw new Error(\"NEAR_PAYER_ACCOUNT_ID, NEAR_PAYER_SECRET_KEY, and X402_RESOURCE_URL are required\");\n}\n\nconst signer = createLocalNearSigner({\n  accountId: NEAR_PAYER_ACCOUNT_ID,\n  secretKey: NEAR_PAYER_SECRET_KEY,\n  rpcUrls: { \"near:testnet\": \"https://rpc.testnet.fastnear.com\" },\n});\nconst paidFetch = createNearPaymentFetch({ signer, network: \"near:testnet\" });\nconst response = await paidFetch(X402_RESOURCE_URL);\nif (!response.ok) throw new Error(`Paid request failed: ${response.status}`);\nconsole.log(await response.json());"
+      },
+      {
+        "id": "x402-remote-facilitator-seller",
+        "title": "Configure a seller with an explicit remote facilitator",
+        "summary": "Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.",
+        "language": "js",
+        "code": "import { createNearResourceServer } from \"@fastnear/x402/server\";\n\nconst { X402_FACILITATOR_URL } = process.env;\nif (!X402_FACILITATOR_URL) throw new Error(\"X402_FACILITATOR_URL is required\");\n\nexport const resourceServer = createNearResourceServer({\n  facilitators: { url: X402_FACILITATOR_URL },\n});\nawait resourceServer.initialize();"
       }
     ]
   },

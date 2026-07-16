@@ -9,6 +9,7 @@ import {
   recipeCatalog,
   explainSurface,
   mlDsa65Surface,
+  x402Surface,
   supportSurface,
 } from "../recipes/source.mjs";
 
@@ -38,8 +39,8 @@ function renderPagination(pagination) {
 }
 
 function assertCatalogContract() {
-  if (generatedArtifact.version !== 4) {
-    throw new Error(`Expected generated artifact version 4, received ${generatedArtifact.version}`);
+  if (generatedArtifact.version !== 5) {
+    throw new Error(`Expected generated artifact version 5, received ${generatedArtifact.version}`);
   }
 
   if (!Array.isArray(generatedArtifact.families) || generatedArtifact.families.length < 6) {
@@ -73,6 +74,66 @@ function assertCatalogContract() {
       if (!(field in quickstart)) {
         throw new Error(`ML-DSA-65 quickstart ${quickstart.id ?? "<unknown>"} is missing required field ${field}`);
       }
+    }
+  }
+
+  if (x402Surface.package !== "@fastnear/x402" || x402Surface.browserGlobal !== "nearX402") {
+    throw new Error("Expected canonical @fastnear/x402 package and browser global metadata");
+  }
+  if (x402Surface.entrypoints.length !== 4) {
+    throw new Error("Expected four focused @fastnear/x402 entrypoints");
+  }
+  if (x402Surface.chooseByTask.length !== 5 || x402Surface.quickstarts.length !== 2) {
+    throw new Error("Expected the x402 task chooser and two focused quickstarts");
+  }
+
+  const expectedX402Entrypoints = new Map([
+    [
+      "@fastnear/x402",
+      ["createFastNearWalletSigner", "createNearX402Client", "createNearPaymentFetch"],
+    ],
+    ["@fastnear/x402/node", ["createLocalNearSigner"]],
+    ["@fastnear/x402/server", ["createNearResourceServer"]],
+    ["@fastnear/x402/facilitator", ["createNearFacilitator"]],
+  ]);
+  for (const [subpath, expectedExports] of expectedX402Entrypoints) {
+    const entrypoint = x402Surface.entrypoints.find(entry => entry.subpath === subpath);
+    if (!entrypoint || JSON.stringify(entrypoint.exports) !== JSON.stringify(expectedExports)) {
+      throw new Error(`Expected canonical x402 exports for ${subpath}`);
+    }
+  }
+
+  const expectedX402Tasks = new Map([
+    ["Pay an x402 URL from Node.js", ["createLocalNearSigner", "createNearPaymentFetch"]],
+    ["Pay an x402 URL from a browser wallet", ["createFastNearWalletSigner", "createNearPaymentFetch"]],
+    ["Protect a seller resource", ["createNearResourceServer"]],
+    ["Operate a NEAR facilitator", ["createNearFacilitator"]],
+    ["Integrate below the paid-fetch helper", ["createNearX402Client"]],
+  ]);
+  for (const [task, expectedFactories] of expectedX402Tasks) {
+    const choice = x402Surface.chooseByTask.find(item => item.task === task);
+    if (!choice || JSON.stringify(choice.use) !== JSON.stringify(expectedFactories)) {
+      throw new Error(`Expected canonical x402 task mapping for ${task}`);
+    }
+  }
+
+  const quickstartIds = new Set(x402Surface.quickstarts.map(quickstart => quickstart.id));
+  for (const id of ["x402-node-paid-fetch", "x402-remote-facilitator-seller"]) {
+    if (!quickstartIds.has(id)) {
+      throw new Error(`Expected x402 quickstart ${id}`);
+    }
+  }
+  for (const phrase of ["Only x402 v2 exact", "NEP-141", "explicit facilitator"]) {
+    if (!x402Surface.constraints.some(constraint => constraint.includes(phrase))) {
+      throw new Error(`Expected x402 constraint containing ${phrase}`);
+    }
+  }
+  if (!/^https:\/\/.+/.test(x402Surface.guideUrl)) {
+    throw new Error("Expected an absolute x402 package guide URL");
+  }
+  for (const feature of ["signDelegateActions", "signDelegateActionsWithTtl"]) {
+    if (!x402Surface.walletFeatures.includes(feature)) {
+      throw new Error(`Expected x402 wallet feature ${feature}`);
     }
   }
 }
@@ -148,6 +209,49 @@ ${renderList(mlDsa65Surface.safety)}
 ${mlDsa65Surface.quickstarts.map((quickstart) => `${subheading} ${quickstart.title}
 
 Recipe ID: \`${quickstart.id}\`
+
+${quickstart.summary}
+
+\`\`\`${quickstart.language}
+${quickstart.code}
+\`\`\``).join("\n\n")}`;
+}
+
+function renderX402Section({ headingLevel = 3 } = {}) {
+  const heading = "#".repeat(headingLevel);
+  const subheading = "#".repeat(headingLevel + 1);
+
+  return `${heading} x402 payments on NEAR
+
+\`${x402Surface.package}\` adapts the official x402 Foundation NEAR mechanism without introducing another wire format.
+
+- Protocol: x402 v${x402Surface.protocol.version} \`${x402Surface.protocol.scheme}\` on ${x402Surface.protocol.networks.map(network => `\`${network}\``).join(" and ")}.
+- Authorization: ${x402Surface.protocol.authorization}; asset: ${x402Surface.protocol.paymentAsset}.
+- Browser global: \`${x402Surface.browserGlobal}\`.
+- Runtime: ${x402Surface.runtime}
+- Browser status: ${x402Surface.browserStatus}
+- Required wallet features: ${x402Surface.walletFeatures.map(feature => `\`${feature}\``).join(" and ")}.
+- Package guide: [${x402Surface.guideUrl}](${x402Surface.guideUrl}).
+
+${subheading} Choose by task
+
+${renderList(x402Surface.chooseByTask.map(choice => `${choice.task}: ${choice.use.map(name => `\`${name}\``).join(" + ")} from ${choice.imports.map(name => `\`${name}\``).join(" and ")} — ${choice.status}.`))}
+
+${subheading} Entrypoints
+
+${renderList(x402Surface.entrypoints.map(entry => `\`${entry.subpath}\`: ${entry.exports.map(name => `\`${name}\``).join(", ")} — ${entry.purpose}.`))}
+
+${subheading} Constraints
+
+${renderList(x402Surface.constraints)}
+
+${subheading} Safe defaults
+
+${renderList(x402Surface.safeDefaults)}
+
+${x402Surface.quickstarts.map(quickstart => `${subheading} ${quickstart.title}
+
+Quickstart ID: \`${quickstart.id}\`
 
 ${quickstart.summary}
 
@@ -261,6 +365,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - ` + "`near.explain.*`" + ` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: ` + "`near.view`" + `, ` + "`near.queryAccount`" + `, ` + "`near.queryTx`" + `, ` + "`near.sendTx`" + `, ` + "`near.requestSignIn`" + `, and ` + "`near.signMessage`" + `.
 - ` + "`near.batch(...)`" + ` and ` + "`near.view.many(...)`" + ` fan out many reads with settled, concurrency-capped results, and ` + "`near.config({ retry, batch })`" + ` tunes automatic 429/transient retry — both on by default. See the API package README for details.
+- ` + "`@fastnear/x402`" + ` provides opt-in x402 v2 NEAR payment clients plus focused ` + "`/node`" + `, ` + "`/server`" + `, and ` + "`/facilitator`" + ` entrypoints; browser-wallet payments require a timeout-aware wallet, with Meteor Wallet tested for this release.
 
 ### Hosted agent entrypoint
 
@@ -289,6 +394,8 @@ ${terminal.code}
   }).join("\n\n")}
 
 ${renderMlDsa65Section()}
+
+${renderX402Section()}
 
 ### Structured explain helpers
 
@@ -498,6 +605,7 @@ Primary packages:
 - @fastnear/wallet
 - @fastnear/utils
 - @fastnear/ml-dsa-65
+- @fastnear/x402
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -545,7 +653,7 @@ Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.sendTransaction({ receiverId, actions, network })
 - nearWallet.sendTransactions({ transactions, network })
 - nearWallet.signMessage({ message, recipient, nonce, network })
-- nearWallet.signDelegateActions({ delegateActions, signerId, network })
+- nearWallet.signDelegateActions({ delegateActions: [{ ..., blockHeightTtl }], signerId, network }) — timeout-aware requests require signDelegateActionsWithTtl
 - nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })
 - nearWallet.accountId({ network })
 - nearWallet.isConnected({ network })
@@ -553,6 +661,19 @@ Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.switchNetwork(network)
 - nearWallet.onConnect(handler)
 - nearWallet.onDisconnect(handler)
+
+x402 payment surface (@fastnear/x402):
+- Runtime: ${x402Surface.runtime}
+- Protocol: x402 v${x402Surface.protocol.version} ${x402Surface.protocol.scheme}; networks: ${x402Surface.protocol.networks.join(", ")}; asset: ${x402Surface.protocol.paymentAsset}
+- Pay a URL in Node: ${x402Surface.chooseByTask[0].use.join(" + ")} (${x402Surface.chooseByTask[0].imports.join(" + ")})
+- Protect a seller resource: ${x402Surface.chooseByTask[2].use.join(" + ")} (${x402Surface.chooseByTask[2].imports.join(" + ")}); explicit facilitator required
+- Browser: ${x402Surface.entrypoints[0].exports.join(" / ")} (global ${x402Surface.browserGlobal})
+- Node: @fastnear/x402/node ${x402Surface.entrypoints[1].exports.join(" / ")}
+- Seller: @fastnear/x402/server ${x402Surface.entrypoints[2].exports.join(" / ")}; explicit facilitator required
+- Self-hosted facilitator: @fastnear/x402/facilitator ${x402Surface.entrypoints[3].exports.join(" / ")}
+- Wallet features: ${x402Surface.walletFeatures.join(" + ")}
+- Status: ${x402Surface.browserStatus}
+- Guide: ${x402Surface.guideUrl}
 
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
@@ -608,6 +729,7 @@ Prefer ` + "`recipes/index.json`" + ` when you need structured task data.
 - ` + "`@fastnear/wallet`" + `: wallet connection and transaction/signing provider
 - ` + "`@fastnear/utils`" + `: units, crypto, serialization, storage helpers
 - ` + "`@fastnear/ml-dsa-65`" + `: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
+- ` + "`@fastnear/x402`" + `: official x402 v2 NEAR adapters for paid fetch, local-key clients, resource servers, and facilitators
 
 ## Unified config
 
@@ -673,7 +795,7 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 - ` + "`nearWallet.connect`" + ` / ` + "`disconnect`" + ` / ` + "`restore`" + `: open, close, or rehydrate a session per network. ` + "`connect({ network, contractId, manifest })`" + ` is the canonical entrypoint; ` + "`contractId`" + ` mints a function-call key scoped to that contract so zero-deposit calls sign silently.
 - ` + "`nearWallet.sendTransaction({ receiverId, actions, network })`" + ` / ` + "`sendTransactions`" + `: dispatch one or many transactions through the connected wallet on the chosen network.
 - ` + "`nearWallet.signMessage({ message, recipient, nonce, network })`" + `: NEP-413 message signing.
-- ` + "`nearWallet.signDelegateActions({ delegateActions, signerId?, network? })`" + `: sign NEP-366 delegate actions for gasless relay-based flows. Returns ` + "`{ signedDelegateActions: Array<{ delegateHash: Uint8Array; signedDelegate: SignedDelegate }> }`" + `.
+- ` + "`nearWallet.signDelegateActions({ delegateActions, signerId?, network? })`" + `: sign NEP-366 delegate actions for gasless relay-based flows. Each request may include ` + "`blockHeightTtl`" + `; using it requires a wallet that advertises ` + "`signDelegateActionsWithTtl`" + `. The canonical transport result is ` + "`{ borshSerializedBase64: string }`" + `, while legacy structured and bare-base64 results remain accepted during the bridge transition.
 - ` + "`nearWallet.addFunctionCallKey({ contractId, methodNames, allowance, network })`" + ` (` + "`@fastnear/wallet@1.1.4+`" + `): grant a second function-call key on another contract after sign-in, so a follow-on zero-deposit call to that contract also signs silently.
 - ` + "`nearWallet.accountId`" + ` / ` + "`isConnected`" + ` / ` + "`connectedNetworks`" + ` / ` + "`switchNetwork`" + `: per-network session inspection and the active-network cursor.
 - ` + "`nearWallet.onConnect`" + ` / ` + "`onDisconnect`" + `: subscribe to session lifecycle.
@@ -698,6 +820,8 @@ ${supportSurface.captureExample.summary}
 \`\`\`${supportSurface.captureExample.language}
 ${supportSurface.captureExample.code}
 \`\`\`
+
+${renderX402Section({ headingLevel: 2 })}
 
 ${renderMlDsa65Section({ headingLevel: 2 })}
 

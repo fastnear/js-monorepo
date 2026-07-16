@@ -23,6 +23,7 @@ const publishPreparationScript = path.join(
 const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), "fastnear-packed-smoke-"));
 const tarballsRoot = path.join(temporaryRoot, "tarballs");
 const consumerRoot = path.join(temporaryRoot, "consumer");
+const serverConsumerRoot = path.join(temporaryRoot, "x402-server-consumer");
 
 const exportProbes = {
   "@fastnear/api": ["sendTx", "queryProtocolVersion"],
@@ -32,6 +33,19 @@ const exportProbes = {
   "@fastnear/utils": ["serializeSignedTransaction", "signerFromPrivateKey"],
   "@fastnear/wallet": ["connect", "sendTransaction"],
   "@fastnear/wallet-adapter": ["createMeteorAdapter", "createNearMobileAdapter"],
+  "@fastnear/x402": [
+    "createFastNearWalletSigner",
+    "createNearPaymentFetch",
+    "createNearX402Client",
+  ],
+};
+
+const subpathExportProbes = {
+  "@fastnear/x402": {
+    "/node": ["createLocalNearSigner"],
+    "/server": ["createNearResourceServer"],
+    "/facilitator": ["createNearFacilitator"],
+  },
 };
 
 const runtimes = [
@@ -41,6 +55,14 @@ const runtimes = [
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
+}
+
+function resolveExportTarget(manifest, exportPath, condition) {
+  let target = manifest.exports?.[exportPath];
+  while (target && typeof target === "object") {
+    target = target[condition] ?? target.default;
+  }
+  return typeof target === "string" ? target : undefined;
 }
 
 function run(command, args, options = {}) {
@@ -198,6 +220,7 @@ function writeConsumerProject(workspaces) {
   const packageSpecs = workspaces.map((workspace) => ({
     name: workspace.manifest.name,
     probes: exportProbes[workspace.manifest.name] ?? [],
+    subpaths: subpathExportProbes[workspace.manifest.name] ?? {},
     version: workspace.manifest.version,
   }));
 
@@ -222,22 +245,33 @@ function runtimeKeys(namespace) {
     .sort();
 }
 
-for (const packageSpec of packageSpecs) {
-  const cjs = require(packageSpec.name);
-  const esm = await import(packageSpec.name);
+async function assertModuleFormats(specifier, probes) {
+  const cjs = require(specifier);
+  const esm = await import(specifier);
   const cjsKeys = runtimeKeys(cjs);
   const esmKeys = runtimeKeys(esm);
 
-  assert.ok(cjsKeys.length > 0, packageSpec.name + " require() exposed no exports");
-  assert.ok(esmKeys.length > 0, packageSpec.name + " import exposed no exports");
-  assert.deepEqual(cjsKeys, esmKeys, packageSpec.name + " CJS/ESM export mismatch");
+  assert.ok(cjsKeys.length > 0, specifier + " require() exposed no exports");
+  assert.ok(esmKeys.length > 0, specifier + " import exposed no exports");
+  assert.deepEqual(cjsKeys, esmKeys, specifier + " CJS/ESM export mismatch");
 
-  for (const probe of packageSpec.probes) {
-    assert.notEqual(cjs[probe], undefined, packageSpec.name + " require() missed " + probe);
-    assert.notEqual(esm[probe], undefined, packageSpec.name + " import missed " + probe);
+  for (const probe of probes) {
+    assert.notEqual(cjs[probe], undefined, specifier + " require() missed " + probe);
+    assert.notEqual(esm[probe], undefined, specifier + " import missed " + probe);
+  }
+}
+
+for (const packageSpec of packageSpecs) {
+  await assertModuleFormats(packageSpec.name, packageSpec.probes);
+  for (const [subpath, probes] of Object.entries(packageSpec.subpaths)) {
+    await assertModuleFormats(packageSpec.name + subpath, probes);
   }
 
-  console.log(packageSpec.name + "@" + packageSpec.version + ": require() + import() OK");
+  const subpathCount = Object.keys(packageSpec.subpaths).length;
+  console.log(
+    packageSpec.name + "@" + packageSpec.version + ": require() + import() OK" +
+      (subpathCount === 0 ? "" : " (" + subpathCount + " subpaths)"),
+  );
 }
 
 console.log("Runtime " + process.version + ": all packed packages OK");
@@ -264,6 +298,9 @@ function installTarballsTogether(workspaces) {
 function verifyInstalledGraph(workspaces) {
   const consumerManifest = readJson(path.join(consumerRoot, "package.json"));
   const lockfile = readJson(path.join(consumerRoot, "package-lock.json"));
+  const walletWorkspace = workspaces.find(
+    (workspace) => workspace.manifest.name === "@fastnear/wallet",
+  );
 
   for (const workspace of workspaces) {
     const { name, version } = workspace.manifest;
@@ -294,6 +331,20 @@ function verifyInstalledGraph(workspaces) {
       /^file:/,
       `${name} is not a direct local-tarball dependency`,
     );
+
+    if (name === "@fastnear/x402") {
+      assert.ok(walletWorkspace, "Missing @fastnear/wallet workspace");
+      assert.equal(
+        installedManifest.peerDependencies?.["@fastnear/wallet"],
+        walletWorkspace.manifest.version,
+        "@fastnear/x402 did not rewrite its wallet peer to the publish version",
+      );
+      assert.deepEqual(
+        installedManifest.peerDependenciesMeta?.["@fastnear/wallet"],
+        { optional: true },
+        "@fastnear/x402 must keep @fastnear/wallet optional",
+      );
+    }
 
     for (const [dependencyName, dependencyRange] of Object.entries(
       installedManifest.dependencies ?? {},
@@ -345,7 +396,94 @@ function verifyInstalledGraph(workspaces) {
         );
       }
     }
+
+    for (const subpath of Object.keys(subpathExportProbes[name] ?? {})) {
+      const exportPath = `.${subpath}`;
+      for (const condition of ["require", "import", "types"]) {
+        const target = resolveExportTarget(
+          installedManifest,
+          exportPath,
+          condition,
+        );
+        assert.ok(
+          target,
+          `${name} tarball is missing the ${condition} target for ${exportPath}`,
+        );
+        assert.equal(
+          existsSync(path.resolve(path.dirname(installedManifestPath), target)),
+          true,
+          `${name} tarball is missing ${target}`,
+        );
+      }
+    }
   }
+}
+
+function installServerOnlyX402Consumer(workspaces) {
+  const byName = new Map(
+    workspaces.map((workspace) => [workspace.manifest.name, workspace]),
+  );
+  const x402 = byName.get("@fastnear/x402");
+  assert.ok(x402, "Missing @fastnear/x402 workspace");
+
+  const localDependencyClosure = [];
+  const visited = new Set();
+  function visit(workspace) {
+    if (visited.has(workspace.manifest.name)) return;
+    visited.add(workspace.manifest.name);
+    localDependencyClosure.push(workspace);
+    for (const dependencyName of Object.keys(workspace.manifest.dependencies ?? {})) {
+      const dependency = byName.get(dependencyName);
+      if (dependency) visit(dependency);
+    }
+  }
+  visit(x402);
+
+  assert.equal(
+    visited.has("@fastnear/wallet"),
+    false,
+    "@fastnear/x402 must not make its optional wallet peer a runtime dependency",
+  );
+
+  mkdirSync(serverConsumerRoot, { recursive: true });
+  writeFileSync(
+    path.join(serverConsumerRoot, "package.json"),
+    `${JSON.stringify({
+      name: "fastnear-x402-server-only-acceptance",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+    }, null, 2)}\n`,
+  );
+
+  console.log("\nInstalling @fastnear/x402 without its optional wallet peer");
+  run(
+    "npm",
+    [
+      "install",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--prefer-offline",
+      ...localDependencyClosure.map((workspace) => workspace.tarballPath),
+    ],
+    { cwd: serverConsumerRoot },
+  );
+
+  assert.equal(
+    existsSync(path.join(serverConsumerRoot, "node_modules/@fastnear/wallet")),
+    false,
+    "A server-only @fastnear/x402 install unexpectedly installed @fastnear/wallet",
+  );
+  run(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      'const mod = await import("@fastnear/x402/server"); if (typeof mod.createNearResourceServer !== "function") process.exit(1);',
+    ],
+    { cwd: serverConsumerRoot },
+  );
 }
 
 function smokeRuntimes() {
@@ -390,6 +528,7 @@ try {
   writeConsumerProject(packed);
   installTarballsTogether(packed);
   verifyInstalledGraph(packed);
+  installServerOnlyX402Consumer(packed);
   smokeRuntimes();
   assertWorkspaceManifestsUnchanged(workspaces);
   assert.equal(
