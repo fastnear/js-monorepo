@@ -46,7 +46,7 @@ yarn smoke:x402:testnet -- \
 
 The harness permits exactly one `send_tx`, checks the serialized inner delegate and outer relayer transaction before forwarding it, waits for `FINAL`, reconciles exact token and nonce deltas, and proves a sequential replay is rejected without another submission. If submission becomes ambiguous, it prints a `near tx-status` reconciliation command and never retries automatically.
 
-## Intear and Meteor gates
+## Browser wallet gate
 
 Omit the payer credential and use `--serve-wallet` with the same confirmations:
 
@@ -66,13 +66,13 @@ yarn smoke:x402:testnet -- \
   --confirm-relayer relayer.mike.testnet \
   --confirm-asset wrap.testnet \
   --confirm-amount 1 \
-  --expected-wallet "Intear Wallet"
+  --expected-wallet "Meteor Wallet"
 ```
 
-Open the printed `127.0.0.1` URL, connect the exact configured account and wallet, and click Pay. The page uses the locally built wallet and x402 IIFEs, fixes the network and payment fields, never auto-connects or auto-pays, and closes its one-shot server after final reconciliation. Run it separately with `--expected-wallet "Intear Wallet"` and `--expected-wallet "Meteor Wallet"`; the exact value must match `nearWallet.walletName()` for the candidate manifest.
+Open the printed `127.0.0.1` URL, connect the exact configured account and wallet, and click Pay. The page uses the locally built wallet and x402 IIFEs, fixes the network and payment fields, never auto-connects or auto-pays, and closes its one-shot server after final reconciliation. Meteor Wallet is the maintained browser-wallet release gate for FastNEAR `1.5.0`; additional wallets should only be documented as compatible after their maintained production executor advertises `signDelegateActionsWithTtl` and passes this same harness. The exact `--expected-wallet` value must match `nearWallet.walletName()` for the active manifest.
 
 The browser session expires after 15 minutes by default. `--wallet-timeout-seconds` accepts 1 through 3600. To test an unpublished near-connect manifest, pass its public HTTPS URL with `--wallet-manifest`; embedded credentials and query strings are rejected because the browser receives the URL.
 
-By default, wallet mode serves the locally built wallet and x402 IIFEs. To run the same gate against published release artifacts, add an exact package version such as `--bundle-version 1.5.0-beta.0`. The page then loads both IIFEs from immutable, exact-version jsDelivr URLs. Tags, ranges, partial versions, and malformed prerelease versions are rejected; `--bundle-version` is only valid with `--serve-wallet`.
+By default, wallet mode serves the locally built wallet and x402 IIFEs. To run the same gate against published release artifacts, add an exact package version such as `--bundle-version 1.5.0`. The page then loads both IIFEs from immutable, exact-version jsDelivr URLs. Tags, ranges, partial versions, and malformed prerelease versions are rejected; `--bundle-version` is only valid with `--serve-wallet`.
 
 Use the installed `near` CLI only for operator setup, balance inspection, and `near tx-status` reconciliation. The payment itself goes through the package's official local signer or wallet bridge and upstream reference relayer.

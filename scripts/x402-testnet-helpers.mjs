@@ -33,10 +33,18 @@ const OPTION_DEFINITIONS = {
 
 const EXACT_SEMVER =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const EXACT_SEMVER_SOURCE =
+  "(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?";
 const WALLET_CDN =
   "https://cdn.jsdelivr.net/npm/@fastnear/wallet@next/dist/umd/browser.global.js";
 const X402_CDN =
   "https://cdn.jsdelivr.net/npm/@fastnear/x402@next/dist/umd/browser.global.js";
+const WALLET_CDN_RE = new RegExp(
+  `https://cdn\\.jsdelivr\\.net/npm/@fastnear/wallet@(?:next|${EXACT_SEMVER_SOURCE})/dist/umd/browser\\.global\\.js`,
+);
+const X402_CDN_RE = new RegExp(
+  `https://cdn\\.jsdelivr\\.net/npm/@fastnear/x402@(?:next|${EXACT_SEMVER_SOURCE})/dist/umd/browser\\.global\\.js`,
+);
 
 function exactBundleVersion(value) {
   if (typeof value !== "string" || !EXACT_SEMVER.test(value)) {
@@ -298,12 +306,12 @@ export function transformWalletSmokePage(html, config, bundleVersion) {
     ? "/bundles/x402.js"
     : X402_CDN.replace("@next/", `@${version}/`);
 
-  if (!html.includes(WALLET_CDN) || !html.includes(X402_CDN) || !html.includes("</head>")) {
+  if (!WALLET_CDN_RE.test(html) || !X402_CDN_RE.test(html) || !html.includes("</head>")) {
     throw new Error("The static x402 page no longer matches the wallet-smoke template");
   }
 
   return html
-    .replace(WALLET_CDN, walletBundle)
-    .replace(X402_CDN, x402Bundle)
+    .replace(WALLET_CDN_RE, walletBundle)
+    .replace(X402_CDN_RE, x402Bundle)
     .replace("</head>", `${injection}\n</head>`);
 }

@@ -74,7 +74,7 @@ x402 payment surface (@fastnear/x402):
 - Seller: @fastnear/x402/server createNearResourceServer; explicit facilitator required
 - Self-hosted facilitator: @fastnear/x402/facilitator createNearFacilitator
 - Wallet features: signDelegateActions + signDelegateActionsWithTtl
-- Status: Beta: requires @fastnear/near-connect 0.13+ and a wallet that advertises both timeout-aware delegate-signing capabilities; production wallet manifest activation remains QA-gated.
+- Status: Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.
 - Guide: https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md
 
 Named endpoint response types:

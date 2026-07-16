@@ -4,7 +4,7 @@ Adapters for using the official [`@x402/near`](https://www.npmjs.com/package/@x4
 
 This package does not implement a second x402 wire format. It uses x402 v2, NEP-366 signed delegate actions, and the Foundation's NEAR verifier and settlement code.
 
-> **Browser-wallet beta:** the wallet path requires `@fastnear/near-connect@0.13.0` or later and a wallet that advertises both `signDelegateActions` and `signDelegateActionsWithTtl`. Keep production rollout gated on successful Intear and Meteor testnet settlement QA; the local-key client is the stable integration path today.
+> **Browser-wallet support:** the wallet path requires `@fastnear/near-connect@0.13.0` or later and a wallet that advertises both `signDelegateActions` and `signDelegateActionsWithTtl`. Meteor Wallet is the tested production wallet path for this release; additional wallets should pass the same guarded testnet harness before being documented as compatible.
 
 ## Install
 
@@ -24,8 +24,8 @@ Choose the smallest entrypoint for the job:
 
 | Task | Imports | Main factory | Status |
 |---|---|---|---|
-| Pay a URL from Node.js | `@fastnear/x402`, `@fastnear/x402/node` | `createNearPaymentFetch` | Stable core path |
-| Pay from a browser wallet | `@fastnear/x402`, `@fastnear/wallet` | `createFastNearWalletSigner` + `createNearPaymentFetch` | Preview |
+| Pay a URL from Node.js | `@fastnear/x402`, `@fastnear/x402/node` | `createNearPaymentFetch` | Stable |
+| Pay from a browser wallet | `@fastnear/x402`, `@fastnear/wallet` | `createFastNearWalletSigner` + `createNearPaymentFetch` | Stable with a compatible timeout-aware wallet |
 | Protect a seller resource | `@fastnear/x402/server` | `createNearResourceServer` | Explicit facilitator required |
 | Operate a facilitator | `@fastnear/x402/facilitator` | `createNearFacilitator` | Bring your own HTTP framework |
 
@@ -71,11 +71,11 @@ Use `network: "near:*"` (the default) when the client should accept either canon
 
 ### Browser script
 
-The IIFE bundle exports `window.nearX402`. The `@next` URLs below intentionally describe the beta channel; pin exact released versions before production use.
+The IIFE bundle exports `window.nearX402`. Pin exact released versions for production use.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@next/dist/umd/browser.global.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@next/dist/umd/browser.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.5.0/dist/umd/browser.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@1.5.0/dist/umd/browser.global.js"></script>
 <script>
   async function payAfterClick(url) {
     const connection = await nearWallet.connect({
@@ -289,9 +289,9 @@ This is an in-process trust boundary: isolate the facilitator behind authenticat
 
 ## Release gate
 
-The browser path is released in dependency order. FastNEAR `1.4.0` shipped the timeout-aware wallet prerequisite without `@fastnear/x402`; `@fastnear/near-connect@0.13.0` now carries the Meteor executor, Intear TTL forwarding, and shared delegate-signing capability types. The synchronized `1.5.0-beta.0` prerelease consumes that bridge and adds `@fastnear/x402`.
+The browser path was released in dependency order. FastNEAR `1.4.0` shipped the timeout-aware wallet prerequisite without `@fastnear/x402`; `@fastnear/near-connect@0.13.0` carries shared delegate-signing capability types and the Meteor bridge; FastNEAR `1.5.0` adds the stable `@fastnear/x402` package.
 
-Promote the beta only after real testnet approval and settlement succeed through both Intear and Meteor production wallet paths, an automated local-key testnet flow succeeds, packed CJS/ESM subpath imports pass, and the jsDelivr IIFE exposes the locked `nearX402` global. If repository versions move first, use the next two synchronized minor versions in the same prerequisite-then-feature order.
+Stable release requires an automated local-key testnet flow, one real Meteor Wallet testnet settlement from `mike.testnet`, packed CJS/ESM subpath imports, bundle-budget checks, generated-agent consistency, and jsDelivr verification that the IIFE exposes the locked `nearX402` global. Other wallets are not release gates unless they are actively maintained, advertise `signDelegateActionsWithTtl`, and pass the same one-click settlement harness.
 
 Repository maintainers should use the [guarded testnet QA guide](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/TESTNET_QA.md) for the shared local-key and browser-wallet release harness.
 

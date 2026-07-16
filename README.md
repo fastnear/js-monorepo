@@ -36,7 +36,7 @@ The monorepo now ships a low-level-first runtime plus a compact task catalog for
 - `near.explain.*` turns actions, transactions, and thrown errors into stable JSON summaries.
 - The original low-level entrypoints stay intact: `near.view`, `near.queryAccount`, `near.queryTx`, `near.sendTx`, `near.requestSignIn`, and `near.signMessage`.
 - `near.batch(...)` and `near.view.many(...)` fan out many reads with settled, concurrency-capped results, and `near.config({ retry, batch })` tunes automatic 429/transient retry — both on by default. See the API package README for details.
-- `@fastnear/x402` provides opt-in x402 v2 NEAR payment clients plus focused `/node`, `/server`, and `/facilitator` entrypoints; its browser-wallet path is beta while wallet production manifests remain QA-gated.
+- `@fastnear/x402` provides opt-in x402 v2 NEAR payment clients plus focused `/node`, `/server`, and `/facilitator` entrypoints; browser-wallet payments require a timeout-aware wallet, with Meteor Wallet tested for this release.
 
 ### Hosted agent entrypoint
 
@@ -529,14 +529,14 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 - Authorization: NEP-366 SignedDelegate; asset: NEP-141 fungible tokens.
 - Browser global: `nearX402`.
 - Runtime: Package-only; not included in agents.js or near.js.
-- Browser status: Beta: requires @fastnear/near-connect 0.13+ and a wallet that advertises both timeout-aware delegate-signing capabilities; production wallet manifest activation remains QA-gated.
+- Browser status: Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.
 - Required wallet features: `signDelegateActions` and `signDelegateActionsWithTtl`.
 - Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md).
 
 #### Choose by task
 
-- Pay an x402 URL from Node.js: `createLocalNearSigner` + `createNearPaymentFetch` from `@fastnear/x402/node` and `@fastnear/x402` — stable core path.
-- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — beta until Intear and Meteor production wallet QA pass.
+- Pay an x402 URL from Node.js: `createLocalNearSigner` + `createNearPaymentFetch` from `@fastnear/x402/node` and `@fastnear/x402` — stable.
+- Pay an x402 URL from a browser wallet: `createFastNearWalletSigner` + `createNearPaymentFetch` from `@fastnear/wallet` and `@fastnear/x402` — stable with a compatible timeout-aware wallet; Meteor Wallet is the tested production path.
 - Protect a seller resource: `createNearResourceServer` from `@fastnear/x402/server` — requires an explicit facilitator.
 - Operate a NEAR facilitator: `createNearFacilitator` from `@fastnear/x402/facilitator` — HTTP framework and secret storage are operator choices.
 - Integrate below the paid-fetch helper: `createNearX402Client` from `@fastnear/x402` — lower-level client path.
