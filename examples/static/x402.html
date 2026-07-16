@@ -81,6 +81,10 @@
   let connectedNetwork = null;
   let connectedWalletName = null;
   const smokeConfig = globalThis.__FASTNEAR_X402_SMOKE__ || null;
+  const requiredWalletFeatures = {
+    signDelegateActions: true,
+    signDelegateActionsWithTtl: true,
+  };
 
   function selectedNetwork() {
     return document.getElementById('network').value;
@@ -92,6 +96,25 @@
 
   function showResult(message) {
     document.getElementById('result').textContent = message;
+  }
+
+  function connectOptionsFor(network) {
+    return {
+      network,
+      ...(smokeConfig && smokeConfig.manifest ? { manifest: smokeConfig.manifest } : {}),
+      features: requiredWalletFeatures,
+    };
+  }
+
+  function walletSummary(wallets) {
+    return wallets.map((wallet) => `${wallet.name || wallet.id} (${wallet.id})`).join(', ');
+  }
+
+  async function availableCompatibleWallets(network) {
+    const connectOptions = connectOptionsFor(network);
+    return typeof nearWallet.availableWallets === 'function'
+      ? await nearWallet.availableWallets(connectOptions)
+      : [];
   }
 
   function setConnected(network, accountId) {
@@ -112,23 +135,13 @@
     }
 
     const network = selectedNetwork();
-    const walletFeatures = {
-      signDelegateActions: true,
-      signDelegateActionsWithTtl: true,
-    };
-    const connectOptions = {
-      network,
-      ...(smokeConfig && smokeConfig.manifest ? { manifest: smokeConfig.manifest } : {}),
-      features: walletFeatures,
-    };
+    const connectOptions = connectOptionsFor(network);
     try {
       setStatus('Checking compatible wallets...');
-      const wallets = typeof nearWallet.availableWallets === 'function'
-        ? await nearWallet.availableWallets(connectOptions)
-        : [];
-      const walletSummary = wallets.map((wallet) => `${wallet.name || wallet.id} (${wallet.id})`).join(', ');
+      const wallets = await availableCompatibleWallets(network);
+      const summary = walletSummary(wallets);
       if (smokeConfig && wallets.length !== 1) {
-        throw new Error(`Expected exactly one candidate wallet; found ${wallets.length}${walletSummary ? `: ${walletSummary}` : ''}.`);
+        throw new Error(`Expected exactly one candidate wallet; found ${wallets.length}${summary ? `: ${summary}` : ''}.`);
       }
 
       setStatus(smokeConfig
@@ -141,8 +154,8 @@
 
       if (!connection) {
         setConnected(null, null);
-        showResult(walletSummary
-          ? `No compatible wallet was connected. Candidate wallets: ${walletSummary}. Check whether the wallet popup was closed, rejected, or blocked.`
+        showResult(summary
+          ? `No compatible wallet was connected. Candidate wallets: ${summary}. Check whether the wallet popup was closed, rejected, or blocked.`
           : 'No compatible wallet was connected. The manifest did not expose a wallet with both delegate-signing features.');
         return;
       }
@@ -230,7 +243,28 @@
     setStatus('One-shot testnet smoke — connect the exact expected account; no payment occurs until Pay is clicked.');
   }
 
+  async function reportSmokeWalletCandidates() {
+    if (!smokeConfig) return;
+    if (!globalThis.nearWallet) {
+      showResult('Wallet bundle is unavailable. Check the @fastnear/wallet script URL.');
+      return;
+    }
+
+    try {
+      const wallets = await availableCompatibleWallets(selectedNetwork());
+      const summary = walletSummary(wallets);
+      if (wallets.length === 1) {
+        showResult(`Candidate wallet loaded: ${summary}. Click Connect compatible wallet to open it.`);
+      } else {
+        showResult(`Candidate wallet check found ${wallets.length}${summary ? `: ${summary}` : ''}.`);
+      }
+    } catch (error) {
+      showResult(`Candidate wallet check failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   applySmokeConfiguration();
+  reportSmokeWalletCandidates();
 </script>
 <footer class="brand-footer">&copy; 2026 FastNear · <a href="https://github.com/fastnear/js-monorepo" target="_blank" rel="noopener">GitHub</a></footer>
 </body>
