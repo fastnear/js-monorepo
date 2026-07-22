@@ -51,7 +51,7 @@ Record each release-gating run here:
 
 | Date | Package version | Account | Amount | Result | Notes |
 |------|-----------------|---------|--------|--------|-------|
-| —    | —               | —       | —      | —      | first entry pending a funded run |
+| 2026-07-22 | 1.6.0 | mike.near | 0.05 wNEAR → 0.093389 USDC | SUCCESS | intent `DBcSo8Cx7wqUF6QoeK4HpFXADX9V7M9RpbvDj2iG8Qoy`; deposit tx `8fWAQiaTKhRSx5fMhuUcGf8ZLs9t53fknNhVziTLKcY4`; settlement `6ZKK34vbT9gbbKr1ugYyQj9Qv7pmTpuVwHZW7P78rU8a`; keyless (0.2% fee); required storage-registering the deposit address on wrap.near first |
 
 ## Known live-surface caveats
 
@@ -61,3 +61,8 @@ Record each release-gating run here:
   2026-07-22 by the dry smoke); relay-path QA needs partner credentials.
 - Deposit addresses expire (`timeWhenInactive`) — the funded smoke commits
   its quote immediately before depositing.
+- NEAR-chain deposit addresses are fresh implicit accounts with NO storage
+  registration on the token contract — an unregistered `ft_transfer` reverts
+  on-chain (verified 2026-07-22). The smoke storage-registers the address
+  (~0.00125 NEAR) before transferring; integrators sending NEP-141 deposits
+  from NEAR must do the same.

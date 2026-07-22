@@ -51,6 +51,33 @@ const oneClick = createOneClickClient({
 });
 const step = (label, detail) => console.log(`✓ ${label}${detail ? ` — ${detail}` : ""}`);
 
+// Unwrap a send_tx response, assert every receipt succeeded, return the hash.
+function assertTxSuccess(response, label) {
+  const outcome = response?.result ?? response;
+  const hash = outcome?.transaction?.hash;
+  const failures = [];
+  const topStatus = outcome?.status;
+  if (topStatus && typeof topStatus === "object" && "Failure" in topStatus) {
+    failures.push(topStatus.Failure);
+  }
+  for (const receipt of outcome?.receipts_outcome ?? []) {
+    const status = receipt?.outcome?.status;
+    if (status && typeof status === "object" && "Failure" in status) {
+      failures.push(status.Failure);
+    }
+  }
+  if (failures.length > 0) {
+    console.error(`✗ ${label} FAILED on-chain (tx ${hash ?? "unknown"}):`);
+    console.error(JSON.stringify(failures, null, 2));
+    process.exit(1);
+  }
+  if (!hash) {
+    console.error(`✗ ${label}: could not read transaction hash from the RPC response`);
+    process.exit(1);
+  }
+  return hash;
+}
+
 // --- Preflight (always) ----------------------------------------------------
 
 const publicKey = publicKeyFromPrivate(PRIVATE_KEY);
@@ -123,7 +150,7 @@ if (wnearBalance < BigInt(AMOUNT)) {
     waitUntil: "FINAL",
     network: "mainnet",
   });
-  step("wrapped NEAR", wrapResult?.transaction?.hash ?? "(submitted)");
+  step("wrapped NEAR", assertTxSuccess(wrapResult, "near_deposit"));
 }
 
 const committed = await oneClick.quote({
@@ -137,6 +164,42 @@ if (!depositAddress) {
   process.exit(1);
 }
 step("committed quote", `depositAddress ${depositAddress}`);
+
+// A fresh implicit deposit address has no storage on wrap.near — an
+// unregistered receiver makes ft_transfer revert. Register it first.
+const storage = await view({
+  contractId: WNEAR,
+  methodName: "storage_balance_of",
+  args: { account_id: depositAddress },
+  network: "mainnet",
+});
+if (storage == null) {
+  const bounds = await view({
+    contractId: WNEAR,
+    methodName: "storage_balance_bounds",
+    args: {},
+    network: "mainnet",
+  });
+  const registerResult = await sendTx({
+    signerId: ACCOUNT_ID,
+    signer: signerFromPrivateKey(PRIVATE_KEY),
+    receiverId: WNEAR,
+    actions: [
+      actions.functionCall({
+        methodName: "storage_deposit",
+        args: { account_id: depositAddress, registration_only: true },
+        gas: FT_TRANSFER_GAS,
+        deposit: String(bounds?.min ?? "1250000000000000000000"),
+      }),
+    ],
+    waitUntil: "FINAL",
+    network: "mainnet",
+  });
+  step(
+    "deposit address storage-registered on wrap.near",
+    assertTxSuccess(registerResult, "storage_deposit"),
+  );
+}
 
 const transferResult = await sendTx({
   signerId: ACCOUNT_ID,
@@ -153,13 +216,11 @@ const transferResult = await sendTx({
   waitUntil: "FINAL",
   network: "mainnet",
 });
-const depositTxHash = transferResult?.transaction?.hash;
-step("deposit sent", depositTxHash ?? "(submitted)");
+const depositTxHash = assertTxSuccess(transferResult, "ft_transfer to deposit address");
+step("deposit sent", depositTxHash);
 
-if (depositTxHash) {
-  await oneClick.submitDeposit({ txHash: depositTxHash, depositAddress });
-  step("deposit tx reported to 1Click");
-}
+await oneClick.submitDeposit({ txHash: depositTxHash, depositAddress });
+step("deposit tx reported to 1Click");
 
 const deadline = Date.now() + POLL_TIMEOUT_MS;
 let finalStatus = null;
