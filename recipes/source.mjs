@@ -531,6 +531,26 @@ export const supportSurface = {
   trialCreditsUrl: FASTNEAR_DASHBOARD_URL,
   trialCreditsLabel: "dashboard.fastnear.com",
   trialCreditsSummary: "Free trial credits are available at dashboard.fastnear.com.",
+  hostedPages: [
+    {
+      url: `${FASTNEAR_CDN_BASE}/x402.html`,
+      topic: "x402 payments on NEAR",
+      summary:
+        "Integration map, payer quickstarts, constraints, and wallet-compatibility status for @fastnear/x402.",
+    },
+    {
+      url: `${FASTNEAR_CDN_BASE}/post-quantum.html`,
+      topic: "Post-quantum ML-DSA-65 keys",
+      summary:
+        "Enrollment flow, key forms, wire sizes, and safety rules for @fastnear/ml-dsa-65.",
+    },
+    {
+      url: `${FASTNEAR_CDN_BASE}/retries.html`,
+      topic: "Retries and bulk reads",
+      summary:
+        "Transient-failure retry defaults and the near.batch / near.view.many settled-results surface.",
+    },
+  ],
   discoveryOrder: [
     {
       step: 1,

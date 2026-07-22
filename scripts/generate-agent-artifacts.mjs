@@ -266,6 +266,7 @@ function renderSupportSection() {
 - API key env var: ` + "`" + supportSurface.apiKeyEnvVar + "`" + `
 - Hosted recipe catalog: ` + "`" + supportSurface.hostedCatalogUrl + "`" + `
 - Hosted terminal wrapper: ` + "`" + supportSurface.hostedAgentEntry + "`" + `
+- Hosted topic explainers: ` + supportSurface.hostedPages.map((page) => "`" + page.url + "`" + " (" + page.topic + ")").join(", ") + `
 - Free trial credits: ` + "`" + supportSurface.trialCreditsUrl + "`" + `
 
 Set ` + "`" + supportSurface.apiKeyEnvVar + "`" + ` before running the authenticated snippets.
@@ -504,6 +505,7 @@ ${kvTerminalSnippet.code}
 - API key env var: ` + "`" + supportSurface.apiKeyEnvVar + "`" + `
 - Hosted recipe catalog: ` + "`" + supportSurface.hostedCatalogUrl + "`" + `
 - Hosted terminal wrapper: ` + "`" + supportSurface.hostedAgentEntry + "`" + `
+- Hosted topic explainers: ` + supportSurface.hostedPages.map((page) => "`" + page.url + "`" + " (" + page.topic + ")").join(", ") + `
 - Free trial credits: ` + "`" + supportSurface.trialCreditsUrl + "`" + `
 
 Release contract:
@@ -690,6 +692,9 @@ Canonical machine-readable catalog:
 Canonical hosted agent wrapper:
 - ${FASTNEAR_AGENT_ENTRY}
 
+Hosted topic explainers:
+${supportSurface.hostedPages.map((page) => `- ${page.url} — ${page.topic}`).join("\n")}
+
 Wrapper source in repo:
 - recipes/near-node.mjs
 
@@ -805,6 +810,7 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 - API key env var: ` + "`" + supportSurface.apiKeyEnvVar + "`" + `
 - Hosted recipe catalog: ` + "`" + supportSurface.hostedCatalogUrl + "`" + `
 - Hosted terminal wrapper: ` + "`" + supportSurface.hostedAgentEntry + "`" + `
+- Hosted topic explainers: ` + supportSurface.hostedPages.map((page) => "`" + page.url + "`" + " (" + page.topic + ")").join(", ") + `
 - Free trial credits: ` + "`" + supportSurface.trialCreditsUrl + "`" + `
 
 Set ` + "`" + supportSurface.apiKeyEnvVar + "`" + ` before running the authenticated snippets.
