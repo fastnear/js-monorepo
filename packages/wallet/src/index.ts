@@ -17,7 +17,9 @@ export {
   removeDebugWallet,
   switchNetwork,
   addFunctionCallKey,
-  signDelegateActions
+  signDelegateActions,
+  connectedNetworks,
+  getActiveNetwork
 } from "./connector.js";
 
 export type {

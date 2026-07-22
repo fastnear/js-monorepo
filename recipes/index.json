@@ -797,7 +797,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": true,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});\nEOF"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst block = await near.neardata.lastBlockFinal();\n\n// shard.chunk is null when a shard missed this block — guard before reading.\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk?.transactions.length ?? 0,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + (shard.chunk?.transactions.length ?? 0),\n    0\n  ),\n});\nEOF"
         },
         {
           "id": "curl-jq",
@@ -813,7 +813,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "const block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});"
+          "code": "const block = await near.neardata.lastBlockFinal();\n\n// shard.chunk is null when a shard missed this block — guard before reading.\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk?.transactions.length ?? 0,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + (shard.chunk?.transactions.length ?? 0),\n    0\n  ),\n});"
         },
         {
           "id": "esm",
@@ -821,7 +821,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst block = await near.neardata.lastBlockFinal();\n\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk.transactions.length,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + shard.chunk.transactions.length,\n    0\n  ),\n});"
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst block = await near.neardata.lastBlockFinal();\n\n// shard.chunk is null when a shard missed this block — guard before reading.\nnear.print({\n  height: block.block.header.height,\n  timestamp_nanosec: block.block.header.timestamp_nanosec,\n  txs_per_shard: block.shards.map((shard) => ({\n    shard_id: shard.shard_id,\n    tx_count: shard.chunk?.transactions.length ?? 0,\n  })),\n  total_txs: block.shards.reduce(\n    (count, shard) => count + (shard.chunk?.transactions.length ?? 0),\n    0\n  ),\n});"
         }
       ],
       "service": "neardata",
@@ -1625,7 +1625,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": true,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  contract_count: inventory.tokens.length,\n  total_tokens: inventory.tokens.reduce(\n    (sum, c) => sum + (c.tokens?.length ?? 0),\n    0\n  ),\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),\n  })),\n});\nEOF"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\n// The inventory endpoint returns contract-level rows only (no per-token\n// ids) — use the nft-for-owner recipe to list tokens on one contract.\nnear.print({\n  contract_count: inventory.tokens.length,\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    last_update_block_height: entry.last_update_block_height,\n  })),\n});\nEOF"
         },
         {
           "id": "curl-jq",
@@ -1641,7 +1641,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  contract_count: inventory.tokens.length,\n  total_tokens: inventory.tokens.reduce(\n    (sum, c) => sum + (c.tokens?.length ?? 0),\n    0\n  ),\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),\n  })),\n});"
+          "code": "// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\n// The inventory endpoint returns contract-level rows only (no per-token\n// ids) — use the nft-for-owner recipe to list tokens on one contract.\nnear.print({\n  contract_count: inventory.tokens.length,\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    last_update_block_height: entry.last_update_block_height,\n  })),\n});"
         },
         {
           "id": "esm",
@@ -1649,20 +1649,19 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\nnear.print({\n  contract_count: inventory.tokens.length,\n  total_tokens: inventory.tokens.reduce(\n    (sum, c) => sum + (c.tokens?.length ?? 0),\n    0\n  ),\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),\n  })),\n});"
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Tip: `near.config({ apiKey: \"<your_key>\" })` raises rate limits.\nconst inventory = await near.nft.inventory({\n  accountId: \"root.near\",\n});\n\n// The inventory endpoint returns contract-level rows only (no per-token\n// ids) — use the nft-for-owner recipe to list tokens on one contract.\nnear.print({\n  contract_count: inventory.tokens.length,\n  preview: inventory.tokens.slice(0, 3).map((entry) => ({\n    contract_id: entry.contract_id,\n    last_update_block_height: entry.last_update_block_height,\n  })),\n});"
         }
       ],
       "service": "api",
-      "returns": "{ tokens: Array<{ contract_id: string; tokens?: Array<{ token_id: string }> }> }",
+      "returns": "{ tokens: Array<{ contract_id: string; last_update_block_height: number | null }> }",
       "outputKeys": [
         "contract_count",
-        "total_tokens",
         "preview[].contract_id",
-        "preview[].sample_token_ids"
+        "preview[].last_update_block_height"
       ],
       "responseNotes": [
         "near.nft.inventory hits the FastNear indexer — set near.config({ apiKey }) to avoid the public rate limit.",
-        "One row per NFT contract the account holds; the embedded token list is best-effort and may need follow-up calls for full metadata."
+        "One row per NFT contract the account holds — contract ids only, no per-token ids; follow up with nft-for-owner per contract for token details."
       ],
       "chooseWhen": [
         "Choose this when the question is 'what NFT contracts does this account hold tokens on?'.",
@@ -1703,7 +1702,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": true,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\nnear.print({\n  amount: past.amount,\n  storage_usage: past.storage_usage,\n  block_hash: past.block_hash,\n  block_height: past.block_height,\n});\nEOF"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\n// near.query* returns the raw JSON-RPC envelope — the data lives in .result.\nconst acct = past.result;\n\nnear.print({\n  amount: acct.amount,\n  storage_usage: acct.storage_usage,\n  block_hash: acct.block_hash,\n  block_height: acct.block_height,\n});\nEOF"
         },
         {
           "id": "curl-jq",
@@ -1719,7 +1718,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\nnear.print({\n  amount: past.amount,\n  storage_usage: past.storage_usage,\n  block_hash: past.block_hash,\n  block_height: past.block_height,\n});"
+          "code": "// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\n// near.query* returns the raw JSON-RPC envelope — the data lives in .result.\nconst acct = past.result;\n\nnear.print({\n  amount: acct.amount,\n  storage_usage: acct.storage_usage,\n  block_hash: acct.block_hash,\n  block_height: acct.block_height,\n});"
         },
         {
           "id": "esm",
@@ -1727,7 +1726,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\nnear.print({\n  amount: past.amount,\n  storage_usage: past.storage_usage,\n  block_hash: past.block_hash,\n  block_height: past.block_height,\n});"
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Reads canonical account state at a specific historical block via the\n// archival RPC. Add useArchival to any view/query when blockId predates\n// the regular RPC's retention window (~5 epochs / a few days).\nconst past = await near.queryAccount({\n  accountId: \"root.near\",\n  blockId: 100_000_000,\n  useArchival: true,\n});\n\n// near.query* returns the raw JSON-RPC envelope — the data lives in .result.\nconst acct = past.result;\n\nnear.print({\n  amount: acct.amount,\n  storage_usage: acct.storage_usage,\n  block_hash: acct.block_hash,\n  block_height: acct.block_height,\n});"
         }
       ],
       "service": "rpc",
