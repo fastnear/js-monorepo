@@ -307,15 +307,16 @@ near.print({
 
   lastBlockFinal: `const block = await near.neardata.lastBlockFinal();
 
+// shard.chunk is null when a shard missed this block — guard before reading.
 near.print({
   height: block.block.header.height,
   timestamp_nanosec: block.block.header.timestamp_nanosec,
   txs_per_shard: block.shards.map((shard) => ({
     shard_id: shard.shard_id,
-    tx_count: shard.chunk.transactions.length,
+    tx_count: shard.chunk?.transactions.length ?? 0,
   })),
   total_txs: block.shards.reduce(
-    (count, shard) => count + shard.chunk.transactions.length,
+    (count, shard) => count + (shard.chunk?.transactions.length ?? 0),
     0
   ),
 });`,
@@ -459,15 +460,13 @@ const inventory = await near.nft.inventory({
   accountId: "root.near",
 });
 
+// The inventory endpoint returns contract-level rows only (no per-token
+// ids) — use the nft-for-owner recipe to list tokens on one contract.
 near.print({
   contract_count: inventory.tokens.length,
-  total_tokens: inventory.tokens.reduce(
-    (sum, c) => sum + (c.tokens?.length ?? 0),
-    0
-  ),
   preview: inventory.tokens.slice(0, 3).map((entry) => ({
     contract_id: entry.contract_id,
-    sample_token_ids: (entry.tokens || []).slice(0, 3).map((t) => t.token_id),
+    last_update_block_height: entry.last_update_block_height,
   })),
 });`,
 
@@ -480,11 +479,14 @@ const past = await near.queryAccount({
   useArchival: true,
 });
 
+// near.query* returns the raw JSON-RPC envelope — the data lives in .result.
+const acct = past.result;
+
 near.print({
-  amount: past.amount,
-  storage_usage: past.storage_usage,
-  block_hash: past.block_hash,
-  block_height: past.block_height,
+  amount: acct.amount,
+  storage_usage: acct.storage_usage,
+  block_hash: acct.block_hash,
+  block_height: acct.block_height,
 });`,
 
   connectTestnet: `// near.recipes.connect honors a per-call network override
@@ -1588,11 +1590,11 @@ export const recipeCatalog = [
     }),
   }, {
     service: "api",
-    returns: "{ tokens: Array<{ contract_id: string; tokens?: Array<{ token_id: string }> }> }",
-    outputKeys: ["contract_count", "total_tokens", "preview[].contract_id", "preview[].sample_token_ids"],
+    returns: "{ tokens: Array<{ contract_id: string; last_update_block_height: number | null }> }",
+    outputKeys: ["contract_count", "preview[].contract_id", "preview[].last_update_block_height"],
     responseNotes: [
       "near.nft.inventory hits the FastNear indexer — set near.config({ apiKey }) to avoid the public rate limit.",
-      "One row per NFT contract the account holds; the embedded token list is best-effort and may need follow-up calls for full metadata.",
+      "One row per NFT contract the account holds — contract ids only, no per-token ids; follow up with nft-for-owner per contract for token details.",
     ],
     chooseWhen: [
       "Choose this when the question is 'what NFT contracts does this account hold tokens on?'.",
