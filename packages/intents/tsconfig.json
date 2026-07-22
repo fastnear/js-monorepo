@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "./dist/esm",
+    "declaration": true,
+    "declarationMap": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@fastnear/*": ["../*/src"]
+    }
+  },
+  "include": ["src/**/*", "../../types/*.d.ts"]
+}

@@ -17,6 +17,17 @@ const packages = [
   { directory: "wallet", globalName: "nearWallet" },
   { directory: "ml-dsa-65", globalName: "NearMlDsa65" },
   {
+    directory: "intents",
+    globalName: "nearIntents",
+    probes: [
+      "createOneClickClient",
+      "createWalletIntentSigner",
+      "createSolverRelayClient",
+      "ftDepositAction",
+      "mtBatchBalances",
+    ],
+  },
+  {
     directory: "x402",
     globalName: "nearX402",
     probes: [

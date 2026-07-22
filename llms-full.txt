@@ -272,7 +272,7 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - API key env var: `FASTNEAR_API_KEY`
 - Hosted recipe catalog: `https://js.fastnear.com/recipes.json`
 - Hosted terminal wrapper: `https://js.fastnear.com/agents.js`
-- Hosted topic explainers: `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads)
+- Hosted topic explainers: `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads), `https://js.fastnear.com/intents.html` (NEAR Intents)
 - Free trial credits: `https://dashboard.fastnear.com`
 
 Set `FASTNEAR_API_KEY` before running the authenticated snippets.
@@ -597,6 +597,172 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 
   return { direct: direct.result, publicKeyHandle, listed };
 }
+```
+
+## NEAR Intents
+
+`@fastnear/intents` integrates the NEAR Intents protocol: the intents.near verifier, the hosted 1Click swap API, and the solver relay.
+
+- Verifier: `intents.near` (mainnet); ledger: NEP-245 multi-token; token ids nep141:<contract>, nep171:<contract>:<id>, nep245:<contract>:<id>.
+- Signing: NEP-413 signed messages (full-access keys only); the verifier also accepts erc191, tip191, raw_ed25519, webauthn, ton_connect, and sep53 payloads.
+- 1Click API: `https://1click.chaindefuser.com`; solver relay: `https://solver-relay-v2.chaindefuser.com/rpc`.
+- Browser global: `nearIntents`.
+- Runtime: Package-only; not included in agents.js or near.js.
+- Wallet status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.
+- Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md).
+
+### Choose by task
+
+- Quote and track a swap: `createOneClickClient` from `@fastnear/intents` — stable; keyless use adds a 0.2% platform fee to quotes.
+- Sign intents from a browser wallet: `createWalletIntentSigner` from `@fastnear/wallet` and `@fastnear/intents` — NEP-413 via the connected wallet's full-access key; FunctionCall session keys cannot sign intents.
+- Sign intents from Node.js or an agent: `createLocalIntentSigner` from `@fastnear/intents/node` — raw full-access key, server-side only.
+- Deposit, check balances, withdraw on the verifier: `ftDepositAction` + `wrapNearAction` + `mtBatchBalances` + `ftWithdrawAction` from `@fastnear/intents` and `@fastnear/api` — action builders for near.sendTx plus NEP-245 views over injected near.view.
+- Talk to the solver relay directly: `createSolverRelayClient` from `@fastnear/intents/relay` — quotes require a partner API key in practice; the 1Click path is the default.
+
+### Entrypoints
+
+- `@fastnear/intents`: `createOneClickClient`, `createWalletIntentSigner`, `createSolverRelayClient`, `ftDepositAction`, `wrapNearAction`, `ftWithdrawAction`, `mtBalance`, `mtBatchBalances`, `toSignedIntent`, `randomNonce` — browser-safe 1Click client, wallet intent signer, verifier helpers, and relay client.
+- `@fastnear/intents/relay`: `createSolverRelayClient` — solver-relay JSON-RPC client (quote, publish_intent, publish_intents, get_status).
+- `@fastnear/intents/node`: `createLocalIntentSigner` — local full-access-key NEP-413 intent signer for servers and agents.
+
+### Constraints
+
+- The verifier is intents.near on NEAR mainnet; there is no public testnet deployment of the intents stack.
+- NEP-413 intent signatures require a full-access key, and the verifier checks the key is authorized for signer_id.
+- Submitted signatures use ed25519:<base58> encoding — not the base64 NEAR wallets return; the signers own that conversion.
+- Native NEAR is not a verifier asset: wrap to wNEAR before depositing, and exit native NEAR only via the native_withdraw intent.
+- Amounts are base-unit strings, and token_diff diffs must net to zero per token across the executed batch.
+
+### Safe defaults
+
+- Quote with dry:true first; commit with dry:false only when ready to fund the deposit address before it expires.
+- Keep local signer private keys in server-side secret storage, never browser code.
+- Use a partner API key from partners.near-intents.org to remove the 0.2% keyless platform fee.
+- Poll /v0/status to a terminal state (SUCCESS, REFUNDED, FAILED) and surface swapDetails on non-success.
+- Omit msg on ft_withdraw so failed withdrawals stay refundable.
+
+### Quote a swap and read live pricing
+
+Quickstart ID: `intents-one-click-quote`
+
+Discover assets and price a swap with a free dry-run quote — no auth, no funds, no commitment.
+
+```js
+import { createOneClickClient } from "@fastnear/intents";
+
+const oneClick = createOneClickClient();
+
+const tokens = await oneClick.tokens();
+const quote = await oneClick.quote({
+  dry: true,
+  swapType: "EXACT_INPUT",
+  slippageTolerance: 100,
+  originAsset: "nep141:wrap.near",
+  destinationAsset: "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+  amount: "1000000000000000000000000",
+  depositType: "ORIGIN_CHAIN",
+  refundTo: "you.near",
+  refundType: "ORIGIN_CHAIN",
+  recipient: "you.near",
+  recipientType: "DESTINATION_CHAIN",
+  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+});
+
+console.log(quote.quote.amountOutFormatted);
+```
+
+### Sign a token_diff intent with a browser wallet
+
+Quickstart ID: `intents-wallet-sign`
+
+NEP-413 through the connected wallet, re-encoded to the MultiPayload the verifier accepts.
+
+```js
+import { createWalletIntentSigner } from "@fastnear/intents";
+// window.nearWallet from https://js.fastnear.com/wallet.js, already connected.
+
+const signer = createWalletIntentSigner({ wallet: nearWallet });
+
+const signed = await signer.signIntents({
+  intents: [{
+    intent: "token_diff",
+    diff: {
+      "nep141:usdc.near": "-1000000",
+      "nep141:usdt.near": "1000000",
+    },
+  }],
+});
+// signed = { standard: "nep413", payload, public_key, signature } — submit via
+// oneClick.submitIntent, relay.publishIntent, or intents.near execute_intents.
+```
+
+### Swap intents.near balances from Node.js
+
+Quickstart ID: `intents-node-swap`
+
+The INTENTS deposit type: 1Click builds the payload, the local signer signs it verbatim, no deposit transaction needed.
+
+```js
+import { createOneClickClient } from "@fastnear/intents";
+import { createLocalIntentSigner } from "@fastnear/intents/node";
+
+const { NEAR_ACCOUNT_ID, NEAR_PRIVATE_KEY } = process.env;
+const oneClick = createOneClickClient();
+const signer = createLocalIntentSigner({
+  accountId: NEAR_ACCOUNT_ID,
+  privateKey: NEAR_PRIVATE_KEY, // full-access, server-side only
+});
+
+// Quote with depositType/refundType/recipientType "INTENTS" — the input
+// funds already sit inside intents.near, so no deposit transaction is needed.
+const quote = await oneClick.quote({
+  dry: false,
+  swapType: "EXACT_INPUT",
+  slippageTolerance: 100,
+  originAsset: "nep141:wrap.near",
+  destinationAsset: "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+  amount: "1000000000000000000000000",
+  depositType: "INTENTS",
+  refundTo: NEAR_ACCOUNT_ID,
+  refundType: "INTENTS",
+  recipient: NEAR_ACCOUNT_ID,
+  recipientType: "INTENTS",
+  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+});
+const { intent } = await oneClick.generateIntent({
+  signerId: NEAR_ACCOUNT_ID,
+  depositAddress: quote.quote.depositAddress,
+});
+// signPayload pins the recipient to intents.near and signs verbatim.
+const signed = await signer.signPayload(intent);
+const { intentHash } = await oneClick.submitIntent({ signedData: signed });
+console.log(intentHash);
+```
+
+### Deposit wNEAR and read verifier balances
+
+Quickstart ID: `intents-deposit-balances`
+
+Action builders for near.sendTx plus NEP-245 ledger views over the injected near.view.
+
+```js
+import { ftDepositAction, wrapNearAction, mtBatchBalances } from "@fastnear/intents";
+
+await near.sendTx({
+  receiverId: "wrap.near",
+  actions: [wrapNearAction({ amountYocto: "1000000000000000000000000" })],
+});
+await near.sendTx({
+  receiverId: "wrap.near",
+  actions: [ftDepositAction({ amount: "1000000000000000000000000" })],
+});
+
+const balances = await mtBatchBalances({
+  accountId: near.accountId(),
+  tokenIds: ["nep141:wrap.near"],
+  view: near.view,
+});
+near.print(balances);
 ```
 
 ## Recipe catalog

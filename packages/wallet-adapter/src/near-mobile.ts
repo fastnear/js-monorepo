@@ -1,13 +1,7 @@
-import { serialize as borshSerialize, type Schema } from "@fastnear/borsh";
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
-  base64ToBytes,
-  curveFromKey,
-  keyFromString,
   privateKeyFromRandom,
   publicKeyFromPrivate,
-  sha256,
+  verifyNep413Signature,
 } from "@fastnear/utils";
 import { createRpcFactory } from "./rpc.js";
 import { TransportError, UserRejectedError } from "./errors.js";
@@ -29,7 +23,6 @@ import type {
 const DEFAULT_SIGNER_BACKEND_URL = "https://near-mobile-signer-backend_production.peersyst.tech";
 const DEFAULT_NEAR_MOBILE_WALLET_URL = "near-mobile-wallet://sign";
 const SESSION_KEY = "session";
-const NEP413_TAG = 2147484061;
 
 type SignerRequestStatus = "pending" | "approved" | "rejected";
 
@@ -82,56 +75,6 @@ const normalizeError = (error: unknown, fallbackCode: string, fallbackMessage: s
   if (error instanceof TransportError || error instanceof UserRejectedError) return error;
   if (error instanceof Error) return new TransportError(fallbackCode, error.message, { cause: error });
   return new TransportError(fallbackCode, fallbackMessage, { details: error });
-};
-
-const signMessagePayloadSchema: Schema = {
-  struct: {
-    tag: "u32",
-    message: "string",
-    nonce: { array: { type: "u8", len: 32 } },
-    recipient: "string",
-    callbackUrl: { option: "string" },
-  },
-};
-
-const verifyNep413Signature = ({
-  publicKey,
-  signature,
-  message,
-  nonce,
-  recipient,
-  callbackUrl,
-}: {
-  publicKey: string;
-  signature: string;
-  message: string;
-  nonce: number[];
-  recipient: string;
-  callbackUrl?: string;
-}): boolean => {
-  const borshPayload = borshSerialize(signMessagePayloadSchema, {
-    tag: NEP413_TAG,
-    message,
-    nonce: Uint8Array.from(nonce),
-    recipient,
-    callbackUrl: callbackUrl ?? null,
-  });
-
-  const hash = sha256(new Uint8Array(borshPayload));
-  const pk = keyFromString(publicKey);
-  const sig = base64ToBytes(signature);
-
-  if (curveFromKey(publicKey) === "secp256k1") {
-    // Strip recovery byte (last byte) — compact sig is first 64 bytes
-    const compactSig = sig.slice(0, 64);
-    // Prepend 0x04 uncompressed prefix — NEAR stores 64 bytes, noble expects 65
-    const fullPk = new Uint8Array(65);
-    fullPk[0] = 0x04;
-    fullPk.set(pk, 1);
-    return secp256k1.verify(compactSig, hash, fullPk, { prehash: false });
-  }
-
-  return ed25519.verify(sig, hash, pk);
 };
 
 class SessionRepository {

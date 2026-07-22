@@ -8,7 +8,8 @@
     "@fastnear/wallet",
     "@fastnear/utils",
     "@fastnear/ml-dsa-65",
-    "@fastnear/x402"
+    "@fastnear/x402",
+    "@fastnear/intents"
   ],
   "support": {
     "apiKeyEnvVar": "FASTNEAR_API_KEY",
@@ -34,6 +35,11 @@
         "url": "https://js.fastnear.com/retries.html",
         "topic": "Retries and bulk reads",
         "summary": "Transient-failure retry defaults and the near.batch / near.view.many settled-results surface."
+      },
+      {
+        "url": "https://js.fastnear.com/intents.html",
+        "topic": "NEAR Intents",
+        "summary": "Multichain intent swaps: 1Click quotes, NEP-413 intent signing, and verifier deposits/withdrawals with @fastnear/intents."
       }
     ],
     "discoveryOrder": [
@@ -2099,6 +2105,157 @@
         "summary": "Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.",
         "language": "js",
         "code": "import { createNearResourceServer } from \"@fastnear/x402/server\";\n\nconst { X402_FACILITATOR_URL } = process.env;\nif (!X402_FACILITATOR_URL) throw new Error(\"X402_FACILITATOR_URL is required\");\n\nexport const resourceServer = createNearResourceServer({\n  facilitators: { url: X402_FACILITATOR_URL },\n});\nawait resourceServer.initialize();"
+      }
+    ]
+  },
+  "intents": {
+    "package": "@fastnear/intents",
+    "runtime": "Package-only; not included in agents.js or near.js.",
+    "guideUrl": "https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md",
+    "protocol": {
+      "verifierContract": "intents.near",
+      "network": "mainnet",
+      "ledger": "NEP-245 multi-token; token ids nep141:<contract>, nep171:<contract>:<id>, nep245:<contract>:<id>",
+      "signing": "NEP-413 signed messages (full-access keys only); the verifier also accepts erc191, tip191, raw_ed25519, webauthn, ton_connect, and sep53 payloads",
+      "oneClickBaseUrl": "https://1click.chaindefuser.com",
+      "solverRelayUrl": "https://solver-relay-v2.chaindefuser.com/rpc"
+    },
+    "browserGlobal": "nearIntents",
+    "browserStatus": "The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.",
+    "walletFeatures": [
+      "signMessage"
+    ],
+    "chooseByTask": [
+      {
+        "task": "Quote and track a swap",
+        "use": [
+          "createOneClickClient"
+        ],
+        "imports": [
+          "@fastnear/intents"
+        ],
+        "status": "stable; keyless use adds a 0.2% platform fee to quotes"
+      },
+      {
+        "task": "Sign intents from a browser wallet",
+        "use": [
+          "createWalletIntentSigner"
+        ],
+        "imports": [
+          "@fastnear/wallet",
+          "@fastnear/intents"
+        ],
+        "status": "NEP-413 via the connected wallet's full-access key; FunctionCall session keys cannot sign intents"
+      },
+      {
+        "task": "Sign intents from Node.js or an agent",
+        "use": [
+          "createLocalIntentSigner"
+        ],
+        "imports": [
+          "@fastnear/intents/node"
+        ],
+        "status": "raw full-access key, server-side only"
+      },
+      {
+        "task": "Deposit, check balances, withdraw on the verifier",
+        "use": [
+          "ftDepositAction",
+          "wrapNearAction",
+          "mtBatchBalances",
+          "ftWithdrawAction"
+        ],
+        "imports": [
+          "@fastnear/intents",
+          "@fastnear/api"
+        ],
+        "status": "action builders for near.sendTx plus NEP-245 views over injected near.view"
+      },
+      {
+        "task": "Talk to the solver relay directly",
+        "use": [
+          "createSolverRelayClient"
+        ],
+        "imports": [
+          "@fastnear/intents/relay"
+        ],
+        "status": "quotes require a partner API key in practice; the 1Click path is the default"
+      }
+    ],
+    "entrypoints": [
+      {
+        "subpath": "@fastnear/intents",
+        "exports": [
+          "createOneClickClient",
+          "createWalletIntentSigner",
+          "createSolverRelayClient",
+          "ftDepositAction",
+          "wrapNearAction",
+          "ftWithdrawAction",
+          "mtBalance",
+          "mtBatchBalances",
+          "toSignedIntent",
+          "randomNonce"
+        ],
+        "purpose": "browser-safe 1Click client, wallet intent signer, verifier helpers, and relay client"
+      },
+      {
+        "subpath": "@fastnear/intents/relay",
+        "exports": [
+          "createSolverRelayClient"
+        ],
+        "purpose": "solver-relay JSON-RPC client (quote, publish_intent, publish_intents, get_status)"
+      },
+      {
+        "subpath": "@fastnear/intents/node",
+        "exports": [
+          "createLocalIntentSigner"
+        ],
+        "purpose": "local full-access-key NEP-413 intent signer for servers and agents"
+      }
+    ],
+    "constraints": [
+      "The verifier is intents.near on NEAR mainnet; there is no public testnet deployment of the intents stack.",
+      "NEP-413 intent signatures require a full-access key, and the verifier checks the key is authorized for signer_id.",
+      "Submitted signatures use ed25519:<base58> encoding — not the base64 NEAR wallets return; the signers own that conversion.",
+      "Native NEAR is not a verifier asset: wrap to wNEAR before depositing, and exit native NEAR only via the native_withdraw intent.",
+      "Amounts are base-unit strings, and token_diff diffs must net to zero per token across the executed batch."
+    ],
+    "safeDefaults": [
+      "Quote with dry:true first; commit with dry:false only when ready to fund the deposit address before it expires.",
+      "Keep local signer private keys in server-side secret storage, never browser code.",
+      "Use a partner API key from partners.near-intents.org to remove the 0.2% keyless platform fee.",
+      "Poll /v0/status to a terminal state (SUCCESS, REFUNDED, FAILED) and surface swapDetails on non-success.",
+      "Omit msg on ft_withdraw so failed withdrawals stay refundable."
+    ],
+    "quickstarts": [
+      {
+        "id": "intents-one-click-quote",
+        "title": "Quote a swap and read live pricing",
+        "summary": "Discover assets and price a swap with a free dry-run quote — no auth, no funds, no commitment.",
+        "language": "js",
+        "code": "import { createOneClickClient } from \"@fastnear/intents\";\n\nconst oneClick = createOneClickClient();\n\nconst tokens = await oneClick.tokens();\nconst quote = await oneClick.quote({\n  dry: true,\n  swapType: \"EXACT_INPUT\",\n  slippageTolerance: 100,\n  originAsset: \"nep141:wrap.near\",\n  destinationAsset: \"nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1\",\n  amount: \"1000000000000000000000000\",\n  depositType: \"ORIGIN_CHAIN\",\n  refundTo: \"you.near\",\n  refundType: \"ORIGIN_CHAIN\",\n  recipient: \"you.near\",\n  recipientType: \"DESTINATION_CHAIN\",\n  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),\n});\n\nconsole.log(quote.quote.amountOutFormatted);"
+      },
+      {
+        "id": "intents-wallet-sign",
+        "title": "Sign a token_diff intent with a browser wallet",
+        "summary": "NEP-413 through the connected wallet, re-encoded to the MultiPayload the verifier accepts.",
+        "language": "js",
+        "code": "import { createWalletIntentSigner } from \"@fastnear/intents\";\n// window.nearWallet from https://js.fastnear.com/wallet.js, already connected.\n\nconst signer = createWalletIntentSigner({ wallet: nearWallet });\n\nconst signed = await signer.signIntents({\n  intents: [{\n    intent: \"token_diff\",\n    diff: {\n      \"nep141:usdc.near\": \"-1000000\",\n      \"nep141:usdt.near\": \"1000000\",\n    },\n  }],\n});\n// signed = { standard: \"nep413\", payload, public_key, signature } — submit via\n// oneClick.submitIntent, relay.publishIntent, or intents.near execute_intents."
+      },
+      {
+        "id": "intents-node-swap",
+        "title": "Swap intents.near balances from Node.js",
+        "summary": "The INTENTS deposit type: 1Click builds the payload, the local signer signs it verbatim, no deposit transaction needed.",
+        "language": "js",
+        "code": "import { createOneClickClient } from \"@fastnear/intents\";\nimport { createLocalIntentSigner } from \"@fastnear/intents/node\";\n\nconst { NEAR_ACCOUNT_ID, NEAR_PRIVATE_KEY } = process.env;\nconst oneClick = createOneClickClient();\nconst signer = createLocalIntentSigner({\n  accountId: NEAR_ACCOUNT_ID,\n  privateKey: NEAR_PRIVATE_KEY, // full-access, server-side only\n});\n\n// Quote with depositType/refundType/recipientType \"INTENTS\" — the input\n// funds already sit inside intents.near, so no deposit transaction is needed.\nconst quote = await oneClick.quote({\n  dry: false,\n  swapType: \"EXACT_INPUT\",\n  slippageTolerance: 100,\n  originAsset: \"nep141:wrap.near\",\n  destinationAsset: \"nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1\",\n  amount: \"1000000000000000000000000\",\n  depositType: \"INTENTS\",\n  refundTo: NEAR_ACCOUNT_ID,\n  refundType: \"INTENTS\",\n  recipient: NEAR_ACCOUNT_ID,\n  recipientType: \"INTENTS\",\n  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),\n});\nconst { intent } = await oneClick.generateIntent({\n  signerId: NEAR_ACCOUNT_ID,\n  depositAddress: quote.quote.depositAddress,\n});\n// signPayload pins the recipient to intents.near and signs verbatim.\nconst signed = await signer.signPayload(intent);\nconst { intentHash } = await oneClick.submitIntent({ signedData: signed });\nconsole.log(intentHash);"
+      },
+      {
+        "id": "intents-deposit-balances",
+        "title": "Deposit wNEAR and read verifier balances",
+        "summary": "Action builders for near.sendTx plus NEP-245 ledger views over the injected near.view.",
+        "language": "js",
+        "code": "import { ftDepositAction, wrapNearAction, mtBatchBalances } from \"@fastnear/intents\";\n\nawait near.sendTx({\n  receiverId: \"wrap.near\",\n  actions: [wrapNearAction({ amountYocto: \"1000000000000000000000000\" })],\n});\nawait near.sendTx({\n  receiverId: \"wrap.near\",\n  actions: [ftDepositAction({ amount: \"1000000000000000000000000\" })],\n});\n\nconst balances = await mtBatchBalances({\n  accountId: near.accountId(),\n  tokenIds: [\"nep141:wrap.near\"],\n  view: near.view,\n});\nnear.print(balances);"
       }
     ]
   },

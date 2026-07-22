@@ -1,0 +1,78 @@
+{
+  "name": "@fastnear/intents",
+  "version": "1.5.0",
+  "description": "NEAR Intents for end users and agents: 1Click swaps, NEP-413 intent signing, verifier deposits/withdrawals, and the solver relay",
+  "license": "MIT",
+  "type": "module",
+  "types": "./dist/esm/index.d.ts",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "browser": "./dist/umd/browser.global.js",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "yarn --cwd ../.. vitest run packages/intents/src",
+    "prepack": "yarn build && node ../../scripts/prepare-package-for-publish.mjs prepare",
+    "postpack": "node ../../scripts/prepare-package-for-publish.mjs restore",
+    "release": "node ../../scripts/publish-packed.mjs",
+    "clean": "yarn rimraf dist node_modules",
+    "type-check": "tsc --noEmit"
+  },
+  "author": "FastNear",
+  "homepage": "https://js.fastnear.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastnear/js-monorepo.git"
+  },
+  "keywords": [
+    "near",
+    "near-intents",
+    "intents",
+    "defuse",
+    "1click",
+    "swap",
+    "nep-413",
+    "nep-245",
+    "fastnear"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    },
+    "./relay": {
+      "types": "./dist/esm/relay.d.ts",
+      "import": "./dist/esm/relay.js",
+      "require": "./dist/cjs/relay.cjs"
+    },
+    "./node": {
+      "types": "./dist/esm/node.d.ts",
+      "import": "./dist/esm/node.js",
+      "require": "./dist/cjs/node.cjs"
+    }
+  },
+  "dependencies": {
+    "@fastnear/utils": "workspace:*"
+  },
+  "peerDependencies": {
+    "@fastnear/wallet": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@fastnear/wallet": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@fastnear/wallet": "workspace:*",
+    "rimraf": "*",
+    "tsup": "^8.3.6",
+    "typescript": "*"
+  }
+}
