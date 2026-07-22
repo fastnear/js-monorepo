@@ -9,7 +9,7 @@ import {
   signHash,
   type NearPublicKey,
 } from "./crypto.js";
-import { base64ToBytes } from "./misc.js";
+import { base64ToBytes, fromBase58 } from "./misc.js";
 
 /**
  * NEP-413 off-chain message signing.
@@ -44,9 +44,12 @@ function toNonceBytes(nonce: Uint8Array | ReadonlyArray<number>): Uint8Array {
 }
 
 function toSignatureBytes(signature: string | Uint8Array): Uint8Array {
-  return signature instanceof Uint8Array
-    ? signature
-    : base64ToBytes(signature);
+  if (signature instanceof Uint8Array) return signature;
+  // The NEP-413 MultiPayload format (e.g. intents.near) carries signatures
+  // as "<curve>:<base58>"; wallets return plain base64. Accept both.
+  const separator = signature.indexOf(":");
+  if (separator !== -1) return fromBase58(signature.slice(separator + 1));
+  return base64ToBytes(signature);
 }
 
 /** A NEP-413 payload as this module accepts it (nonce may be a plain array). */
@@ -99,7 +102,8 @@ export function signNep413Message(
 
 /**
  * Verify a NEP-413 signature (ed25519 or secp256k1) against its payload.
- * Accepts the base64 signature string wallets return, or raw bytes.
+ * Accepts the base64 signature string wallets return, the curve-prefixed
+ * base58 form MultiPayloads carry ("ed25519:<base58>"), or raw bytes.
  */
 export function verifyNep413Signature({
   publicKey,

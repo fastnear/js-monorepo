@@ -11,6 +11,7 @@ import {
   privateKeyFromRandom,
   publicKeyFromPrivate,
   sha256,
+  toBase58,
 } from "./index.js";
 
 // Hand-rolled borsh serialization, written independently of @fastnear/borsh,
@@ -157,6 +158,20 @@ describe("signNep413Message / verifyNep413Signature", () => {
       verifyNep413Signature({
         publicKey: signed.publicKey,
         signature: bytesToBase64(signed.signature),
+        ...payload,
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts the curve-prefixed base58 form MultiPayloads carry", () => {
+    const privateKey = privateKeyFromRandom();
+    const payload = { message: "m", nonce: NONCE, recipient: "intents.near" };
+    const signed = signNep413Message(payload, privateKey);
+
+    expect(
+      verifyNep413Signature({
+        publicKey: signed.publicKey,
+        signature: `ed25519:${toBase58(signed.signature)}`,
         ...payload,
       }),
     ).toBe(true);
