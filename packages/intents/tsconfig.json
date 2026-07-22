@@ -9,8 +9,7 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "paths": {
-      "@fastnear/utils": ["../utils/src/index.ts"],
-      "@fastnear/wallet": ["../wallet/src/index.ts"]
+      "@fastnear/*": ["../*/src"]
     }
   },
   "include": ["src/**/*", "../../types/*.d.ts"]
