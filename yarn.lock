@@ -639,10 +639,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@fastnear/near-connect@npm:*, @fastnear/near-connect@npm:^0.13.0":
-  version: 0.13.0
-  resolution: "@fastnear/near-connect@npm:0.13.0"
-  checksum: 10c0/c7b945125d874693730bdc87ffc1a64032dd733e16e611449389c2554ed001cc16614c0b56ee96d583555836ced87ba6b70354f6ab0929d02885f6fbf6dcf566
+"@fastnear/near-connect@npm:^0.13.1":
+  version: 0.13.1
+  resolution: "@fastnear/near-connect@npm:0.13.1"
+  checksum: 10c0/0fbb6e739cfe0ac08259fba5f2ffbe899f719764472744d4ae7242880bd1b632ad7220ec72aecd7777910c3ac8bbdd098cb142db47e9d2bf7c9a3c53bae4d2a1
   languageName: node
   linkType: hard
 
@@ -680,7 +680,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@fastnear/wallet@workspace:packages/wallet"
   dependencies:
-    "@fastnear/near-connect": "npm:*"
+    "@fastnear/near-connect": "npm:^0.13.1"
     rimraf: "npm:*"
     tsup: "npm:^8.3.6"
     typescript: "npm:*"
@@ -2357,7 +2357,7 @@ __metadata:
   dependencies:
     "@esbuild-plugins/node-globals-polyfill": "npm:^0.2.3"
     "@esbuild-plugins/node-modules-polyfill": "npm:^0.2.2"
-    "@fastnear/near-connect": "npm:^0.13.0"
+    "@fastnear/near-connect": "npm:^0.13.1"
     "@near-js/transactions": "npm:^2.5.1"
     "@noble/curves": "npm:=2.0.1"
     "@noble/hashes": "npm:=2.0.1"
