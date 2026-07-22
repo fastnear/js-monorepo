@@ -300,6 +300,43 @@ describe("createWalletIntentSigner", () => {
       } as never),
     ).rejects.toThrow(/only signs nep413/);
   });
+
+  it("pins the signPayload recipient to intents.near by default", async () => {
+    const { wallet } = mockWallet();
+    const signer = createWalletIntentSigner({ wallet });
+    await expect(
+      signer.signPayload({
+        message: "m",
+        nonce: bytesToBase64(new Uint8Array(32)),
+        recipient: "evil.near",
+      }),
+    ).rejects.toThrow(/Refusing to sign a payload for recipient "evil.near"/);
+  });
+
+  it("cross-checks the generated payload's signer_id against the wallet account", async () => {
+    const { wallet } = mockWallet();
+    const signer = createWalletIntentSigner({ wallet });
+    await expect(
+      signer.signPayload({
+        message: '{"signer_id":"bob.near","deadline":"d","intents":[]}',
+        nonce: bytesToBase64(new Uint8Array(32)),
+        recipient: "intents.near",
+      }),
+    ).rejects.toThrow(/signed as alice.near but the intent names bob.near/);
+  });
+
+  it("refuses callbackUrl payloads the wallet transport cannot bind", async () => {
+    const { wallet } = mockWallet();
+    const signer = createWalletIntentSigner({ wallet });
+    await expect(
+      signer.signPayload({
+        message: "m",
+        nonce: bytesToBase64(new Uint8Array(32)),
+        recipient: "intents.near",
+        callbackUrl: "https://example.com/cb",
+      }),
+    ).rejects.toThrow(/cannot bind callbackUrl/);
+  });
 });
 
 describe("createLocalIntentSigner signPayload", () => {
@@ -329,7 +366,28 @@ describe("createLocalIntentSigner signPayload", () => {
     const privateKey = privateKeyFromRandom();
     const signer = createLocalIntentSigner({ accountId: "a.near", privateKey });
     await expect(
-      signer.signPayload({ message: "m", nonce: bytesToBase64(new Uint8Array(16)), recipient: "r" }),
+      signer.signPayload({
+        message: "m",
+        nonce: bytesToBase64(new Uint8Array(16)),
+        recipient: "intents.near",
+      }),
     ).rejects.toThrow(/32 bytes/);
+  });
+
+  it("pins the recipient to intents.near by default", async () => {
+    const privateKey = privateKeyFromRandom();
+    const signer = createLocalIntentSigner({ accountId: "a.near", privateKey });
+    const nonce = bytesToBase64(new Uint8Array(32));
+
+    await expect(
+      signer.signPayload({ message: "m", nonce, recipient: "evil.near" }),
+    ).rejects.toThrow(/Refusing to sign a payload for recipient "evil.near"/);
+
+    // Explicit override allows a different verifier deployment.
+    const signed = await signer.signPayload(
+      { message: "m", nonce, recipient: "staging-intents.near" },
+      { expectedRecipient: "staging-intents.near" },
+    );
+    expect(signed.payload.recipient).toBe("staging-intents.near");
   });
 });

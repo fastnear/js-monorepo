@@ -5,6 +5,8 @@ import {
   type IntentMessage,
   type IntentSigner,
   type SignIntentsParams,
+  type GeneratedUnsignedIntent,
+  type SignPayloadOptions,
   type SignedIntentNep413,
   type UnsignedNep413Payload,
 } from "./types.js";
@@ -16,7 +18,7 @@ export function randomNonce(): Uint8Array {
 
 const DEFAULT_DEADLINE_MS = 5 * 60 * 1000;
 
-/** ISO-8601 deadline `minutes` from now (default 5). */
+/** ISO-8601 deadline `ms` milliseconds from now (default 5 minutes). */
 export function defaultDeadline(ms: number = DEFAULT_DEADLINE_MS): string {
   return new Date(Date.now() + ms).toISOString();
 }
@@ -115,7 +117,7 @@ export function toSignedIntent({
  * and decodes a base64 nonce string to bytes.
  */
 export function unsignedPayloadParts(
-  input: UnsignedNep413Payload | { standard?: string; payload: UnsignedNep413Payload },
+  input: GeneratedUnsignedIntent,
 ): { message: string; nonce: Uint8Array; recipient: string; callbackUrl?: string } {
   const payload =
     "payload" in input && typeof input.payload === "object"
@@ -146,6 +148,29 @@ export function unsignedPayloadParts(
     recipient: payload.recipient,
     ...(payload.callbackUrl ? { callbackUrl: payload.callbackUrl } : {}),
   };
+}
+
+function assertExpectedRecipient(
+  recipient: string,
+  options?: SignPayloadOptions,
+): void {
+  const expected = options?.expectedRecipient ?? INTENTS_CONTRACT_ID;
+  if (recipient !== expected) {
+    throw new Error(
+      `Refusing to sign a payload for recipient "${recipient}" — expected "${expected}". ` +
+        "Pass { expectedRecipient } only when intentionally targeting a different verifier.",
+    );
+  }
+}
+
+/** Best-effort signer_id extraction from an intent-message JSON string. */
+function signerIdFromMessage(message: string): string | undefined {
+  try {
+    const parsed = JSON.parse(message);
+    return typeof parsed?.signer_id === "string" ? parsed.signer_id : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -198,6 +223,15 @@ export function createWalletIntentSigner({
     callbackUrl?: string;
     expectedSigner?: string;
   }): Promise<SignedIntentNep413> {
+    if (callbackUrl) {
+      // NEP-413 binds callbackUrl into the signed digest, but the wallet
+      // signMessage transport has no callbackUrl parameter — signing would
+      // produce a payload that advertises a callbackUrl the signature does
+      // not cover, which the verifier rejects.
+      throw new Error(
+        "Wallet intent signing cannot bind callbackUrl payloads; use the local signer or drop callbackUrl",
+      );
+    }
     const signed = await wallet.signMessage({
       message,
       recipient,
@@ -245,8 +279,16 @@ export function createWalletIntentSigner({
       });
     },
 
-    async signPayload(payload): Promise<SignedIntentNep413> {
-      return signParts(unsignedPayloadParts(payload));
+    async signPayload(
+      payload: GeneratedUnsignedIntent,
+      options?: SignPayloadOptions,
+    ): Promise<SignedIntentNep413> {
+      const parts = unsignedPayloadParts(payload);
+      assertExpectedRecipient(parts.recipient, options);
+      return signParts({
+        ...parts,
+        expectedSigner: signerIdFromMessage(parts.message),
+      });
     },
   };
 }

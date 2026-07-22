@@ -91,6 +91,15 @@ describe("createOneClickClient", () => {
     expect((error as IntentsHttpError).message).toMatch(/originAsset/);
   });
 
+  it("omits Content-Type on bodyless GET requests", async () => {
+    const { fetch, calls } = mockFetch([{ body: [] }]);
+    const client = createOneClickClient({ fetch, apiKey: "k" });
+    await client.tokens();
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBeUndefined();
+    expect(headers["X-API-Key"]).toBe("k");
+  });
+
   it("strips a trailing slash from custom base URLs", async () => {
     const { fetch, calls } = mockFetch([{ body: [] }]);
     const client = createOneClickClient({ fetch, baseUrl: "https://example.com/" });
@@ -183,6 +192,14 @@ describe("createSolverRelayClient", () => {
     });
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers["X-API-Key"]).toBe("relay-key");
+  });
+
+  it("rejects malformed JSON-RPC envelopes with SolverRelayError", async () => {
+    const { fetch } = mockFetch([{ body: {} }]);
+    const client = createSolverRelayClient({ fetch });
+    await expect(
+      client.getStatus({ intentHash: "h" }),
+    ).rejects.toThrow(/malformed JSON-RPC envelope/);
   });
 
   it("surfaces JSON-RPC errors as SolverRelayError", async () => {

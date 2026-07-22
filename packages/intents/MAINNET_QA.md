@@ -8,7 +8,7 @@ amount of real tokens and is run manually before releases.
 ## Tier 1 — free (run always)
 
 ```sh
-yarn workspace @fastnear/intents build
+yarn build
 node scripts/smoke-intents-dry.mjs
 ```
 

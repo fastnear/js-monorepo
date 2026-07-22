@@ -166,15 +166,39 @@ export interface UnsignedNep413Payload {
   callbackUrl?: string;
 }
 
+/**
+ * What signPayload accepts: a bare unsigned payload or the
+ * { standard, payload } wrapper 1Click's generate-intent returns.
+ */
+export type GeneratedUnsignedIntent =
+  | UnsignedNep413Payload
+  | { standard: string; payload: UnsignedNep413Payload };
+
+export interface SignPayloadOptions {
+  /**
+   * The verifying contract the payload's recipient must equal. Defaults to
+   * intents.near — a server response naming any other recipient throws
+   * instead of being signed. Set explicitly to sign for a different
+   * (e.g. staging) verifier deployment.
+   */
+  expectedRecipient?: string;
+}
+
 /** The signer surface shared by the wallet and local-key implementations. */
 export interface IntentSigner {
   /** Build and sign an intent message this client composes itself. */
   signIntents(params: SignIntentsParams): Promise<SignedIntentNep413>;
   /**
    * Sign a pre-built NEP-413 payload verbatim — the 1Click generate-intent
-   * flow, where the server chooses the message, nonce, and recipient.
+   * flow, where the server chooses the message, nonce, and recipient. The
+   * recipient is pinned to intents.near unless options.expectedRecipient
+   * overrides it, so a malicious or buggy server cannot redirect the
+   * signature to another contract.
    */
-  signPayload(payload: UnsignedNep413Payload): Promise<SignedIntentNep413>;
+  signPayload(
+    payload: GeneratedUnsignedIntent,
+    options?: SignPayloadOptions,
+  ): Promise<SignedIntentNep413>;
 }
 
 export interface SignIntentsParams {
@@ -346,8 +370,8 @@ export interface OneClickGenerateIntentRequest {
 }
 
 export interface OneClickGenerateIntentResponse {
-  /** Unsigned payload to sign. */
-  intent: unknown;
+  /** Unsigned payload to sign — pass it to an IntentSigner's signPayload. */
+  intent: GeneratedUnsignedIntent;
   correlationId?: string;
 }
 

@@ -11,18 +11,16 @@ describe("ftDepositAction", () => {
   it("builds the ft_transfer_call deposit with 1 yocto and empty msg", () => {
     expect(ftDepositAction({ amount: "1000000" })).toEqual({
       type: "FunctionCall",
-      params: {
-        methodName: "ft_transfer_call",
-        args: { receiver_id: "intents.near", amount: "1000000", msg: "" },
-        gas: "100000000000000",
-        deposit: "1",
-      },
+      methodName: "ft_transfer_call",
+      args: { receiver_id: "intents.near", amount: "1000000", msg: "" },
+      gas: "100000000000000",
+      deposit: "1",
     });
   });
 
   it("credits another account via creditTo", () => {
     const action = ftDepositAction({ amount: "1", creditTo: "bob.near" });
-    expect(action.params.args.msg).toBe("bob.near");
+    expect(action.args.msg).toBe("bob.near");
   });
 
   it("rejects creditTo together with msg", () => {
@@ -35,9 +33,9 @@ describe("ftDepositAction", () => {
 describe("wrapNearAction", () => {
   it("wraps native NEAR via near_deposit with the amount as deposit", () => {
     const action = wrapNearAction({ amountYocto: "5000000000000000000000000" });
-    expect(action.params.methodName).toBe("near_deposit");
-    expect(action.params.deposit).toBe("5000000000000000000000000");
-    expect(action.params.args).toEqual({});
+    expect(action.methodName).toBe("near_deposit");
+    expect(action.deposit).toBe("5000000000000000000000000");
+    expect(action.args).toEqual({});
   });
 });
 
@@ -48,13 +46,13 @@ describe("ftWithdrawAction", () => {
       receiverId: "alice.near",
       amount: "42",
     });
-    expect(action.params.methodName).toBe("ft_withdraw");
-    expect(action.params.args).toEqual({
+    expect(action.methodName).toBe("ft_withdraw");
+    expect(action.args).toEqual({
       token: "usdt.tether-token.near",
       receiver_id: "alice.near",
       amount: "42",
     });
-    expect(action.params.deposit).toBe("1");
+    expect(action.deposit).toBe("1");
   });
 
   it("rejects prefixed multi-token ids", () => {

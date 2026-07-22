@@ -38,6 +38,11 @@ const exportProbes = {
     "createNearPaymentFetch",
     "createNearX402Client",
   ],
+  "@fastnear/intents": [
+    "createOneClickClient",
+    "createWalletIntentSigner",
+    "createSolverRelayClient",
+  ],
 };
 
 const subpathExportProbes = {
@@ -45,6 +50,10 @@ const subpathExportProbes = {
     "/node": ["createLocalNearSigner"],
     "/server": ["createNearResourceServer"],
     "/facilitator": ["createNearFacilitator"],
+  },
+  "@fastnear/intents": {
+    "/relay": ["createSolverRelayClient"],
+    "/node": ["createLocalIntentSigner"],
   },
 };
 

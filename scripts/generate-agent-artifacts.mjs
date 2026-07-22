@@ -165,6 +165,20 @@ function assertCatalogContract() {
     }
   }
 
+  const expectedIntentsTasks = new Map([
+    ["Quote and track a swap", ["createOneClickClient"]],
+    ["Sign intents from a browser wallet", ["createWalletIntentSigner"]],
+    ["Sign intents from Node.js or an agent", ["createLocalIntentSigner"]],
+    ["Deposit, check balances, withdraw on the verifier", ["ftDepositAction", "wrapNearAction", "mtBatchBalances", "ftWithdrawAction"]],
+    ["Talk to the solver relay directly", ["createSolverRelayClient"]],
+  ]);
+  for (const [task, expectedFactories] of expectedIntentsTasks) {
+    const choice = intentsSurface.chooseByTask.find(item => item.task === task);
+    if (!choice || JSON.stringify(choice.use) !== JSON.stringify(expectedFactories)) {
+      throw new Error(`Expected canonical intents task mapping for ${task}`);
+    }
+  }
+
   const intentsQuickstartIds = new Set(intentsSurface.quickstarts.map(quickstart => quickstart.id));
   for (const id of ["intents-one-click-quote", "intents-wallet-sign", "intents-node-swap", "intents-deposit-balances"]) {
     if (!intentsQuickstartIds.has(id)) {

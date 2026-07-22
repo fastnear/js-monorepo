@@ -11,8 +11,10 @@ import {
 } from "./signing.js";
 import {
   INTENTS_CONTRACT_ID,
+  type GeneratedUnsignedIntent,
   type IntentSigner,
   type SignIntentsParams,
+  type SignPayloadOptions,
   type SignedIntentNep413,
 } from "./types.js";
 
@@ -82,8 +84,19 @@ export function createLocalIntentSigner({
       });
     },
 
-    async signPayload(payload): Promise<SignedIntentNep413> {
-      return signParts(unsignedPayloadParts(payload));
+    async signPayload(
+      payload: GeneratedUnsignedIntent,
+      options?: SignPayloadOptions,
+    ): Promise<SignedIntentNep413> {
+      const parts = unsignedPayloadParts(payload);
+      const expected = options?.expectedRecipient ?? INTENTS_CONTRACT_ID;
+      if (parts.recipient !== expected) {
+        throw new Error(
+          `Refusing to sign a payload for recipient "${parts.recipient}" — expected "${expected}". ` +
+            "Pass { expectedRecipient } only when intentionally targeting a different verifier.",
+        );
+      }
+      return signParts(parts);
     },
   };
 }

@@ -3,7 +3,7 @@
 // optional solver-relay probe). Never moves funds and needs no credentials.
 //
 // Usage:
-//   yarn build:intents-smoke-deps && node scripts/smoke-intents-dry.mjs
+//   yarn build && node scripts/smoke-intents-dry.mjs
 //   node scripts/smoke-intents-dry.mjs --offline   # skip network probes
 import process from "node:process";
 
@@ -82,10 +82,15 @@ if (!offline) {
 
   // 3. Live dry-run quote (free preview: no deposit address, no commitment).
   try {
-    const usd = tokens.find(
-      (token) => token.blockchain === "near" && token.symbol === "USDC",
-    );
-    const destination = usd ?? tokens.find((token) => token.assetId !== "nep141:wrap.near");
+    // Deterministic NEAR-chain destination so recipient stays a NEAR account.
+    const destination =
+      tokens.find(
+        (token) => token.blockchain === "near" && token.symbol === "USDC",
+      ) ??
+      tokens.find(
+        (token) => token.blockchain === "near" && token.assetId !== "nep141:wrap.near",
+      );
+    if (!destination) throw new Error("no NEAR-chain destination asset found");
     const quote = await oneClick.quote({
       dry: true,
       swapType: "EXACT_INPUT",
@@ -96,8 +101,8 @@ if (!offline) {
       depositType: "ORIGIN_CHAIN",
       refundTo: "smoke.near",
       refundType: "ORIGIN_CHAIN",
-      recipient: destination.blockchain === "near" ? "smoke.near" : destination.contractAddress ?? "smoke.near",
-      recipientType: destination.blockchain === "near" ? "DESTINATION_CHAIN" : "INTENTS",
+      recipient: "smoke.near",
+      recipientType: "DESTINATION_CHAIN",
       deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
     });
     if (!quote?.quote?.amountOut) throw new Error("quote missing amountOut");

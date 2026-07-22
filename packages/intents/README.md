@@ -105,11 +105,26 @@ const signer = createLocalIntentSigner({
 // INTENTS deposit type: balances already inside intents.near swap without a
 // new on-chain transaction — 1Click builds the payload, you sign and submit.
 const oneClick = createOneClickClient();
+const quote = await oneClick.quote({
+  dry: false,
+  swapType: "EXACT_INPUT",
+  slippageTolerance: 100,
+  originAsset: "nep141:wrap.near",
+  destinationAsset: "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+  amount: "1000000000000000000000000",
+  depositType: "INTENTS", // input funds already sit inside intents.near
+  refundTo: process.env.NEAR_ACCOUNT_ID,
+  refundType: "INTENTS",
+  recipient: process.env.NEAR_ACCOUNT_ID,
+  recipientType: "INTENTS",
+  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+});
 const { intent } = await oneClick.generateIntent({
   signerId: process.env.NEAR_ACCOUNT_ID,
   depositAddress: quote.quote.depositAddress,
 });
-// The server chose the message, nonce, and recipient — sign it verbatim.
+// The server chose the message, nonce, and recipient. signPayload pins the
+// recipient to intents.near and signs the payload verbatim.
 const signed = await signer.signPayload(intent);
 const { intentHash } = await oneClick.submitIntent({ signedData: signed });
 ```
@@ -220,6 +235,12 @@ const status = await relay.getStatus({ intentHash: intent_hash });
   helpers, solver relay re-export (browser-safe; global `nearIntents`)
 - `@fastnear/intents/relay` — solver relay JSON-RPC client
 - `@fastnear/intents/node` — local full-access-key signer (server-side only)
+
+## Release gate
+
+Run the [mainnet QA runbook](./MAINNET_QA.md) before releasing: the free
+dry smoke (`node scripts/smoke-intents-dry.mjs`) always, and the env-gated
+funded micro swap (`scripts/smoke-intents-mainnet.mjs`) per release.
 
 ## Upstream
 

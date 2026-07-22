@@ -9,14 +9,17 @@ export const ONE_YOCTO = "1";
 /** wNEAR contract — native NEAR must be wrapped before depositing. */
 export const WRAP_NEAR_CONTRACT_ID = "wrap.near";
 
+/**
+ * The flat FastNEAR action shape. near.sendTx serializes these fields
+ * directly, and @fastnear/wallet converts flat actions for near-connect
+ * wallets — so one shape works on both signing paths.
+ */
 export interface FunctionCallActionShape {
   type: "FunctionCall";
-  params: {
-    methodName: string;
-    args: Record<string, unknown>;
-    gas: string;
-    deposit: string;
-  };
+  methodName: string;
+  args: Record<string, unknown>;
+  gas: string;
+  deposit: string;
 }
 
 /**
@@ -49,16 +52,14 @@ export function ftDepositAction({
   }
   return {
     type: "FunctionCall",
-    params: {
-      methodName: "ft_transfer_call",
-      args: {
-        receiver_id: verifierId,
-        amount,
-        msg: msg ?? creditTo ?? "",
-      },
-      gas,
-      deposit: ONE_YOCTO,
+    methodName: "ft_transfer_call",
+    args: {
+      receiver_id: verifierId,
+      amount,
+      msg: msg ?? creditTo ?? "",
     },
+    gas,
+    deposit: ONE_YOCTO,
   };
 }
 
@@ -78,12 +79,10 @@ export function wrapNearAction({
 }): FunctionCallActionShape {
   return {
     type: "FunctionCall",
-    params: {
-      methodName: "near_deposit",
-      args: {},
-      gas,
-      deposit: amountYocto,
-    },
+    methodName: "near_deposit",
+    args: {},
+    gas,
+    deposit: amountYocto,
   };
 }
 
@@ -117,21 +116,19 @@ export function ftWithdrawAction({
   }
   return {
     type: "FunctionCall",
-    params: {
-      methodName: "ft_withdraw",
-      args: {
-        token,
-        receiver_id: receiverId,
-        amount,
-        ...(memo !== undefined ? { memo } : {}),
-        ...(msg !== undefined ? { msg } : {}),
-        ...(storageDeposit !== undefined
-          ? { storage_deposit: storageDeposit }
-          : {}),
-      },
-      gas,
-      deposit: ONE_YOCTO,
+    methodName: "ft_withdraw",
+    args: {
+      token,
+      receiver_id: receiverId,
+      amount,
+      ...(memo !== undefined ? { memo } : {}),
+      ...(msg !== undefined ? { msg } : {}),
+      ...(storageDeposit !== undefined
+        ? { storage_deposit: storageDeposit }
+        : {}),
     },
+    gas,
+    deposit: ONE_YOCTO,
   };
 }
 

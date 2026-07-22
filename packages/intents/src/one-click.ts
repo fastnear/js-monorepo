@@ -80,15 +80,21 @@ export function createOneClickClient(
     throw new Error("A fetch implementation is required");
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (options.apiKey) headers["X-API-Key"] = options.apiKey;
-  if (options.jwt) headers.Authorization = `Bearer ${options.jwt}`;
+  const authHeaders: Record<string, string> = {};
+  if (options.apiKey) authHeaders["X-API-Key"] = options.apiKey;
+  if (options.jwt) authHeaders.Authorization = `Bearer ${options.jwt}`;
 
   async function request<T>(
     method: "GET" | "POST",
     path: string,
     body?: unknown,
   ): Promise<T> {
+    // Content-Type only when a body exists — a bodyless GET with
+    // application/json forces an unnecessary CORS preflight in browsers.
+    const headers =
+      body === undefined
+        ? authHeaders
+        : { ...authHeaders, "Content-Type": "application/json" };
     const response = await fetchImplementation(`${baseUrl}${path}`, {
       method,
       headers,

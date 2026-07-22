@@ -13,7 +13,9 @@ const budgets = [
   { package: "borsh", baselineGzip: 2_496 },
   { package: "borsh-schema", baselineGzip: 1_411 },
   { package: "utils", baselineGzip: 35_696 },
-  { package: "api", baselineGzip: 49_371 },
+  // The api IIFE re-exports the @fastnear/utils surface, which now carries
+  // the shared NEP-413 signing module (prefix-tag borsh + sign/verify).
+  { package: "api", baselineGzip: 49_371, maxGzipGrowth: 4 * 1024 - 1 },
   { package: "wallet", baselineGzip: 21_323 },
   // The timeout-aware Meteor bridge includes local Borsh/action binding and
   // signature verification before accepting a wallet response.

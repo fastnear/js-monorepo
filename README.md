@@ -722,11 +722,27 @@ const signer = createLocalIntentSigner({
   privateKey: NEAR_PRIVATE_KEY, // full-access, server-side only
 });
 
-const quote = await oneClick.quote({ /* ...depositType: "INTENTS"... */ });
+// Quote with depositType/refundType/recipientType "INTENTS" — the input
+// funds already sit inside intents.near, so no deposit transaction is needed.
+const quote = await oneClick.quote({
+  dry: false,
+  swapType: "EXACT_INPUT",
+  slippageTolerance: 100,
+  originAsset: "nep141:wrap.near",
+  destinationAsset: "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+  amount: "1000000000000000000000000",
+  depositType: "INTENTS",
+  refundTo: NEAR_ACCOUNT_ID,
+  refundType: "INTENTS",
+  recipient: NEAR_ACCOUNT_ID,
+  recipientType: "INTENTS",
+  deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
+});
 const { intent } = await oneClick.generateIntent({
   signerId: NEAR_ACCOUNT_ID,
   depositAddress: quote.quote.depositAddress,
 });
+// signPayload pins the recipient to intents.near and signs verbatim.
 const signed = await signer.signPayload(intent);
 const { intentHash } = await oneClick.submitIntent({ signedData: signed });
 console.log(intentHash);

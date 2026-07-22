@@ -91,7 +91,13 @@ export function createSolverRelayClient(
         body.error,
       );
     }
-    return (body as { result: T }).result;
+    if (!body || typeof body !== "object" || !("result" in body)) {
+      throw new SolverRelayError(
+        `Solver relay ${method} returned a malformed JSON-RPC envelope`,
+        parsed,
+      );
+    }
+    return body.result as T;
   }
 
   return {
