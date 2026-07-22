@@ -609,6 +609,23 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@fastnear/intents@workspace:packages/intents":
+  version: 0.0.0-use.local
+  resolution: "@fastnear/intents@workspace:packages/intents"
+  dependencies:
+    "@fastnear/utils": "workspace:*"
+    "@fastnear/wallet": "workspace:*"
+    rimraf: "npm:*"
+    tsup: "npm:^8.3.6"
+    typescript: "npm:*"
+  peerDependencies:
+    "@fastnear/wallet": "workspace:*"
+  peerDependenciesMeta:
+    "@fastnear/wallet":
+      optional: true
+  languageName: unknown
+  linkType: soft
+
 "@fastnear/ml-dsa-65@workspace:packages/ml-dsa-65":
   version: 0.0.0-use.local
   resolution: "@fastnear/ml-dsa-65@workspace:packages/ml-dsa-65"

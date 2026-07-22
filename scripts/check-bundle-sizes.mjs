@@ -20,6 +20,9 @@ const budgets = [
   { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 4 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
   { package: "x402", raw: 256 * 1024, gzip: 64 * 1024 },
+  // Typed fetch clients + NEP-413 payload assembly; no crypto in the
+  // browser entry (local-key signing lives in the /node subpath).
+  { package: "intents", raw: 64 * 1024, gzip: 16 * 1024 },
 ];
 
 const results = [];

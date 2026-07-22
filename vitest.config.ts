@@ -18,6 +18,18 @@ export default defineConfig({
         __dirname,
         "packages/ml-dsa-65/src",
       ),
+      "@fastnear/intents/relay": path.resolve(
+        __dirname,
+        "packages/intents/src/relay.ts",
+      ),
+      "@fastnear/intents/node": path.resolve(
+        __dirname,
+        "packages/intents/src/node.ts",
+      ),
+      "@fastnear/intents": path.resolve(
+        __dirname,
+        "packages/intents/src/index.ts",
+      ),
       "@fastnear/x402/facilitator": path.resolve(
         __dirname,
         "packages/x402/src/facilitator.ts",
