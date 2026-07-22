@@ -74,8 +74,8 @@ Use `network: "near:*"` (the default) when the client should accept either canon
 The IIFE bundle exports `window.nearX402`. Pin exact released versions for production use.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.5.0/dist/umd/browser.global.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@1.5.0/dist/umd/browser.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.6.1/dist/umd/browser.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@1.6.1/dist/umd/browser.global.js"></script>
 <script>
   async function payAfterClick(url) {
     const connection = await nearWallet.connect({
