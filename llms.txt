@@ -8,6 +8,7 @@ Primary packages:
 - @fastnear/utils
 - @fastnear/ml-dsa-65
 - @fastnear/x402
+- @fastnear/intents
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -77,6 +78,18 @@ x402 payment surface (@fastnear/x402):
 - Status: Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.
 - Guide: https://github.com/fastnear/js-monorepo/blob/main/packages/x402/README.md
 
+NEAR Intents surface (@fastnear/intents):
+- Runtime: Package-only; not included in agents.js or near.js.
+- Verifier: intents.near (mainnet); ledger: NEP-245 multi-token ids like nep141:wrap.near
+- Quote/track swaps: createOneClickClient (https://1click.chaindefuser.com); keyless adds a 0.2% fee
+- Browser signing: createWalletIntentSigner (global nearIntents) over nearWallet.signMessage — NEP-413, full-access keys only
+- Node signing: @fastnear/intents/node createLocalIntentSigner
+- Verifier helpers: ftDepositAction / wrapNearAction / ftWithdrawAction + mtBalance / mtBatchBalances views
+- Solver relay: @fastnear/intents/relay createSolverRelayClient (https://solver-relay-v2.chaindefuser.com/rpc); quotes need a partner API key
+- Signature encoding: MultiPayload wants ed25519:<base58> — the signers re-encode the wallet's base64
+- Status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.
+- Guide: https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md
+
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
 - FastNearApiV1AccountFullResponse
@@ -96,6 +109,7 @@ Hosted topic explainers:
 - https://js.fastnear.com/x402.html — x402 payments on NEAR
 - https://js.fastnear.com/post-quantum.html — Post-quantum ML-DSA-65 keys
 - https://js.fastnear.com/retries.html — Retries and bulk reads
+- https://js.fastnear.com/intents.html — NEAR Intents
 
 Wrapper source in repo:
 - recipes/near-node.mjs

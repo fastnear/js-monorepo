@@ -10,6 +10,7 @@ import {
   explainSurface,
   mlDsa65Surface,
   x402Surface,
+  intentsSurface,
   supportSurface,
 } from "../recipes/source.mjs";
 
@@ -136,6 +137,54 @@ function assertCatalogContract() {
       throw new Error(`Expected x402 wallet feature ${feature}`);
     }
   }
+
+  if (intentsSurface.package !== "@fastnear/intents" || intentsSurface.browserGlobal !== "nearIntents") {
+    throw new Error("Expected canonical @fastnear/intents package and browser global metadata");
+  }
+  if (intentsSurface.entrypoints.length !== 3) {
+    throw new Error("Expected three focused @fastnear/intents entrypoints");
+  }
+  if (intentsSurface.chooseByTask.length !== 5 || intentsSurface.quickstarts.length !== 4) {
+    throw new Error("Expected the intents task chooser and four focused quickstarts");
+  }
+
+  const expectedIntentsEntrypoints = new Map([
+    ["@fastnear/intents/relay", ["createSolverRelayClient"]],
+    ["@fastnear/intents/node", ["createLocalIntentSigner"]],
+  ]);
+  for (const [subpath, expectedExports] of expectedIntentsEntrypoints) {
+    const entrypoint = intentsSurface.entrypoints.find(entry => entry.subpath === subpath);
+    if (!entrypoint || JSON.stringify(entrypoint.exports) !== JSON.stringify(expectedExports)) {
+      throw new Error(`Expected canonical intents exports for ${subpath}`);
+    }
+  }
+  const intentsRoot = intentsSurface.entrypoints.find(entry => entry.subpath === "@fastnear/intents");
+  for (const factory of ["createOneClickClient", "createWalletIntentSigner", "ftDepositAction", "mtBatchBalances"]) {
+    if (!intentsRoot || !intentsRoot.exports.includes(factory)) {
+      throw new Error(`Expected @fastnear/intents root export ${factory}`);
+    }
+  }
+
+  const intentsQuickstartIds = new Set(intentsSurface.quickstarts.map(quickstart => quickstart.id));
+  for (const id of ["intents-one-click-quote", "intents-wallet-sign", "intents-node-swap", "intents-deposit-balances"]) {
+    if (!intentsQuickstartIds.has(id)) {
+      throw new Error(`Expected intents quickstart ${id}`);
+    }
+  }
+  for (const phrase of ["intents.near on NEAR mainnet", "full-access key", "ed25519:<base58>", "net to zero"]) {
+    if (!intentsSurface.constraints.some(constraint => constraint.includes(phrase))) {
+      throw new Error(`Expected intents constraint containing ${phrase}`);
+    }
+  }
+  if (!/^https:\/\/.+/.test(intentsSurface.guideUrl)) {
+    throw new Error("Expected an absolute intents package guide URL");
+  }
+  if (!intentsSurface.walletFeatures.includes("signMessage")) {
+    throw new Error("Expected the intents wallet feature signMessage");
+  }
+  if (!supportSurface.hostedPages.some(page => page.url.endsWith("/intents.html"))) {
+    throw new Error("Expected the hosted intents.html explainer in supportSurface.hostedPages");
+  }
 }
 
 function renderSnippet(snippet) {
@@ -250,6 +299,49 @@ ${subheading} Safe defaults
 ${renderList(x402Surface.safeDefaults)}
 
 ${x402Surface.quickstarts.map(quickstart => `${subheading} ${quickstart.title}
+
+Quickstart ID: \`${quickstart.id}\`
+
+${quickstart.summary}
+
+\`\`\`${quickstart.language}
+${quickstart.code}
+\`\`\``).join("\n\n")}`;
+}
+
+function renderIntentsSection({ headingLevel = 3 } = {}) {
+  const heading = "#".repeat(headingLevel);
+  const subheading = "#".repeat(headingLevel + 1);
+
+  return `${heading} NEAR Intents
+
+\`${intentsSurface.package}\` integrates the NEAR Intents protocol: the ${intentsSurface.protocol.verifierContract} verifier, the hosted 1Click swap API, and the solver relay.
+
+- Verifier: \`${intentsSurface.protocol.verifierContract}\` (${intentsSurface.protocol.network}); ledger: ${intentsSurface.protocol.ledger}.
+- Signing: ${intentsSurface.protocol.signing}.
+- 1Click API: \`${intentsSurface.protocol.oneClickBaseUrl}\`; solver relay: \`${intentsSurface.protocol.solverRelayUrl}\`.
+- Browser global: \`${intentsSurface.browserGlobal}\`.
+- Runtime: ${intentsSurface.runtime}
+- Wallet status: ${intentsSurface.browserStatus}
+- Package guide: [${intentsSurface.guideUrl}](${intentsSurface.guideUrl}).
+
+${subheading} Choose by task
+
+${renderList(intentsSurface.chooseByTask.map(choice => `${choice.task}: ${choice.use.map(name => `\`${name}\``).join(" + ")} from ${choice.imports.map(name => `\`${name}\``).join(" and ")} — ${choice.status}.`))}
+
+${subheading} Entrypoints
+
+${renderList(intentsSurface.entrypoints.map(entry => `\`${entry.subpath}\`: ${entry.exports.map(name => `\`${name}\``).join(", ")} — ${entry.purpose}.`))}
+
+${subheading} Constraints
+
+${renderList(intentsSurface.constraints)}
+
+${subheading} Safe defaults
+
+${renderList(intentsSurface.safeDefaults)}
+
+${intentsSurface.quickstarts.map(quickstart => `${subheading} ${quickstart.title}
 
 Quickstart ID: \`${quickstart.id}\`
 
@@ -397,6 +489,8 @@ ${terminal.code}
 ${renderMlDsa65Section()}
 
 ${renderX402Section()}
+
+${renderIntentsSection()}
 
 ### Structured explain helpers
 
@@ -608,6 +702,7 @@ Primary packages:
 - @fastnear/utils
 - @fastnear/ml-dsa-65
 - @fastnear/x402
+- @fastnear/intents
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -676,6 +771,18 @@ x402 payment surface (@fastnear/x402):
 - Wallet features: ${x402Surface.walletFeatures.join(" + ")}
 - Status: ${x402Surface.browserStatus}
 - Guide: ${x402Surface.guideUrl}
+
+NEAR Intents surface (@fastnear/intents):
+- Runtime: ${intentsSurface.runtime}
+- Verifier: ${intentsSurface.protocol.verifierContract} (${intentsSurface.protocol.network}); ledger: NEP-245 multi-token ids like nep141:wrap.near
+- Quote/track swaps: createOneClickClient (${intentsSurface.protocol.oneClickBaseUrl}); keyless adds a 0.2% fee
+- Browser signing: createWalletIntentSigner (global ${intentsSurface.browserGlobal}) over nearWallet.signMessage — NEP-413, full-access keys only
+- Node signing: @fastnear/intents/node createLocalIntentSigner
+- Verifier helpers: ftDepositAction / wrapNearAction / ftWithdrawAction + mtBalance / mtBatchBalances views
+- Solver relay: @fastnear/intents/relay createSolverRelayClient (${intentsSurface.protocol.solverRelayUrl}); quotes need a partner API key
+- Signature encoding: MultiPayload wants ed25519:<base58> — the signers re-encode the wallet's base64
+- Status: ${intentsSurface.browserStatus}
+- Guide: ${intentsSurface.guideUrl}
 
 Named endpoint response types:
 - FastNearRecipeDiscoveryEntry
@@ -830,6 +937,8 @@ ${supportSurface.captureExample.code}
 ${renderX402Section({ headingLevel: 2 })}
 
 ${renderMlDsa65Section({ headingLevel: 2 })}
+
+${renderIntentsSection({ headingLevel: 2 })}
 
 ## Recipe catalog
 
