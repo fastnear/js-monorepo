@@ -201,6 +201,11 @@ describe("createFastNearWalletSigner", () => {
 });
 
 describe("x402 client and fetch helpers", () => {
+  it("re-exports x402Client as a real runtime value (the d.ts advertises it)", async () => {
+    const barrel = await import("./index.js");
+    expect(typeof barrel.x402Client).toBe("function");
+  });
+
   it("creates a client registered for NEAR exact", async () => {
     const createSignedDelegateAction = vi.fn(async () => encodedSignedDelegate);
     const client = createNearX402Client({ signer: { createSignedDelegateAction } });

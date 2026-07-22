@@ -208,4 +208,7 @@ export function createNearPaymentFetch({
 }
 
 export type { ClientNearSigner } from "@x402/near";
-export type { x402Client } from "@x402/core/client";
+// Value re-export, not `export type`: the dts bundler drops the `type`
+// keyword, so the published d.ts advertises a runtime export either way —
+// make it real (the class is a runtime dependency already imported above).
+export { x402Client } from "@x402/core/client";
