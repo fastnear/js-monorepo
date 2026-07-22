@@ -1,4 +1,5 @@
 export * from "./crypto.js";
+export * from "./nep413.js";
 export * from "./transaction.js";
 export * from "./misc.js";
 export * from "./storage.js";
