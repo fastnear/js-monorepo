@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/x402",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "FastNEAR wallet, fetch, resource-server, and facilitator adapters for x402 payments on NEAR",
   "license": "MIT",
   "type": "module",
