@@ -92,6 +92,11 @@ Canonical machine-readable catalog:
 Canonical hosted agent wrapper:
 - https://js.fastnear.com/agents.js
 
+Hosted topic explainers:
+- https://js.fastnear.com/x402.html — x402 payments on NEAR
+- https://js.fastnear.com/post-quantum.html — Post-quantum ML-DSA-65 keys
+- https://js.fastnear.com/retries.html — Retries and bulk reads
+
 Wrapper source in repo:
 - recipes/near-node.mjs
 
