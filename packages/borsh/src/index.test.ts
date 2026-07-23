@@ -14,9 +14,17 @@ function checkDecode(expected: unknown, schema: Schema, encoded: number[]) {
   expect(decoded).toEqual(expected);
 }
 
-function checkRoundtrip(value: unknown, schema: Schema, encoded: number[]) {
+// `decoded` defaults to `value`, but for u64/u128 the round-trip is
+// intentionally asymmetric: you may encode from a bigint, but decode returns a
+// decimal string by default, so wide-int cases pass the string form explicitly.
+function checkRoundtrip(
+  value: unknown,
+  schema: Schema,
+  encoded: number[],
+  decoded: unknown = value,
+) {
   checkEncode(value, schema, encoded);
-  checkDecode(value, schema, encoded);
+  checkDecode(decoded, schema, encoded);
 }
 
 // ── Primitives ───────────────────────────────────────────────────────
@@ -54,12 +62,14 @@ describe("primitives", () => {
 // ── BigInt types ─────────────────────────────────────────────────────
 
 describe("bigint types", () => {
+  // Wide integers encode from bigint (or string/number) but decode to a
+  // decimal string by default — see the "bigint decode opt-in" block below.
   it("u64 round-trip", () => {
-    checkRoundtrip(103n, "u64", [103, 0, 0, 0, 0, 0, 0, 0]);
+    checkRoundtrip(103n, "u64", [103, 0, 0, 0, 0, 0, 0, 0], "103");
   });
 
   it("u64 zero", () => {
-    checkRoundtrip(0n, "u64", [0, 0, 0, 0, 0, 0, 0, 0]);
+    checkRoundtrip(0n, "u64", [0, 0, 0, 0, 0, 0, 0, 0], "0");
   });
 
   it("u64 max (2^64 - 1)", () => {
@@ -67,6 +77,7 @@ describe("bigint types", () => {
       BigInt("18446744073709551615"),
       "u64",
       [255, 255, 255, 255, 255, 255, 255, 255],
+      "18446744073709551615",
     );
   });
 
@@ -76,6 +87,7 @@ describe("bigint types", () => {
       BigInt("4294967297"),
       "u64",
       [1, 0, 0, 0, 1, 0, 0, 0],
+      "4294967297",
     );
   });
 
@@ -84,6 +96,7 @@ describe("bigint types", () => {
       104n,
       "u128",
       [104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "104",
     );
   });
 
@@ -92,6 +105,7 @@ describe("bigint types", () => {
       0n,
       "u128",
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "0",
     );
   });
 
@@ -100,6 +114,7 @@ describe("bigint types", () => {
       BigInt("340282366920938463463374607431768211455"),
       "u128",
       Array(16).fill(255),
+      "340282366920938463463374607431768211455",
     );
   });
 
@@ -108,7 +123,42 @@ describe("bigint types", () => {
       128n,
       "u128",
       [128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "128",
     );
+  });
+
+  it("accepts string and number input, not just bigint", () => {
+    checkEncode("103", "u64", [103, 0, 0, 0, 0, 0, 0, 0]);
+    checkEncode(103, "u64", [103, 0, 0, 0, 0, 0, 0, 0]);
+  });
+});
+
+// ── bigint decode opt-in ─────────────────────────────────────────────
+
+describe("bigint decode opt-in", () => {
+  it("default decode returns decimal strings (JSON-safe)", () => {
+    const schema: Schema = { struct: { deposit: "u128" } };
+    const bytes = serialize(schema, { deposit: 250n });
+    const decoded = deserialize(schema, bytes);
+    expect(decoded).toEqual({ deposit: "250" });
+    // The whole point: a decoded value survives JSON.stringify.
+    expect(() => JSON.stringify(decoded)).not.toThrow();
+    expect(JSON.parse(JSON.stringify(decoded))).toEqual({ deposit: "250" });
+  });
+
+  it("{ bigints: 'bigint' } opts back into native bigint", () => {
+    const bytes = serialize("u128", 250n);
+    expect(deserialize("u128", bytes, { bigints: "bigint" })).toBe(250n);
+    expect(deserialize("u128", bytes, { bigints: "string" })).toBe("250");
+  });
+
+  it("round-trips a string-decoded value back to identical bytes", () => {
+    const schema: Schema = { struct: { gas: "u64", deposit: "u128" } };
+    const bytes = serialize(schema, { gas: "30000000000000", deposit: "1" });
+    const decoded = deserialize(schema, bytes);
+    expect(decoded).toEqual({ gas: "30000000000000", deposit: "1" });
+    // Re-encoding the string-decoded value yields identical bytes.
+    expect(serialize(schema, decoded)).toEqual(bytes);
   });
 });
 
@@ -230,6 +280,7 @@ describe("arrays", () => {
       [
         2, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0, 0, 232, 118, 72, 23, 0, 0, 0,
       ],
+      ["10000000000", "100000000000"],
     );
   });
 
@@ -271,7 +322,9 @@ describe("structs", () => {
       1, 2, 0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0,
     ];
-    checkRoundtrip(value, schema, expected);
+    checkRoundtrip(value, schema, expected, {
+      u8: 1, u16: 2, u32: 3, u64: "4", u128: "5",
+    });
   });
 
   // Ported from borsh-js Options struct
@@ -315,7 +368,11 @@ describe("structs", () => {
       },
     };
     const expected = Array(24).fill(255).concat([...Array(254).keys()]);
-    checkRoundtrip(value, schema, expected);
+    checkRoundtrip(value, schema, expected, {
+      u64: "18446744073709551615",
+      u128: "340282366920938463463374607431768211455",
+      arr: [...Array(254).keys()],
+    });
   });
 
   it("empty struct", () => {
@@ -350,7 +407,12 @@ describe("structs", () => {
     };
     const encoded = serialize(schema, value);
     const decoded = deserialize(schema, encoded);
-    expect(decoded).toEqual(value);
+    expect(decoded).toEqual({
+      ...value,
+      u64Val: "4294967297",
+      u128Val: "128",
+      u64Arr: ["10000000000", "100000000000"],
+    });
   });
 });
 
@@ -400,6 +462,7 @@ describe("enums", () => {
       { numbers: numbersValue },
       wrappedSchema,
       [0].concat(numbersEncoded),
+      { numbers: { u8: 1, u16: 2, u32: 3, u64: "4", u128: "5" } },
     );
   });
 });

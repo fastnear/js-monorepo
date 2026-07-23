@@ -145,8 +145,9 @@ describe("Meteor delegate signing", () => {
     ) as any;
     expect(delegate.senderId).toBe("payer.testnet");
     expect(delegate.receiverId).toBe("usdc.fakes.testnet");
-    expect(delegate.nonce).toBe(0n);
-    expect(delegate.maxBlockHeight).toBe(1_300n);
+    // Wide integers decode to decimal strings by default.
+    expect(delegate.nonce).toBe("0");
+    expect(delegate.maxBlockHeight).toBe("1300");
     expect(delegate.actions[0].functionCall.methodName).toBe("ft_transfer");
   });
 
@@ -228,7 +229,7 @@ describe("Meteor delegate signing", () => {
       SCHEMA.DelegateAction,
       base64ToBytes(encoded),
     ) as any;
-    expect(delegate.maxBlockHeight).toBe(2_300n);
+    expect(delegate.maxBlockHeight).toBe("2300");
     expect(postMessage).toHaveBeenCalledOnce();
     expect(removeEventListener).toHaveBeenCalledOnce();
     expect(popup.close).toHaveBeenCalledOnce();

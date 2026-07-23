@@ -827,6 +827,7 @@ Mental model:
 Result shapes:
 - near.query* (queryAccount, queryBlock, queryAccessKey, queryTx) return the raw JSON-RPC envelope { jsonrpc, result, id } — read your data from the .result field.
 - near.view, near.recipes.*, near.ft.*, near.nft.*, near.tx.*, near.api.v1.*, near.transfers.*, near.neardata.*, and near.fastdata.kv.* return the data shape directly (no envelope).
+- Wide integers are strings: amounts, gas, deposits, nonces and other u64/u128 values come back as decimal strings (JSON-safe, matching NEAR RPC). Constructing a tx accepts string | number | bigint and unit strings like "100 Tgas" / "0.01 NEAR"; inspect a built transaction with near.utils.txToJson (never JSON.stringify a bigint). You never need BigInt to build, send, or read a transaction.
 
 Trial credits / API keys:
 - ${supportSurface.trialCreditsUrl}
@@ -896,6 +897,7 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 
 - ` + "`near.query*`" + ` (` + "`queryAccount`" + `, ` + "`queryBlock`" + `, ` + "`queryAccessKey`" + `, ` + "`queryTx`" + `) are JSON-RPC passthroughs and return the raw envelope ` + "`{ jsonrpc, result, id }`" + ` — read your data from the ` + "`.result`" + ` field.
 - ` + "`near.view`" + `, ` + "`near.recipes.*`" + `, ` + "`near.ft.*`" + `, ` + "`near.nft.*`" + ` and the indexed REST families (` + "`near.tx.*`" + `, ` + "`near.api.v1.*`" + `, ` + "`near.transfers.*`" + `, ` + "`near.neardata.*`" + `, ` + "`near.fastdata.kv.*`" + `) return the flat data shape directly. The recipes layer in particular is what flattens ` + "`near.queryAccount`" + ` results into ` + "`{ amount, block_height, storage_usage, ... }`" + ` for ` + "`near.recipes.viewAccount`" + `.
+- **Wide integers are strings.** Amounts, gas, deposits, nonces and other ` + "`u64`" + `/` + "`u128`" + ` values come back as **decimal strings** (JSON-safe, matching NEAR JSON-RPC). Constructing a transaction accepts ` + "`string | number | bigint`" + ` and unit strings like ` + "`\"100 Tgas\"`" + ` / ` + "`\"0.01 NEAR\"`" + `; inspect a built transaction with ` + "`near.utils.txToJson`" + ` rather than ` + "`JSON.stringify`" + `-ing a raw ` + "`bigint`" + `. You never need ` + "`BigInt`" + ` to build, send, or read a transaction. (` + "`@fastnear/borsh`" + ` ` + "`deserialize`" + ` takes ` + "`{ bigints: \"bigint\" }`" + ` to opt back in.)
 
 ## Low-level API entrypoints
 
