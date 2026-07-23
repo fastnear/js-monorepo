@@ -194,7 +194,7 @@ EOF
 - API key env var: `FASTNEAR_API_KEY`
 - Hosted recipe catalog: `https://js.fastnear.com/recipes.json`
 - Hosted terminal wrapper: `https://js.fastnear.com/agents.js`
-- Hosted topic explainers: `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads), `https://js.fastnear.com/intents.html` (NEAR Intents)
+- Hosted topic explainers: `https://js.fastnear.com/transactions.html` (Constructing a transaction), `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads), `https://js.fastnear.com/intents.html` (NEAR Intents)
 - Free trial credits: `https://dashboard.fastnear.com`
 
 Release contract:

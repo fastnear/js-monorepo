@@ -12,7 +12,9 @@ export interface SignedDelegateExpectation {
   senderId: string;
   receiverId: string;
   actions: unknown[];
-  maxBlockHeight: bigint;
+  // Compared as a decimal string, so either form is accepted. Borsh decode
+  // now returns wide integers as strings by default.
+  maxBlockHeight: string | bigint;
 }
 
 function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
@@ -93,12 +95,20 @@ export function validateSignedDelegate(
   }
 
   const delegate = signedDelegate.delegateAction;
+  // Borsh decode returns wide integers (nonce, maxBlockHeight) as decimal
+  // strings by default — normalize before comparing so the check is agnostic
+  // to the decode mode.
+  let noncePositive = false;
+  try {
+    noncePositive = BigInt(delegate?.nonce) > 0n;
+  } catch {
+    noncePositive = false;
+  }
   if (
     delegate?.senderId !== expected.senderId ||
     delegate?.receiverId !== expected.receiverId ||
-    delegate?.maxBlockHeight !== expected.maxBlockHeight ||
-    typeof delegate?.nonce !== "bigint" ||
-    delegate.nonce <= 0n ||
+    String(delegate?.maxBlockHeight) !== String(expected.maxBlockHeight) ||
+    !noncePositive ||
     !Array.isArray(delegate.actions) ||
     delegate.actions.length !== expected.actions.length
   ) {

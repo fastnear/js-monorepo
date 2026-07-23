@@ -2,10 +2,23 @@
 // API-compatible with the `borsh` npm package for the subset of schemas NEAR uses.
 // Supports: u8, u16, u32, u64, u128, string, struct, enum, array (fixed + dynamic), option.
 // Omits: bool, signed integers, f32/f64, set, map, schema validation, runtime type checking.
+//
+// Wide integers (u64/u128) decode to decimal STRINGS by default — the whole
+// @fastnear surface treats big numbers as strings (JSON-safe, matches NEAR RPC
+// reads), so a value you decode can be logged, JSON.stringify'd, and re-encoded
+// without ever touching BigInt. Pass { bigints: "bigint" } to opt into native
+// bigint output. serialize() always accepts string | number | bigint.
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type IntegerType = "u8" | "u16" | "u32" | "u64" | "u128";
+
+/** How wide integers (u64/u128) come back from deserialize. Default: "string". */
+export type BigintMode = "string" | "bigint";
+
+export interface DeserializeOptions {
+  bigints?: BigintMode;
+}
 
 export type StringType = "string";
 
@@ -72,12 +85,14 @@ class DecodeBuffer {
   private offset = 0;
   private view: DataView;
   private bytes: Uint8Array;
+  readonly bigints: BigintMode;
 
-  constructor(buf: Uint8Array) {
+  constructor(buf: Uint8Array, bigints: BigintMode = "string") {
     const ab = new ArrayBuffer(buf.length);
     new Uint8Array(ab).set(buf);
     this.view = new DataView(ab);
     this.bytes = new Uint8Array(ab);
+    this.bigints = bigints;
   }
 
   private assert(size: number): void {
@@ -127,10 +142,11 @@ function encodeBigint(buf: EncodeBuffer, value: bigint, byteLen: number): void {
   buf.storeBytes(out);
 }
 
-function decodeBigint(buf: DecodeBuffer, byteLen: number): bigint {
+function decodeBigint(buf: DecodeBuffer, byteLen: number): bigint | string {
   const bytes = buf.readBytes(byteLen);
   const hex = bytes.reduceRight((r, x) => r + x.toString(16).padStart(2, "0"), "");
-  return BigInt("0x" + hex);
+  const value = BigInt("0x" + hex);
+  return buf.bigints === "bigint" ? value : value.toString();
 }
 
 // ── UTF-8 helpers (no TextEncoder/TextDecoder dependency) ──────────────────────
@@ -333,7 +349,11 @@ export function serialize(schema: Schema, value: unknown): Uint8Array {
   return buf.result();
 }
 
-export function deserialize(schema: Schema, buffer: Uint8Array): any {
-  const buf = new DecodeBuffer(buffer);
+export function deserialize(
+  schema: Schema,
+  buffer: Uint8Array,
+  options?: DeserializeOptions,
+): any {
+  const buf = new DecodeBuffer(buffer, options?.bigints ?? "string");
   return decodeValue(buf, schema);
 }

@@ -108,9 +108,12 @@ describe("schema structure", () => {
 
 const zeroBytes = (n: number) => new Array(n).fill(0);
 
+// These tests verify the NEAR chain schema's byte layout, so they decode in
+// bigint mode to stay symmetric with the bigint inputs. The default
+// string-decode behavior is covered in the @fastnear/borsh package tests.
 function roundtrip(schema: Schema, value: unknown) {
   const encoded = serialize(schema, value);
-  const decoded = deserialize(schema, encoded);
+  const decoded = deserialize(schema, encoded, { bigints: "bigint" });
   return decoded;
 }
 

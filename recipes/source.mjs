@@ -535,6 +535,12 @@ export const supportSurface = {
   trialCreditsSummary: "Free trial credits are available at dashboard.fastnear.com.",
   hostedPages: [
     {
+      url: `${FASTNEAR_CDN_BASE}/transactions.html`,
+      topic: "Constructing a transaction",
+      summary:
+        "Build a NEAR transaction end to end with zero BigInt snags: actions, unit gas/deposit strings, local-key and wallet signing, and inspecting via near.utils.txToJson. Wide integers are decimal strings.",
+    },
+    {
       url: `${FASTNEAR_CDN_BASE}/x402.html`,
       topic: "x402 payments on NEAR",
       summary:

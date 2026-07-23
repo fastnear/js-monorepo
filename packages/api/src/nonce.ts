@@ -2,6 +2,11 @@ import { lsGet, lsSet } from "@fastnear/utils";
 
 // Per-access-key, in-process ordering for nonce reservation and consumption.
 // The chain remains authoritative across tabs, processes, and external signers.
+//
+// Convention boundary: the @fastnear surface hands wide integers back as
+// decimal strings, but a reserved nonce is a low-level counter this module
+// increments and compares — it stays bigint here and is never surfaced to the
+// transaction-construction path directly (sendTx/functionCall consume it).
 const _nonceChains = new Map<string, Promise<unknown>>();
 
 /**

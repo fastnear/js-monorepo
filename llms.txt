@@ -106,6 +106,7 @@ Canonical hosted agent wrapper:
 - https://js.fastnear.com/agents.js
 
 Hosted topic explainers:
+- https://js.fastnear.com/transactions.html — Constructing a transaction
 - https://js.fastnear.com/x402.html — x402 payments on NEAR
 - https://js.fastnear.com/post-quantum.html — Post-quantum ML-DSA-65 keys
 - https://js.fastnear.com/retries.html — Retries and bulk reads
@@ -122,6 +123,7 @@ Mental model:
 Result shapes:
 - near.query* (queryAccount, queryBlock, queryAccessKey, queryTx) return the raw JSON-RPC envelope { jsonrpc, result, id } — read your data from the .result field.
 - near.view, near.recipes.*, near.ft.*, near.nft.*, near.tx.*, near.api.v1.*, near.transfers.*, near.neardata.*, and near.fastdata.kv.* return the data shape directly (no envelope).
+- Wide integers are strings: amounts, gas, deposits, nonces and other u64/u128 values come back as decimal strings (JSON-safe, matching NEAR RPC). Constructing a tx accepts string | number | bigint and unit strings like "100 Tgas" / "0.01 NEAR"; inspect a built transaction with near.utils.txToJson (never JSON.stringify a bigint). You never need BigInt to build, send, or read a transaction.
 
 Trial credits / API keys:
 - https://dashboard.fastnear.com

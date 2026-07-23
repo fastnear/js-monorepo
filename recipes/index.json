@@ -22,6 +22,11 @@
     "trialCreditsSummary": "Free trial credits are available at dashboard.fastnear.com.",
     "hostedPages": [
       {
+        "url": "https://js.fastnear.com/transactions.html",
+        "topic": "Constructing a transaction",
+        "summary": "Build a NEAR transaction end to end with zero BigInt snags: actions, unit gas/deposit strings, local-key and wallet signing, and inspecting via near.utils.txToJson. Wide integers are decimal strings."
+      },
+      {
         "url": "https://js.fastnear.com/x402.html",
         "topic": "x402 payments on NEAR",
         "summary": "Integration map, payer quickstarts, constraints, and wallet-compatibility status for @fastnear/x402."
