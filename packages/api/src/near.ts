@@ -1769,6 +1769,11 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     title: "How do I sign delegate actions for gasless transactions?",
   },
   {
+    id: "explain-transaction",
+    api: "near.explain.tx",
+    title: "How do I build and preview a transaction before signing?",
+  },
+  {
     id: "ft-balance",
     api: "near.ft.balance",
     title: "What is this account's FT balance?",

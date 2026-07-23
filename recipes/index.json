@@ -1312,6 +1312,94 @@
       ]
     },
     {
+      "id": "explain-transaction",
+      "title": "How do I build and preview a transaction before signing?",
+      "summary": "Declare actions with readable unit gas/deposit and get a stable JSON summary from near.explain.tx — no wallet, no network, no BigInt.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.explain.tx",
+      "example": {
+        "signerId": "root.near",
+        "receiverId": "berryclub.ek.near",
+        "actions": [
+          {
+            "type": "FunctionCall",
+            "methodName": "draw",
+            "args": {
+              "pixels": [
+                {
+                  "x": 10,
+                  "y": 20,
+                  "color": 65280
+                }
+              ]
+            },
+            "gas": "100 Tgas",
+            "deposit": "0"
+          }
+        ]
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Build actions with readable units — string, number, or bigint all work.\nconst actions = [\n  near.actions.functionCall({\n    methodName: \"draw\",\n    args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n    gas: \"100 Tgas\",\n    deposit: \"0\",\n  }),\n];\n\n// Preview before signing: a pure, JSON-safe summary — no network, no wallet.\n// Wide integers stay decimal strings, so this never trips on BigInt.\nnear.print(near.explain.tx({\n  signerId: \"root.near\",\n  receiverId: \"berryclub.ek.near\",\n  actions,\n}));\nEOF"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "// Build actions with readable units — string, number, or bigint all work.\nconst actions = [\n  near.actions.functionCall({\n    methodName: \"draw\",\n    args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n    gas: \"100 Tgas\",\n    deposit: \"0\",\n  }),\n];\n\n// Preview before signing: a pure, JSON-safe summary — no network, no wallet.\n// Wide integers stay decimal strings, so this never trips on BigInt.\nnear.print(near.explain.tx({\n  signerId: \"root.near\",\n  receiverId: \"berryclub.ek.near\",\n  actions,\n}));"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Build actions with readable units — string, number, or bigint all work.\nconst actions = [\n  near.actions.functionCall({\n    methodName: \"draw\",\n    args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n    gas: \"100 Tgas\",\n    deposit: \"0\",\n  }),\n];\n\n// Preview before signing: a pure, JSON-safe summary — no network, no wallet.\n// Wide integers stay decimal strings, so this never trips on BigInt.\nnear.print(near.explain.tx({\n  signerId: \"root.near\",\n  receiverId: \"berryclub.ek.near\",\n  actions,\n}));"
+        }
+      ],
+      "service": "api",
+      "returns": "ExplainedTransaction",
+      "outputKeys": [
+        "kind",
+        "signerId",
+        "receiverId",
+        "actionCount",
+        "actions"
+      ],
+      "responseNotes": [
+        "near.explain.tx is a pure function — it never opens a wallet or hits the network.",
+        "Wide integers (gas, deposit, amounts) are decimal strings in and out; you never need BigInt to build or inspect a transaction.",
+        "Gas and deposit are echoed exactly as written, including unit strings like \"100 Tgas\" — convert with near.utils.convertUnit only if you need the yocto value."
+      ],
+      "chooseWhen": [
+        "Choose this to sanity-check exactly what you are about to sign before handing actions to a wallet or sendTx.",
+        "Use near.explain.action for a single action, or near.utils.txToJson to JSON-serialize a full signed transaction object."
+      ],
+      "followUps": [
+        "Sign and broadcast the same actions with near.recipes.functionCall (wallet) or sendTx (local key).",
+        "See the hosted /transactions explainer for the full construct-and-send flow."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "function-call",
+        "transfer",
+        "sign-delegate-actions"
+      ]
+    },
+    {
       "id": "ft-balance",
       "title": "What is this account's FT balance?",
       "summary": "Read a NEP-141 token balance with a one-line wrapper that fills in the standard method name.",
