@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/intents",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "NEAR Intents for end users and agents: 1Click swaps, NEP-413 intent signing, verifier deposits/withdrawals, and the solver relay",
   "license": "MIT",
   "type": "module",
