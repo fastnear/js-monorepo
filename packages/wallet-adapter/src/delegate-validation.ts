@@ -2,6 +2,7 @@ import { deserialize, serialize } from "@fastnear/borsh";
 import {
   base64ToBytes,
   bytesToBase64,
+  NEP461_DELEGATE_TAG,
   SCHEMA,
   sha256,
 } from "@fastnear/utils";
@@ -36,7 +37,7 @@ function readBytes(value: unknown, key: string, length: number): Uint8Array | nu
 // @near-js/transactions encodeDelegateAction without bundling that package into
 // the wallet-adapter browser build.
 function encodeDelegateActionForSigning(delegateAction: unknown): Uint8Array {
-  const prefix = 2 ** 30 + 366;
+  const prefix = NEP461_DELEGATE_TAG;
   const delegateBytes = new Uint8Array(serialize(SCHEMA.DelegateAction, delegateAction));
   const prefixed = new Uint8Array(4 + delegateBytes.length);
   new DataView(prefixed.buffer).setUint32(0, prefix, true);

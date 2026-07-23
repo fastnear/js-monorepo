@@ -5,6 +5,7 @@ import {
   keyFromString,
   keyTypeFromString,
   NEAR_KEY_DESCRIPTORS,
+  sha256,
   type NearPublicKey,
 } from "./crypto.js";
 import { base64ToBytes, fromBase58 } from "./misc.js";
@@ -337,3 +338,54 @@ export function mapAction(action: NearAction): object {
 }
 
 export const SCHEMA = getBorshSchema();
+
+/**
+ * NEP-461 domain-separation tag for delegate actions (2^30 + 366), written as a
+ * little-endian u32 in front of the borsh DelegateAction before hashing. Single-
+ * sourced here so the api's local signer and the wallet-adapter's validator
+ * can't drift on the prefix.
+ */
+export const NEP461_DELEGATE_TAG = 2 ** 30 + 366;
+
+/** Map a flat DelegateAction into the borsh chain-schema shape. */
+function mapDelegateAction(delegate: NearDelegateAction) {
+  return {
+    senderId: delegate.senderId,
+    receiverId: delegate.receiverId,
+    actions: delegate.actions.map(mapAction),
+    nonce: BigInt(delegate.nonce),
+    maxBlockHeight: BigInt(delegate.maxBlockHeight),
+    publicKey: mapPublicKey(delegate.publicKey),
+  };
+}
+
+/** Borsh-serialize a NEP-366 DelegateAction, mapped to the chain schema shape. */
+export function serializeDelegateAction(delegate: NearDelegateAction): Uint8Array {
+  return new Uint8Array(borshSerialize(SCHEMA.DelegateAction, mapDelegateAction(delegate)));
+}
+
+/** Borsh-serialize a NEP-366 SignedDelegate from a flat delegate + signature. */
+export function serializeSignedDelegate(
+  delegate: NearDelegateAction,
+  signature: string | Uint8Array,
+): Uint8Array {
+  return new Uint8Array(
+    borshSerialize(SCHEMA.SignedDelegate, {
+      delegateAction: mapDelegateAction(delegate),
+      signature: mapSignature(signature, delegate.publicKey),
+    }),
+  );
+}
+
+/**
+ * The 32-byte hash a signer authorizes for a delegate action:
+ * `sha256(NEP461_DELEGATE_TAG_le_u32 ‖ borsh(DelegateAction))`. Signing this and
+ * pairing the signature with the delegate yields a NEP-366 SignedDelegate.
+ */
+export function delegateSigningHash(delegate: NearDelegateAction): Uint8Array {
+  const body = serializeDelegateAction(delegate);
+  const prefixed = new Uint8Array(4 + body.length);
+  new DataView(prefixed.buffer).setUint32(0, NEP461_DELEGATE_TAG, true);
+  prefixed.set(body, 4);
+  return sha256(prefixed);
+}

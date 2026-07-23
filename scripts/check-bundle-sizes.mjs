@@ -12,10 +12,15 @@ const maxExistingGzipGrowth = 2 * 1024 - 1;
 const budgets = [
   { package: "borsh", baselineGzip: 2_496 },
   { package: "borsh-schema", baselineGzip: 1_411 },
-  { package: "utils", baselineGzip: 35_696 },
-  // The api IIFE re-exports the @fastnear/utils surface, which now carries
-  // the shared NEP-413 signing module (prefix-tag borsh + sign/verify).
-  { package: "api", baselineGzip: 49_371, maxGzipGrowth: 4 * 1024 - 1 },
+  // Transaction serialization now also carries the NEP-366 local delegate signer
+  // (mapDelegateAction / serializeSignedDelegate / delegateSigningHash) plus the
+  // reverse unit formatter (formatNearAmount), which push growth just past 2 KiB.
+  { package: "utils", baselineGzip: 35_696, maxGzipGrowth: 3 * 1024 - 1 },
+  // The api IIFE re-exports the @fastnear/utils surface (NEP-413 signing plus
+  // the NEP-366 local delegate signer and reverse unit formatter) and adds the
+  // near.signDelegate/relayDelegate, gasPrice/status/validators, and
+  // implicitAccountId/createFundedTestnetAccount surfaces.
+  { package: "api", baselineGzip: 49_371, maxGzipGrowth: 5 * 1024 - 1 },
   { package: "wallet", baselineGzip: 21_323 },
   // The timeout-aware Meteor bridge includes local Borsh/action binding and
   // signature verification before accepting a wallet response; action mapping

@@ -646,6 +646,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fastnear/seed-phrase@workspace:packages/seed-phrase":
+  version: 0.0.0-use.local
+  resolution: "@fastnear/seed-phrase@workspace:packages/seed-phrase"
+  dependencies:
+    "@fastnear/utils": "workspace:*"
+    "@noble/curves": "npm:2.0.1"
+    "@noble/hashes": "npm:2.0.1"
+    "@scure/bip39": "npm:1.6.0"
+    "@types/node": "npm:*"
+    rimraf: "npm:*"
+    tsup: "npm:^8.3.6"
+    typescript: "npm:*"
+  languageName: unknown
+  linkType: soft
+
 "@fastnear/utils@workspace:*, @fastnear/utils@workspace:packages/utils":
   version: 0.0.0-use.local
   resolution: "@fastnear/utils@workspace:packages/utils"
@@ -901,7 +916,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:*, @noble/curves@npm:=2.0.1, @noble/curves@npm:~2.0.0":
+"@noble/curves@npm:*, @noble/curves@npm:2.0.1, @noble/curves@npm:=2.0.1, @noble/curves@npm:~2.0.0":
   version: 2.0.1
   resolution: "@noble/curves@npm:2.0.1"
   dependencies:
@@ -1207,7 +1222,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/bip39@npm:^1.6.0":
+"@scure/bip39@npm:1.6.0, @scure/bip39@npm:^1.6.0":
   version: 1.6.0
   resolution: "@scure/bip39@npm:1.6.0"
   dependencies:

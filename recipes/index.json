@@ -27,6 +27,16 @@
         "summary": "Build a NEAR transaction end to end with zero BigInt snags: actions, unit gas/deposit strings, local-key and wallet signing, and inspecting via near.utils.txToJson. Wide integers are decimal strings."
       },
       {
+        "url": "https://js.fastnear.com/meta-transactions.html",
+        "topic": "Gasless meta-transactions",
+        "summary": "Sign a NEP-366 delegate action locally with near.signDelegate (no wallet) and broadcast it via near.relayDelegate or any relayer that pays the gas."
+      },
+      {
+        "url": "https://js.fastnear.com/accounts.html",
+        "topic": "Keys and accounts",
+        "summary": "Generate or recover NEAR keys from a BIP-39 seed phrase with @fastnear/seed-phrase, derive implicit account ids, and create + fund a testnet account with near.createFundedTestnetAccount."
+      },
+      {
         "url": "https://js.fastnear.com/x402.html",
         "topic": "x402 payments on NEAR",
         "summary": "Integration map, payer quickstarts, constraints, and wallet-compatibility status for @fastnear/x402."
@@ -104,6 +114,9 @@
         "near.queryProtocolVersion",
         "near.queryBlock",
         "near.queryTx",
+        "near.gasPrice",
+        "near.status",
+        "near.validators",
         "near.sendTx",
         "near.ft.balance",
         "near.ft.metadata",
@@ -1996,6 +2009,342 @@
         "connect-testnet",
         "function-call",
         "transfer"
+      ]
+    },
+    {
+      "id": "gas-price",
+      "title": "What is the current gas price?",
+      "summary": "Read the current gas price from the RPC with a one-line wrapper; retries and 429-handling are built in.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.gasPrice",
+      "example": {},
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Current gas price straight from the RPC.\n// Retries and 429-handling are on by default (see near.config({ retry })).\nnear.print(await near.gasPrice());\nEOF"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "// Current gas price straight from the RPC.\n// Retries and 429-handling are on by default (see near.config({ retry })).\nnear.print(await near.gasPrice());"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Current gas price straight from the RPC.\n// Retries and 429-handling are on by default (see near.config({ retry })).\nnear.print(await near.gasPrice());"
+        }
+      ],
+      "service": "rpc",
+      "returns": "{ result: { gas_price: string } }",
+      "outputKeys": [
+        "result.gas_price"
+      ],
+      "responseNotes": [
+        "near.gasPrice returns the raw JSON-RPC envelope; read the value from result.gas_price.",
+        "gas_price is a yoctoNEAR-per-gas decimal string — multiply by gas to estimate a fee, no BigInt required beyond your own math.",
+        "Omit the argument for the latest block, or pass { blockId } to price a specific height or hash."
+      ],
+      "chooseWhen": [
+        "Choose this to estimate transaction fees or to show the live network gas price.",
+        "Use near.status for node/sync info or near.validators for the validator set."
+      ],
+      "followUps": [
+        "Build and preview a transaction with near.explain.tx, then sign it with sendTx or a wallet.",
+        "Inspect broader chain state with near.status() and near.validators()."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "explain-transaction",
+        "last-block-final",
+        "function-call"
+      ]
+    },
+    {
+      "id": "format-near-amount",
+      "title": "How do I show a yoctoNEAR balance as human-readable NEAR?",
+      "summary": "Render a yoctoNEAR integer as a human NEAR string with near.utils.formatNearAmount — the reverse of convertUnit, no BigInt.",
+      "network": "mainnet",
+      "auth": "none",
+      "api": "near.utils.formatNearAmount",
+      "example": {
+        "yocto": "1500000000000000000000000"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": true,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.\n// Wide integers are decimal strings in and out — you never touch BigInt.\nconst yocto = \"1500000000000000000000000\";\nnear.print(near.utils.formatNearAmount(yocto)); // \"1.5\"\nEOF"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": true,
+          "code": "// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.\n// Wide integers are decimal strings in and out — you never touch BigInt.\nconst yocto = \"1500000000000000000000000\";\nnear.print(near.utils.formatNearAmount(yocto)); // \"1.5\""
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": true,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.\n// Wide integers are decimal strings in and out — you never touch BigInt.\nconst yocto = \"1500000000000000000000000\";\nnear.print(near.utils.formatNearAmount(yocto)); // \"1.5\""
+        }
+      ],
+      "service": "api",
+      "returns": "string",
+      "outputKeys": [],
+      "responseNotes": [
+        "near.utils.formatNearAmount is pure — no network, no wallet.",
+        "IN accepts a decimal string or bigint yoctoNEAR value; OUT is always a decimal string like \"1.5\", never a number or BigInt.",
+        "Pass { fracDigits } to cap decimals, or { trimZeros: false } to pad; formatUnit(amount, unit) formats other units (e.g. \"tgas\")."
+      ],
+      "chooseWhen": [
+        "Choose this to display a balance read from near.view / near.ft.balance / decoded borsh as human NEAR.",
+        "Use near.utils.convertUnit for the other direction (\"1.5 NEAR\" -> yocto)."
+      ],
+      "followUps": [
+        "Read a balance to format with near.ft.balance or near.queryAccount.",
+        "Construct a transfer of a parsed amount with near.actions.transfer(near.utils.convertUnit(\"1.5 NEAR\"))."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "ft-balance",
+        "transfer",
+        "explain-transaction"
+      ]
+    },
+    {
+      "id": "sign-delegate-local",
+      "title": "How do I sign a gasless delegate transaction without a wallet?",
+      "summary": "Sign a NEP-366 delegate action with a local key so a relayer can broadcast it and pay the gas — the meta-transaction path for servers and agents.",
+      "network": "mainnet",
+      "auth": "local-key",
+      "api": "near.signDelegate",
+      "example": {
+        "receiverId": "guest-book.near",
+        "actions": [
+          {
+            "type": "FunctionCall",
+            "methodName": "add_message",
+            "args": {
+              "text": "gasless hello"
+            },
+            "gas": "30 Tgas",
+            "deposit": "0"
+          }
+        ],
+        "blockHeightTtl": 600
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);\nEOF"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": false,
+          "code": "// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": false,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);"
+        }
+      ],
+      "service": "rpc",
+      "returns": "{ delegateAction, signature, signatureBytes, borshBase64 }",
+      "outputKeys": [
+        "delegateAction.senderId",
+        "delegateAction.nonce",
+        "delegateAction.maxBlockHeight",
+        "signature",
+        "borshBase64"
+      ],
+      "responseNotes": [
+        "near.signDelegate signs locally — it never opens a wallet. The sender's nonce comes from its access key; maxBlockHeight defaults to the final block height plus blockHeightTtl (600).",
+        "nonce and maxBlockHeight are returned as decimal strings; borshBase64 is the NEP-366 SignedDelegate a relayer transports.",
+        "Hand the result to near.relayDelegate (or any relayer) to broadcast — the relayer's full-access key pays the gas, not the sender."
+      ],
+      "chooseWhen": [
+        "Choose this to build gasless / meta-transactions from a server or agent that holds a key but shouldn't pay gas.",
+        "Use nearWallet.signDelegateActions when a browser wallet holds the key, or near.sendTx to sign and pay yourself."
+      ],
+      "followUps": [
+        "Broadcast the signed delegate with near.relayDelegate({ delegateAction, signature, relayerSigner, relayerId }).",
+        "Preview the wrapped actions first with near.explain.tx."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "sign-delegate-actions",
+        "explain-transaction",
+        "function-call"
+      ]
+    },
+    {
+      "id": "create-testnet-account",
+      "title": "How do I create and fund a new testnet account?",
+      "summary": "Generate a key and create + fund a fresh testnet account through the NEAR testnet helper faucet — the common agent onboarding step. Testnet only.",
+      "network": "testnet",
+      "auth": "none",
+      "api": "near.createFundedTestnetAccount",
+      "example": {
+        "newAccountId": "my-agent.testnet"
+      },
+      "snippets": [
+        {
+          "id": "terminal",
+          "label": "Terminal",
+          "environment": "terminal",
+          "language": "bash",
+          "runnable": false,
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Sign locally with the new key from here on.\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);\nEOF"
+        },
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": false,
+          "code": "// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Sign locally with the new key from here on.\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": false,
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Sign locally with the new key from here on.\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);"
+        }
+      ],
+      "service": "rpc",
+      "returns": "{ account_id?: string }",
+      "outputKeys": [
+        "account_id"
+      ],
+      "responseNotes": [
+        "near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.",
+        "Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).",
+        "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account."
+      ],
+      "chooseWhen": [
+        "Choose this for the 'make me a testnet account' onboarding step in an agent or script.",
+        "For an existing account, add a key instead of creating one; for mainnet, fund the account another way."
+      ],
+      "followUps": [
+        "Sign a transaction locally with the new key via near.sendTx.",
+        "Derive a recoverable key from a seed phrase with account-from-seed-phrase."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "account-from-seed-phrase",
+        "function-call",
+        "explain-transaction"
+      ]
+    },
+    {
+      "id": "account-from-seed-phrase",
+      "title": "How do I create or recover a key from a seed phrase?",
+      "summary": "Generate a BIP-39 seed phrase and its NEAR key, or recover the key from an existing phrase, with @fastnear/seed-phrase — byte-identical to near-cli.",
+      "network": "mainnet",
+      "auth": "local-key",
+      "api": "generateSeedPhrase",
+      "example": {
+        "seedPhrase": "shoot island position soft burden budget tooth cruel issue economy destroy above"
+      },
+      "snippets": [
+        {
+          "id": "browser-global",
+          "label": "Browser Global",
+          "environment": "browserGlobal",
+          "language": "js",
+          "runnable": false,
+          "code": "// Load @fastnear/seed-phrase (the NearSeedPhrase global) next to near.js.\n// Create a fresh key pair and its 12-word recovery phrase.\nconst { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase();\n\n// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.\nconst recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);\n\n// Sign locally with the recovered key.\nnear.state.updateAccountState({ accountId: \"you.near\", privateKey: recovered.privateKey });\nnear.print({ seedPhrase, publicKey });"
+        },
+        {
+          "id": "esm",
+          "label": "ESM",
+          "environment": "esm",
+          "language": "js",
+          "runnable": false,
+          "code": "import { generateSeedPhrase, parseSeedPhrase } from \"@fastnear/seed-phrase\";\nimport * as near from \"@fastnear/api\";\n\n// Create a fresh key pair and its 12-word recovery phrase.\nconst { seedPhrase, publicKey, privateKey } = generateSeedPhrase();\n\n// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.\nconst recovered = parseSeedPhrase(seedPhrase);\n\nnear.state.updateAccountState({ accountId: \"you.near\", privateKey: recovered.privateKey });\nnear.print({ seedPhrase, publicKey });"
+        }
+      ],
+      "service": "api",
+      "returns": "{ seedPhrase, publicKey, privateKey }",
+      "outputKeys": [
+        "seedPhrase",
+        "publicKey",
+        "privateKey"
+      ],
+      "responseNotes": [
+        "@fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.",
+        "Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.",
+        "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState to sign locally."
+      ],
+      "chooseWhen": [
+        "Choose this to onboard or recover an account key from a human-writable phrase.",
+        "Use near.utils.privateKeyFromRandom when you don't need a recovery phrase."
+      ],
+      "followUps": [
+        "Create + fund a testnet account for the derived key with create-testnet-account.",
+        "Sign a transaction locally with near.sendTx once the key is in account state."
+      ],
+      "pagination": {
+        "kind": "none",
+        "requestFields": [],
+        "responseFields": [],
+        "filtersMustStayStable": false
+      },
+      "relatedRecipes": [
+        "create-testnet-account",
+        "sign-delegate-local",
+        "function-call"
       ]
     }
   ],

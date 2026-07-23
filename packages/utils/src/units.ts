@@ -35,6 +35,44 @@ export function scaleDecimal(amount: string, shift: number): string {
   return `${intPart}.${fracStr}`;
 }
 
+/**
+ * Format a base-unit integer (e.g. yoctoNEAR) into a human-readable decimal
+ * string for `unit` — the reverse of {@link convertUnit}. OUT stays a decimal
+ * string per the "wide integers are strings" convention; never a bigint/number.
+ *
+ * Pass `amount` as a decimal string or bigint (a JS `number` large enough to be
+ * a real yocto balance can't be represented exactly). `fracDigits` caps the
+ * fractional places shown (defaults to the unit's full precision); `trimZeros`
+ * strips trailing zeros (default) or pads out to `fracDigits`.
+ */
+export function formatUnit(
+  amount: string | number | bigint,
+  unit: string = "near",
+  opts: { fracDigits?: number; trimZeros?: boolean } = {},
+): string {
+  const decimals = UNIT_DECIMALS[unit.toLowerCase()];
+  if (decimals === undefined) throw new Error(`Unknown unit: ${unit}`);
+  const { fracDigits = decimals, trimZeros = true } = opts;
+  const raw = typeof amount === "bigint" ? amount.toString() : `${amount}`;
+  // Negative shift divides by 10^decimals and trims trailing zeros already.
+  const full = scaleDecimal(raw, -decimals);
+  const [whole, existingFrac = ""] = full.split(".");
+  let frac = existingFrac.slice(0, fracDigits);
+  frac = trimZeros ? frac.replace(/0+$/, "") : frac.padEnd(fracDigits, "0");
+  return frac ? `${whole}.${frac}` : whole;
+}
+
+/**
+ * Human-readable yoctoNEAR → NEAR string, the reverse of `convertUnit("… NEAR")`.
+ * `formatNearAmount("1500000000000000000000000") === "1.5"`.
+ */
+export function formatNearAmount(
+  amount: string | number | bigint,
+  opts: { fracDigits?: number; trimZeros?: boolean } = {},
+): string {
+  return formatUnit(amount, "near", opts);
+}
+
 export function convertUnit(s: string | TemplateStringsArray, ...args: any[]): string {
   // Reconstruct raw string from template literal
   if (Array.isArray(s)) {

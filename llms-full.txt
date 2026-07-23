@@ -118,6 +118,9 @@ Canonical NEAR JSON-RPC defaults for direct contract views, account state, and t
 - `near.queryProtocolVersion`
 - `near.queryBlock`
 - `near.queryTx`
+- `near.gasPrice`
+- `near.status`
+- `near.validators`
 - `near.sendTx`
 - `near.ft.balance`
 - `near.ft.metadata`
@@ -273,7 +276,7 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - API key env var: `FASTNEAR_API_KEY`
 - Hosted recipe catalog: `https://js.fastnear.com/recipes.json`
 - Hosted terminal wrapper: `https://js.fastnear.com/agents.js`
-- Hosted topic explainers: `https://js.fastnear.com/transactions.html` (Constructing a transaction), `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads), `https://js.fastnear.com/intents.html` (NEAR Intents)
+- Hosted topic explainers: `https://js.fastnear.com/transactions.html` (Constructing a transaction), `https://js.fastnear.com/meta-transactions.html` (Gasless meta-transactions), `https://js.fastnear.com/accounts.html` (Keys and accounts), `https://js.fastnear.com/x402.html` (x402 payments on NEAR), `https://js.fastnear.com/post-quantum.html` (Post-quantum ML-DSA-65 keys), `https://js.fastnear.com/retries.html` (Retries and bulk reads), `https://js.fastnear.com/intents.html` (NEAR Intents)
 - Free trial credits: `https://dashboard.fastnear.com`
 
 Set `FASTNEAR_API_KEY` before running the authenticated snippets.
@@ -3173,6 +3176,459 @@ const result = await near.recipes.functionCall({
 });
 
 near.print(result);
+```
+
+## What is the current gas price?
+
+- ID: `gas-price`
+- API: `near.gasPrice`
+- Service: `rpc`
+- Returns: `{ result: { gas_price: string } }`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: Read the current gas price from the RPC with a one-line wrapper; retries and 429-handling are built in.
+- Output keys: `result.gas_price`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this to estimate transaction fees or to show the live network gas price.
+- Use near.status for node/sync info or near.validators for the validator set.
+
+Response notes:
+
+- near.gasPrice returns the raw JSON-RPC envelope; read the value from result.gas_price.
+- gas_price is a yoctoNEAR-per-gas decimal string — multiply by gas to estimate a fee, no BigInt required beyond your own math.
+- Omit the argument for the latest block, or pass { blockId } to price a specific height or hash.
+
+Follow-ups:
+
+- Build and preview a transaction with near.explain.tx, then sign it with sendTx or a wallet.
+- Inspect broader chain state with near.status() and near.validators().
+
+Related recipes:
+
+- `explain-transaction`
+- `last-block-final`
+- `function-call`
+
+Example inputs:
+
+```json
+{}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Current gas price straight from the RPC.
+// Retries and 429-handling are on by default (see near.config({ retry })).
+near.print(await near.gasPrice());
+EOF
+```
+
+### Browser Global
+
+```js
+// Current gas price straight from the RPC.
+// Retries and 429-handling are on by default (see near.config({ retry })).
+near.print(await near.gasPrice());
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Current gas price straight from the RPC.
+// Retries and 429-handling are on by default (see near.config({ retry })).
+near.print(await near.gasPrice());
+```
+
+## How do I show a yoctoNEAR balance as human-readable NEAR?
+
+- ID: `format-near-amount`
+- API: `near.utils.formatNearAmount`
+- Service: `api`
+- Returns: `string`
+- Network: `mainnet`
+- Auth: `none`
+- Summary: Render a yoctoNEAR integer as a human NEAR string with near.utils.formatNearAmount — the reverse of convertUnit, no BigInt.
+- Output keys: 
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this to display a balance read from near.view / near.ft.balance / decoded borsh as human NEAR.
+- Use near.utils.convertUnit for the other direction ("1.5 NEAR" -> yocto).
+
+Response notes:
+
+- near.utils.formatNearAmount is pure — no network, no wallet.
+- IN accepts a decimal string or bigint yoctoNEAR value; OUT is always a decimal string like "1.5", never a number or BigInt.
+- Pass { fracDigits } to cap decimals, or { trimZeros: false } to pad; formatUnit(amount, unit) formats other units (e.g. "tgas").
+
+Follow-ups:
+
+- Read a balance to format with near.ft.balance or near.queryAccount.
+- Construct a transfer of a parsed amount with near.actions.transfer(near.utils.convertUnit("1.5 NEAR")).
+
+Related recipes:
+
+- `ft-balance`
+- `transfer`
+- `explain-transaction`
+
+Example inputs:
+
+```json
+{
+  "yocto": "1500000000000000000000000"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.
+// Wide integers are decimal strings in and out — you never touch BigInt.
+const yocto = "1500000000000000000000000";
+near.print(near.utils.formatNearAmount(yocto)); // "1.5"
+EOF
+```
+
+### Browser Global
+
+```js
+// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.
+// Wide integers are decimal strings in and out — you never touch BigInt.
+const yocto = "1500000000000000000000000";
+near.print(near.utils.formatNearAmount(yocto)); // "1.5"
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.
+// Wide integers are decimal strings in and out — you never touch BigInt.
+const yocto = "1500000000000000000000000";
+near.print(near.utils.formatNearAmount(yocto)); // "1.5"
+```
+
+## How do I sign a gasless delegate transaction without a wallet?
+
+- ID: `sign-delegate-local`
+- API: `near.signDelegate`
+- Service: `rpc`
+- Returns: `{ delegateAction, signature, signatureBytes, borshBase64 }`
+- Network: `mainnet`
+- Auth: `local-key`
+- Summary: Sign a NEP-366 delegate action with a local key so a relayer can broadcast it and pay the gas — the meta-transaction path for servers and agents.
+- Output keys: `delegateAction.senderId`, `delegateAction.nonce`, `delegateAction.maxBlockHeight`, `signature`, `borshBase64`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this to build gasless / meta-transactions from a server or agent that holds a key but shouldn't pay gas.
+- Use nearWallet.signDelegateActions when a browser wallet holds the key, or near.sendTx to sign and pay yourself.
+
+Response notes:
+
+- near.signDelegate signs locally — it never opens a wallet. The sender's nonce comes from its access key; maxBlockHeight defaults to the final block height plus blockHeightTtl (600).
+- nonce and maxBlockHeight are returned as decimal strings; borshBase64 is the NEP-366 SignedDelegate a relayer transports.
+- Hand the result to near.relayDelegate (or any relayer) to broadcast — the relayer's full-access key pays the gas, not the sender.
+
+Follow-ups:
+
+- Broadcast the signed delegate with near.relayDelegate({ delegateAction, signature, relayerSigner, relayerId }).
+- Preview the wrapped actions first with near.explain.tx.
+
+Related recipes:
+
+- `sign-delegate-actions`
+- `explain-transaction`
+- `function-call`
+
+Example inputs:
+
+```json
+{
+  "receiverId": "guest-book.near",
+  "actions": [
+    {
+      "type": "FunctionCall",
+      "methodName": "add_message",
+      "args": {
+        "text": "gasless hello"
+      },
+      "gas": "30 Tgas",
+      "deposit": "0"
+    }
+  ],
+  "blockHeightTtl": 600
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Sign a NEP-366 delegate action with a local key — no wallet. A relayer
+// broadcasts it and pays the gas. Requires a signed-in local key
+// (near.config + near.state) or an explicit { signer, signerId }.
+const signed = await near.signDelegate({
+  receiverId: "guest-book.near",
+  actions: [
+    near.actions.functionCall({
+      methodName: "add_message",
+      args: { text: "gasless hello" },
+      gas: "30 Tgas",
+      deposit: "0",
+    }),
+  ],
+  blockHeightTtl: 600,
+});
+
+// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what
+// a relayer transports. Hand it to near.relayDelegate (or any relayer).
+near.print(signed.delegateAction);
+EOF
+```
+
+### Browser Global
+
+```js
+// Sign a NEP-366 delegate action with a local key — no wallet. A relayer
+// broadcasts it and pays the gas. Requires a signed-in local key
+// (near.config + near.state) or an explicit { signer, signerId }.
+const signed = await near.signDelegate({
+  receiverId: "guest-book.near",
+  actions: [
+    near.actions.functionCall({
+      methodName: "add_message",
+      args: { text: "gasless hello" },
+      gas: "30 Tgas",
+      deposit: "0",
+    }),
+  ],
+  blockHeightTtl: 600,
+});
+
+// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what
+// a relayer transports. Hand it to near.relayDelegate (or any relayer).
+near.print(signed.delegateAction);
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Sign a NEP-366 delegate action with a local key — no wallet. A relayer
+// broadcasts it and pays the gas. Requires a signed-in local key
+// (near.config + near.state) or an explicit { signer, signerId }.
+const signed = await near.signDelegate({
+  receiverId: "guest-book.near",
+  actions: [
+    near.actions.functionCall({
+      methodName: "add_message",
+      args: { text: "gasless hello" },
+      gas: "30 Tgas",
+      deposit: "0",
+    }),
+  ],
+  blockHeightTtl: 600,
+});
+
+// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what
+// a relayer transports. Hand it to near.relayDelegate (or any relayer).
+near.print(signed.delegateAction);
+```
+
+## How do I create and fund a new testnet account?
+
+- ID: `create-testnet-account`
+- API: `near.createFundedTestnetAccount`
+- Service: `rpc`
+- Returns: `{ account_id?: string }`
+- Network: `testnet`
+- Auth: `none`
+- Summary: Generate a key and create + fund a fresh testnet account through the NEAR testnet helper faucet — the common agent onboarding step. Testnet only.
+- Output keys: `account_id`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this for the 'make me a testnet account' onboarding step in an agent or script.
+- For an existing account, add a key instead of creating one; for mainnet, fund the account another way.
+
+Response notes:
+
+- near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.
+- Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).
+- After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account.
+
+Follow-ups:
+
+- Sign a transaction locally with the new key via near.sendTx.
+- Derive a recoverable key from a seed phrase with account-from-seed-phrase.
+
+Related recipes:
+
+- `account-from-seed-phrase`
+- `function-call`
+- `explain-transaction`
+
+Example inputs:
+
+```json
+{
+  "newAccountId": "my-agent.testnet"
+}
+```
+
+### Terminal
+
+```bash
+# Assumes FASTNEAR_API_KEY is already set in your shell.
+node -e "$(curl -fsSL https://js.fastnear.com/agents.js)" <<'EOF'
+// Make a key, then create + fund a fresh testnet account via the faucet.
+const privateKey = near.utils.privateKeyFromRandom();
+const publicKey = near.utils.publicKeyFromPrivate(privateKey);
+
+const result = await near.createFundedTestnetAccount({
+  newAccountId: "my-agent.testnet",
+  publicKey,
+});
+
+// Sign locally with the new key from here on.
+near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
+near.print(result);
+EOF
+```
+
+### Browser Global
+
+```js
+// Make a key, then create + fund a fresh testnet account via the faucet.
+const privateKey = near.utils.privateKeyFromRandom();
+const publicKey = near.utils.publicKeyFromPrivate(privateKey);
+
+const result = await near.createFundedTestnetAccount({
+  newAccountId: "my-agent.testnet",
+  publicKey,
+});
+
+// Sign locally with the new key from here on.
+near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
+near.print(result);
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+
+// Make a key, then create + fund a fresh testnet account via the faucet.
+const privateKey = near.utils.privateKeyFromRandom();
+const publicKey = near.utils.publicKeyFromPrivate(privateKey);
+
+const result = await near.createFundedTestnetAccount({
+  newAccountId: "my-agent.testnet",
+  publicKey,
+});
+
+// Sign locally with the new key from here on.
+near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
+near.print(result);
+```
+
+## How do I create or recover a key from a seed phrase?
+
+- ID: `account-from-seed-phrase`
+- API: `generateSeedPhrase`
+- Service: `api`
+- Returns: `{ seedPhrase, publicKey, privateKey }`
+- Network: `mainnet`
+- Auth: `local-key`
+- Summary: Generate a BIP-39 seed phrase and its NEAR key, or recover the key from an existing phrase, with @fastnear/seed-phrase — byte-identical to near-cli.
+- Output keys: `seedPhrase`, `publicKey`, `privateKey`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this to onboard or recover an account key from a human-writable phrase.
+- Use near.utils.privateKeyFromRandom when you don't need a recovery phrase.
+
+Response notes:
+
+- @fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.
+- Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.
+- generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState to sign locally.
+
+Follow-ups:
+
+- Create + fund a testnet account for the derived key with create-testnet-account.
+- Sign a transaction locally with near.sendTx once the key is in account state.
+
+Related recipes:
+
+- `create-testnet-account`
+- `sign-delegate-local`
+- `function-call`
+
+Example inputs:
+
+```json
+{
+  "seedPhrase": "shoot island position soft burden budget tooth cruel issue economy destroy above"
+}
+```
+
+### Browser Global
+
+```js
+// Load @fastnear/seed-phrase (the NearSeedPhrase global) next to near.js.
+// Create a fresh key pair and its 12-word recovery phrase.
+const { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase();
+
+// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
+const recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);
+
+// Sign locally with the recovered key.
+near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
+near.print({ seedPhrase, publicKey });
+```
+
+### ESM
+
+```js
+import { generateSeedPhrase, parseSeedPhrase } from "@fastnear/seed-phrase";
+import * as near from "@fastnear/api";
+
+// Create a fresh key pair and its 12-word recovery phrase.
+const { seedPhrase, publicKey, privateKey } = generateSeedPhrase();
+
+// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
+const recovered = parseSeedPhrase(seedPhrase);
+
+near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
+near.print({ seedPhrase, publicKey });
 ```
 
 ## Explain surface

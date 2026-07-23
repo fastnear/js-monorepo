@@ -47,6 +47,7 @@ export interface BlockView {
   result: {
     header: {
       hash: string;
+      height: number;
       timestamp_nanosec: string;
     };
   };

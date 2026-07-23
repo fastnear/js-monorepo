@@ -107,6 +107,8 @@ Canonical hosted agent wrapper:
 
 Hosted topic explainers:
 - https://js.fastnear.com/transactions.html — Constructing a transaction
+- https://js.fastnear.com/meta-transactions.html — Gasless meta-transactions
+- https://js.fastnear.com/accounts.html — Keys and accounts
 - https://js.fastnear.com/x402.html — x402 payments on NEAR
 - https://js.fastnear.com/post-quantum.html — Post-quantum ML-DSA-65 keys
 - https://js.fastnear.com/retries.html — Retries and bulk reads
@@ -166,4 +168,9 @@ Recipe index:
 - archival-snapshot: What did this account look like at a specific block? (rpc, RpcViewAccountResponse, none, mainnet)
 - connect-testnet: How do I open a testnet wallet session alongside mainnet? (wallet, { accountId: string; network?: "mainnet" | "testnet" } | undefined, wallet, testnet)
 - function-call-testnet: How do I send a function call on testnet without losing my mainnet session? (wallet, { outcomes?: any[] } | { rejected: true } | undefined, wallet, testnet)
+- gas-price: What is the current gas price? (rpc, { result: { gas_price: string } }, none, mainnet)
+- format-near-amount: How do I show a yoctoNEAR balance as human-readable NEAR? (api, string, none, mainnet)
+- sign-delegate-local: How do I sign a gasless delegate transaction without a wallet? (rpc, { delegateAction, signature, signatureBytes, borshBase64 }, local-key, mainnet)
+- create-testnet-account: How do I create and fund a new testnet account? (rpc, { account_id?: string }, none, testnet)
+- account-from-seed-phrase: How do I create or recover a key from a seed phrase? (api, { seedPhrase, publicKey, privateKey }, local-key, mainnet)
 
