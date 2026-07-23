@@ -186,6 +186,72 @@ describe("serializeSignedTransaction", () => {
   );
 });
 
+// ── mapAction: FunctionCall amount coercion ─────────────────────────
+
+describe("mapAction — FunctionCall gas/deposit units", () => {
+  it("accepts human unit strings the demo site and wallet path use", () => {
+    const mapped = mapAction({
+      type: "FunctionCall",
+      methodName: "buy_tokens",
+      args: {},
+      gas: "100 Tgas",
+      deposit: "0.01 NEAR",
+    }) as any;
+    expect(mapped.functionCall.gas).toBe(100_000_000_000_000n);
+    expect(mapped.functionCall.deposit).toBe(10_000_000_000_000_000_000_000n);
+  });
+
+  it("is a no-op on unit-less integer strings (idempotent with pre-converted values)", () => {
+    const mapped = mapAction({
+      type: "FunctionCall",
+      methodName: "draw",
+      args: {},
+      gas: "30000000000000",
+      deposit: "0",
+    }) as any;
+    expect(mapped.functionCall.gas).toBe(30_000_000_000_000n);
+    expect(mapped.functionCall.deposit).toBe(0n);
+  });
+
+  it("accepts bigint and number amounts unchanged", () => {
+    const mapped = mapAction({
+      type: "FunctionCall",
+      methodName: "m",
+      args: {},
+      gas: 30_000_000_000_000n,
+      deposit: 1,
+    }) as any;
+    expect(mapped.functionCall.gas).toBe(30_000_000_000_000n);
+    expect(mapped.functionCall.deposit).toBe(1n);
+  });
+
+  it("defaults gas to 300 Tgas and deposit to 0 when omitted", () => {
+    const mapped = mapAction({
+      type: "FunctionCall",
+      methodName: "m",
+      args: {},
+    }) as any;
+    expect(mapped.functionCall.gas).toBe(300_000_000_000_000n);
+    expect(mapped.functionCall.deposit).toBe(0n);
+  });
+
+  it("rejects an unknown unit with a clear message", () => {
+    expect(() =>
+      mapAction({
+        type: "FunctionCall",
+        methodName: "m",
+        args: {},
+        gas: "100 potato",
+      }),
+    ).toThrow(/Unknown unit/);
+  });
+
+  it("Transfer deposit also accepts NEAR units", () => {
+    const mapped = mapAction({ type: "Transfer", deposit: "1.5 NEAR" }) as any;
+    expect(mapped.transfer.deposit).toBe(1_500_000_000_000_000_000_000_000n);
+  });
+});
+
 // ── mapAction: Stake ────────────────────────────────────────────────
 
 describe("mapAction — Stake", () => {

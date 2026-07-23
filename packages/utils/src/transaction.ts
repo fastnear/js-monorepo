@@ -8,9 +8,30 @@ import {
   type NearPublicKey,
 } from "./crypto.js";
 import { base64ToBytes, fromBase58 } from "./misc.js";
+import { convertUnit } from "./units.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
 
 export type NearInteger = string | bigint | number;
+
+/**
+ * Coerce a NearInteger amount field (gas, deposit, stake, allowance) to bigint.
+ *
+ * String values may carry a human unit suffix — "100 Tgas", "0.01 NEAR" —
+ * which is exactly the shape the wallet path and the demo site's action
+ * config use. `convertUnit` scales those to a plain yocto/gas integer string
+ * (and is a no-op on unit-less digits), so local signing via `near.sendTx`
+ * accepts the same action shape the wallet path does instead of throwing a
+ * bare `BigInt` conversion error.
+ */
+function toNearAmount(
+  value: NearInteger | null | undefined,
+  fallback: NearInteger = 0,
+): bigint {
+  const resolved = value ?? fallback;
+  if (typeof resolved === "bigint") return resolved;
+  if (typeof resolved === "number") return BigInt(resolved);
+  return BigInt(convertUnit(resolved.trim()));
+}
 
 export interface NearCreateAccountAction {
   type: "CreateAccount";
@@ -212,15 +233,15 @@ export function mapAction(action: NearAction): object {
             action.argsBase64 !== null && action.argsBase64 !== undefined
               ? base64ToBytes(action.argsBase64)
               : new TextEncoder().encode(JSON.stringify(action.args ?? {})),
-          gas: BigInt(action.gas ?? "300000000000000"),
-          deposit: BigInt(action.deposit ?? "0"),
+          gas: toNearAmount(action.gas, "300000000000000"),
+          deposit: toNearAmount(action.deposit),
         },
       };
     }
     case "Transfer": {
       return {
         transfer: {
-          deposit: BigInt(action.deposit),
+          deposit: toNearAmount(action.deposit),
         },
       };
     }
@@ -228,7 +249,7 @@ export function mapAction(action: NearAction): object {
       assertNearValidatorPublicKey(action.publicKey);
       return {
         stake: {
-          stake: BigInt(action.stake),
+          stake: toNearAmount(action.stake),
           publicKey: mapPublicKey(action.publicKey),
         },
       };
@@ -262,7 +283,7 @@ export function mapAction(action: NearAction): object {
                 : {
                   functionCall: {
                     allowance: functionCall.allowance != null
-                      ? BigInt(functionCall.allowance)
+                      ? toNearAmount(functionCall.allowance)
                       : null,
                     receiverId: functionCall.receiverId,
                     methodNames: functionCall.methodNames ?? [],

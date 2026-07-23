@@ -18,8 +18,10 @@ const budgets = [
   { package: "api", baselineGzip: 49_371, maxGzipGrowth: 4 * 1024 - 1 },
   { package: "wallet", baselineGzip: 21_323 },
   // The timeout-aware Meteor bridge includes local Borsh/action binding and
-  // signature verification before accepting a wallet response.
-  { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 4 * 1024 - 1 },
+  // signature verification before accepting a wallet response; action mapping
+  // now also carries the shared NEAR unit coercion (convertUnit) so gas/deposit
+  // strings like "100 Tgas" map instead of throwing.
+  { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 5 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
   { package: "x402", raw: 256 * 1024, gzip: 64 * 1024 },
   // Typed fetch clients + NEP-413 payload assembly; no crypto in the

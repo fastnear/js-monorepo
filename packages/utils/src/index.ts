@@ -2,6 +2,7 @@ export * from "./crypto.js";
 export * from "./nep413.js";
 export * from "./transaction.js";
 export * from "./misc.js";
+export * from "./units.js";
 export * from "./storage.js";
 
 import { serialize, deserialize } from "@fastnear/borsh";
