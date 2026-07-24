@@ -1,14 +1,26 @@
 # FastNear JS monorepo
 
 Homepage: https://js.fastnear.com
+Full reference: https://js.fastnear.com/llms-full.txt
+Recipe catalog: https://js.fastnear.com/recipes.json
+Version: 2.1.1 (all @fastnear/* packages share one version)
 
 Primary packages:
 - @fastnear/api
 - @fastnear/wallet
 - @fastnear/utils
+- @fastnear/seed-phrase
 - @fastnear/ml-dsa-65
 - @fastnear/x402
 - @fastnear/intents
+
+Load in a browser:
+- <script src="https://js.fastnear.com/near.js"></script> defines the `near` global
+- <script src="https://js.fastnear.com/wallet.js"></script> defines the `nearWallet` global
+
+Load from npm:
+- npm install @fastnear/api @fastnear/wallet
+- import * as near from "@fastnear/api"; import * as nearWallet from "@fastnear/wallet";
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -134,7 +146,8 @@ Discovery order:
 - 1. Read llms.txt: Start with the concise repo and runtime map.
 - 2. Fetch recipes.json: Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.
 - 3. Run agents.js: Use the hosted terminal wrapper when you want the FastNear JS surface.
-- 4. Fall back to curl + jq: Use raw transport when survey scripting or HTTP-level inspection is more useful.
+- 4. Read llms-full.txt: Go here for the complete reference when the concise map is not enough.
+- 5. Fall back to curl + jq: Use raw transport when survey scripting or HTTP-level inspection is more useful.
 
 Families:
 - rpc: Canonical NEAR JSON-RPC defaults for direct contract views, account state, and transaction status checks. Best for Direct contract view calls with exact method names and args. / Canonical account state and access key reads. / Low-level RPC questions before you need indexed or aggregated surfaces..
@@ -143,6 +156,7 @@ Families:
 - transfers: Asset-movement-focused history for accounts when the question is specifically about transfers, not full execution. Best for Recent transfer feeds for one account. / Asset movement summaries across FT, NFT, and native transfers. / Survey scripting where transfer rows matter more than transaction internals..
 - neardata: Block and shard documents for recent chain-state inspection without reconstructing shard layouts yourself. Best for Recent block inspection and shard-aware exploration. / Questions about network recency or recent transaction volume. / Walking block-height ranges and chunk layouts..
 - fastdata.kv: Indexed key-value history for exact keys, predecessor scans, and account-scoped storage exploration. Best for Exact-key lookups when you already know the contract, predecessor, and key. / Storage history scans keyed by predecessor or current account. / Questions about SocialDB-style writes and indexed storage history..
+- wallet: Browser wallet session and signing surface from @fastnear/wallet: connect, send transactions, sign NEP-413 messages, and sign NEP-366 delegate actions. Best for Anything that needs a user to approve a signature in their own wallet. / Browser dApps where the key never leaves the wallet. / Sign-in plus proof-of-ownership in a single prompt via signMessageParams..
 
 Recipe index format: id: question (family, return type, auth style, default network)
 

@@ -209,7 +209,8 @@ Set `FASTNEAR_API_KEY` before running the authenticated snippets.
 1. Read llms.txt — Start with the concise repo and runtime map.
 2. Fetch recipes.json — Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.
 3. Run agents.js — Use the hosted terminal wrapper when you want the FastNear JS surface.
-4. Fall back to curl + jq — Use raw transport when survey scripting or HTTP-level inspection is more useful.
+4. Read llms-full.txt — Go here for the complete reference when the concise map is not enough.
+5. Fall back to curl + jq — Use raw transport when survey scripting or HTTP-level inspection is more useful.
 
 #### Capture and chain one result
 
@@ -363,6 +364,31 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - `near.fastdata.kv.historyByPredecessor`
 - `near.fastdata.kv.allByPredecessor`
 - `near.fastdata.kv.multi`
+
+#### wallet
+
+Browser wallet session and signing surface from @fastnear/wallet: connect, send transactions, sign NEP-413 messages, and sign NEP-366 delegate actions.
+
+- Auth style: `wallet-session`
+- Default base URLs: none — browser wallet session, not an HTTP service
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+- Best for:
+- Anything that needs a user to approve a signature in their own wallet.
+- Browser dApps where the key never leaves the wallet.
+- Sign-in plus proof-of-ownership in a single prompt via signMessageParams.
+- Entrypoints:
+- `near.recipes.connect`
+- `near.recipes.functionCall`
+- `near.recipes.transfer`
+- `near.recipes.signMessage`
+- `nearWallet.connect`
+- `nearWallet.disconnect`
+- `nearWallet.restore`
+- `nearWallet.sendTransaction`
+- `nearWallet.sendTransactions`
+- `nearWallet.signMessage`
+- `nearWallet.signDelegateActions`
+- `nearWallet.addFunctionCallKey`
 
 
 ### ML-DSA-65 account-key quickstarts

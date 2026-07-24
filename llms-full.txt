@@ -1,14 +1,24 @@
 # FastNear JS monorepo (full)
 
-Prefer `recipes/index.json` when you need structured task data.
+Prefer https://js.fastnear.com/recipes.json when you need structured task data.
+Concise map: https://js.fastnear.com/llms.txt
+Version: 2.1.1 — all `@fastnear/*` packages share one version.
+
+## Load it
+
+- Browser: `<script src="https://js.fastnear.com/near.js"></script>` defines the `near` global; `<script src="https://js.fastnear.com/wallet.js"></script>` defines `nearWallet`.
+- npm: `npm install @fastnear/api @fastnear/wallet`, then `import * as near from "@fastnear/api"`.
+- Terminal: `node -e "$(curl -fsSL https://js.fastnear.com/agents.js)"` — no install.
 
 ## Packages
 
 - `@fastnear/api`: low-level NEAR RPC and FastNear family APIs, plus `near.recipes` task helpers and `near.explain`
 - `@fastnear/wallet`: wallet connection and transaction/signing provider
 - `@fastnear/utils`: units, crypto, serialization, storage helpers
+- `@fastnear/seed-phrase`: BIP-39 seed phrase generation and recovery, SLIP-0010 ed25519 derivation on NEAR's `m/44'/397'/0'` path
 - `@fastnear/ml-dsa-65`: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
 - `@fastnear/x402`: official x402 v2 NEAR adapters for paid fetch, local-key clients, resource servers, and facilitators
+- `@fastnear/intents`: NEAR Intents: 1Click quotes, NEP-413 intent signing, and verifier deposits/withdrawals
 
 ## Unified config
 
@@ -236,6 +246,32 @@ Indexed key-value history for exact keys, predecessor scans, and account-scoped 
 - `near.fastdata.kv.multi`
 
 
+### wallet
+
+Browser wallet session and signing surface from @fastnear/wallet: connect, send transactions, sign NEP-413 messages, and sign NEP-366 delegate actions.
+
+- Auth style: `wallet-session`
+- Default base URLs: none — browser wallet session, not an HTTP service
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+- Best for:
+- Anything that needs a user to approve a signature in their own wallet.
+- Browser dApps where the key never leaves the wallet.
+- Sign-in plus proof-of-ownership in a single prompt via signMessageParams.
+- Entrypoints:
+- `near.recipes.connect`
+- `near.recipes.functionCall`
+- `near.recipes.transfer`
+- `near.recipes.signMessage`
+- `nearWallet.connect`
+- `nearWallet.disconnect`
+- `nearWallet.restore`
+- `nearWallet.sendTransaction`
+- `nearWallet.sendTransactions`
+- `nearWallet.signMessage`
+- `nearWallet.signDelegateActions`
+- `nearWallet.addFunctionCallKey`
+
+
 ## Result shapes
 
 - `near.query*` (`queryAccount`, `queryBlock`, `queryAccessKey`, `queryTx`) are JSON-RPC passthroughs and return the raw envelope `{ jsonrpc, result, id }` — read your data from the `.result` field.
@@ -286,7 +322,8 @@ Set `FASTNEAR_API_KEY` before running the authenticated snippets.
 1. Read llms.txt — Start with the concise repo and runtime map.
 2. Fetch recipes.json — Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.
 3. Run agents.js — Use the hosted terminal wrapper when you want the FastNear JS surface.
-4. Fall back to curl + jq — Use raw transport when survey scripting or HTTP-level inspection is more useful.
+4. Read llms-full.txt — Go here for the complete reference when the concise map is not enough.
+5. Fall back to curl + jq — Use raw transport when survey scripting or HTTP-level inspection is more useful.
 
 ### Capture and chain one result
 
@@ -1691,7 +1728,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const result = await near.recipes.connect({
@@ -1791,7 +1827,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const cu = near.utils.convertUnit;
@@ -1882,7 +1917,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const cu = near.utils.convertUnit;
@@ -1966,7 +2000,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const result = await near.recipes.signMessage({
@@ -2090,7 +2123,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const cu = near.utils.convertUnit;
@@ -2201,7 +2233,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 const result = await near.recipes.connect({
@@ -3140,7 +3171,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 // near.recipes.connect honors a per-call network override
@@ -3250,7 +3280,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });
 
 // near.recipes.functionCall accepts a per-call network override
@@ -3576,7 +3605,7 @@ Response notes:
 
 - near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.
 - Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).
-- After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account.
+- After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account (@fastnear/api 2.1.1+). A full-access key signs any action; a slot that also sets accessKeyContractId is treated as a function-call key and only signs zero-deposit calls to that contract.
 
 Follow-ups:
 
@@ -3611,7 +3640,9 @@ const result = await near.createFundedTestnetAccount({
   publicKey,
 });
 
-// Sign locally with the new key from here on.
+// Store the full-access key and near.sendTx signs locally from here on —
+// no wallet, no popup:
+//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
 near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
 near.print(result);
 EOF
@@ -3629,7 +3660,9 @@ const result = await near.createFundedTestnetAccount({
   publicKey,
 });
 
-// Sign locally with the new key from here on.
+// Store the full-access key and near.sendTx signs locally from here on —
+// no wallet, no popup:
+//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
 near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
 near.print(result);
 ```
@@ -3650,7 +3683,9 @@ const result = await near.createFundedTestnetAccount({
   publicKey,
 });
 
-// Sign locally with the new key from here on.
+// Store the full-access key and near.sendTx signs locally from here on —
+// no wallet, no popup:
+//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
 near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
 near.print(result);
 ```
@@ -3676,7 +3711,7 @@ Response notes:
 
 - @fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.
 - Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.
-- generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState to sign locally.
+- generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+), or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.
 
 Follow-ups:
 
@@ -3707,7 +3742,7 @@ const { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase(
 // Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
 const recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);
 
-// Sign locally with the recovered key.
+// Store the recovered full-access key; near.sendTx signs locally from here on.
 near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
 near.print({ seedPhrase, publicKey });
 ```

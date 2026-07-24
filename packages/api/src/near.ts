@@ -1378,12 +1378,25 @@ export const sendTx = async ({
     }
   }
 
-  // If no local private key, or the receiver doesn't match the access key contract,
-  // or the actions aren't signable with a limited access key, delegate to the wallet
-  if (
-    !explicitSigner &&
-    (!privKey || receiverId !== slot.accessKeyContractId || !canSignWithLAK(actions))
-  ) {
+  // Local signing needs a stored private key. If the slot also carries an
+  // `accessKeyContractId` the key is scoped to that contract, so it may only
+  // sign a single zero-deposit FunctionCall to it — the limited-access-key
+  // rules. An unscoped slot means a full-access key (a seed phrase,
+  // `privateKeyFromRandom()`, a funded testnet account), which can sign
+  // anything. Everything else goes to the wallet provider.
+  //
+  // Note `accessKeyContractId` is only ever *cleared* by this package; nothing
+  // sets it. Before, an unset value made `receiverId !== slot.accessKeyContractId`
+  // permanently true, so a stored private key could never sign anything and
+  // every sendTx fell through to the wallet with "Must sign in" — contradicting
+  // both the documented flow and the nonce-cache comment in updateAccountState.
+  const scopedContractId = slot.accessKeyContractId;
+  const canSignLocally =
+    !!privKey &&
+    (!scopedContractId ||
+      (receiverId === scopedContractId && canSignWithLAK(actions)));
+
+  if (!explicitSigner && !canSignLocally) {
     const jsonTx = { signerId, receiverId, actions };
     updateTxHistory({ status: "Pending", txId, tx: jsonTx, finalState: false });
 

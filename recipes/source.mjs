@@ -1,6 +1,8 @@
 export const FASTNEAR_CDN_BASE = "https://js.fastnear.com";
 export const FASTNEAR_AGENT_ENTRY = `${FASTNEAR_CDN_BASE}/agents.js`;
 export const FASTNEAR_RECIPE_CATALOG_ENTRY = `${FASTNEAR_CDN_BASE}/recipes.json`;
+export const FASTNEAR_LLMS_ENTRY = `${FASTNEAR_CDN_BASE}/llms.txt`;
+export const FASTNEAR_LLMS_FULL_ENTRY = `${FASTNEAR_CDN_BASE}/llms-full.txt`;
 export const FASTNEAR_DASHBOARD_URL = "https://dashboard.fastnear.com";
 
 const stringify = (value) => JSON.stringify(value, null, 2);
@@ -22,7 +24,6 @@ near.useWallet(nearWallet);
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
-  manifest: "./manifest.json",
 });`
     : `import * as near from "@fastnear/api";
 
@@ -590,7 +591,9 @@ const result = await near.createFundedTestnetAccount({
   publicKey,
 });
 
-// Sign locally with the new key from here on.
+// Store the full-access key and near.sendTx signs locally from here on —
+// no wallet, no popup:
+//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
 near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
 near.print(result);`,
 
@@ -601,7 +604,7 @@ const { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase(
 // Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
 const recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);
 
-// Sign locally with the recovered key.
+// Store the recovered full-access key; near.sendTx signs locally from here on.
 near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
 near.print({ seedPhrase, publicKey });`,
 
@@ -624,6 +627,39 @@ export const supportSurface = {
   hostedCatalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
   hostedCatalogLabel: "js.fastnear.com/recipes.json",
   hostedAgentEntry: FASTNEAR_AGENT_ENTRY,
+  hostedLlmsUrl: FASTNEAR_LLMS_ENTRY,
+  hostedLlmsFullUrl: FASTNEAR_LLMS_FULL_ENTRY,
+  // How to get `near` / `nearWallet` into scope. The snippets below assume one
+  // of these has already run; without it a browserGlobal snippet references a
+  // global that nothing defined.
+  loaders: {
+    browserGlobal: {
+      summary:
+        "Load the IIFE bundles with script tags. Each defines one locked global.",
+      scripts: [
+        { url: `${FASTNEAR_CDN_BASE}/near.js`, global: "near", package: "@fastnear/api" },
+        { url: `${FASTNEAR_CDN_BASE}/wallet.js`, global: "nearWallet", package: "@fastnear/wallet" },
+      ],
+      example: [
+        `<script src="${FASTNEAR_CDN_BASE}/near.js"></script>`,
+        `<script src="${FASTNEAR_CDN_BASE}/wallet.js"></script>`,
+      ].join("\n"),
+    },
+    esm: {
+      summary: "Install from npm and import the namespaces.",
+      example: [
+        "npm install @fastnear/api @fastnear/wallet",
+        "",
+        'import * as near from "@fastnear/api";',
+        'import * as nearWallet from "@fastnear/wallet";',
+      ].join("\n"),
+    },
+    terminal: {
+      summary:
+        "No install needed — the hosted wrapper pulls the API and evaluates the snippet on stdin.",
+      example: `node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})" <<'EOF'\n…\nEOF`,
+    },
+  },
   trialCreditsUrl: FASTNEAR_DASHBOARD_URL,
   trialCreditsLabel: "dashboard.fastnear.com",
   trialCreditsSummary: "Free trial credits are available at dashboard.fastnear.com.",
@@ -675,20 +711,29 @@ export const supportSurface = {
     {
       step: 1,
       label: "Read llms.txt",
+      url: FASTNEAR_LLMS_ENTRY,
       detail: "Start with the concise repo and runtime map.",
     },
     {
       step: 2,
       label: "Fetch recipes.json",
+      url: FASTNEAR_RECIPE_CATALOG_ENTRY,
       detail: "Use the hosted machine-readable recipe catalog with stable IDs, families, auth, returns, and snippets.",
     },
     {
       step: 3,
       label: "Run agents.js",
+      url: FASTNEAR_AGENT_ENTRY,
       detail: "Use the hosted terminal wrapper when you want the FastNear JS surface.",
     },
     {
       step: 4,
+      label: "Read llms-full.txt",
+      url: FASTNEAR_LLMS_FULL_ENTRY,
+      detail: "Go here for the complete reference when the concise map is not enough.",
+    },
+    {
+      step: 5,
       label: "Fall back to curl + jq",
       detail: "Use raw transport when survey scripting or HTTP-level inspection is more useful.",
     },
@@ -913,6 +958,37 @@ export const familyCatalog = [
       "near.fastdata.kv.historyByPredecessor",
       "near.fastdata.kv.allByPredecessor",
       "near.fastdata.kv.multi",
+    ],
+  },
+  {
+    // Wallet recipes declare `service: "wallet"`, so this entry has to exist for
+    // every recipe's service to resolve to a family. Unlike the others it is not
+    // an HTTP service: it is browser-only and has no base URLs, so `authStyle`
+    // is the wallet session itself and `defaultBaseUrls` is null.
+    id: "wallet",
+    summary:
+      "Browser wallet session and signing surface from @fastnear/wallet: connect, send transactions, sign NEP-413 messages, and sign NEP-366 delegate actions.",
+    authStyle: "wallet-session",
+    defaultBaseUrls: null,
+    bestFor: [
+      "Anything that needs a user to approve a signature in their own wallet.",
+      "Browser dApps where the key never leaves the wallet.",
+      "Sign-in plus proof-of-ownership in a single prompt via signMessageParams.",
+    ],
+    pagination: clonePagination(paginationNone),
+    entrypoints: [
+      "near.recipes.connect",
+      "near.recipes.functionCall",
+      "near.recipes.transfer",
+      "near.recipes.signMessage",
+      "nearWallet.connect",
+      "nearWallet.disconnect",
+      "nearWallet.restore",
+      "nearWallet.sendTransaction",
+      "nearWallet.sendTransactions",
+      "nearWallet.signMessage",
+      "nearWallet.signDelegateActions",
+      "nearWallet.addFunctionCallKey",
     ],
   },
 ];
@@ -2179,7 +2255,7 @@ export const recipeCatalog = [
     responseNotes: [
       "near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.",
       "Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).",
-      "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account.",
+      "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account (@fastnear/api 2.1.1+). A full-access key signs any action; a slot that also sets accessKeyContractId is treated as a function-call key and only signs zero-deposit calls to that contract.",
     ],
     chooseWhen: [
       "Choose this for the 'make me a testnet account' onboarding step in an agent or script.",
@@ -2227,7 +2303,7 @@ export const recipeCatalog = [
     responseNotes: [
       "@fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.",
       "Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.",
-      "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState to sign locally.",
+      "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+), or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.",
     ],
     chooseWhen: [
       "Choose this to onboard or recover an account key from a human-writable phrase.",
@@ -2858,12 +2934,29 @@ near.print(balances);`,
   ],
 };
 
+// The one list of published packages. `scripts/generate-agent-artifacts.mjs`
+// renders llms.txt and llms-full.txt from this rather than repeating it — the
+// three copies had already drifted apart in three different ways.
+export const publishedPackages = [
+  "@fastnear/api",
+  "@fastnear/wallet",
+  "@fastnear/utils",
+  "@fastnear/seed-phrase",
+  "@fastnear/ml-dsa-65",
+  "@fastnear/x402",
+  "@fastnear/intents",
+];
+
 export const generatedArtifact = {
+  // Schema version of this catalog, NOT the package version. `support.versions`
+  // carries the released @fastnear/* version; `version` is kept alongside
+  // `catalogVersion` so existing consumers keep working.
   version: 5,
+  catalogVersion: 5,
   homepage: FASTNEAR_CDN_BASE,
   source: "recipes/source.mjs",
   catalogUrl: FASTNEAR_RECIPE_CATALOG_ENTRY,
-  packages: ["@fastnear/api", "@fastnear/wallet", "@fastnear/utils", "@fastnear/ml-dsa-65", "@fastnear/x402", "@fastnear/intents"],
+  packages: publishedPackages,
   support: supportSurface,
   families: familyCatalog,
   runtimes: {
