@@ -3,6 +3,7 @@ import {
   lsGet,
   publicKeyFromPrivate,
 } from "@fastnear/utils";
+import { resolveBatchConfig } from "./batch.js";
 
 export type FastNearNetworkId = "mainnet" | "testnet";
 
@@ -238,15 +239,20 @@ export function resolveConfig(
   }
 
   // Deep-merge + normalize retry/batch (like `services`) so `getConfig().retry`
-  // is always a fully-populated object and partial updates don't clobber siblings.
+  // and `.batch` are always fully-populated objects and partial updates don't
+  // clobber siblings. `batch` used to be a bare merge, so `getConfig().batch`
+  // read back `{}` while the effective maxConcurrency was 30 — introspection
+  // said "unset" for a setting that was actually applied.
   next.retry = normalizeRetryConfig(
     mergeRetryConfig(mergeRetryConfig(networkDefaults.retry, baseConfig.retry), requested.retry)
   );
-  next.batch = {
-    ...(networkDefaults.batch || {}),
-    ...(baseConfig.batch || {}),
-    ...(requested.batch || {}),
-  };
+  next.batch = resolveBatchConfig({
+    batch: {
+      ...(networkDefaults.batch || {}),
+      ...(baseConfig.batch || {}),
+      ...(requested.batch || {}),
+    },
+  });
 
   return next;
 }

@@ -110,7 +110,7 @@ import {
 
 import type { ResolvedRetryConfig } from "./state.js";
 
-import { runWithRetry, outcomeError, RETRYABLE_HTTP_STATUSES, RETRYABLE_RPC_CODES } from "./resilience.js";
+import { runWithRetry, outcomeError, isRetryableStatus, RETRYABLE_RPC_CODES } from "./resilience.js";
 import { rpcSend, serviceSend, type RpcRoute } from "./transport.js";
 import { nextRpcId, resolveBatchConfig, mapWithConcurrency } from "./batch.js";
 import { FastNearRpcError, type RpcErrorKind } from "./errors.js";
@@ -173,7 +173,16 @@ function looksRetryable(message: string, code: string | number | null, kind: Exp
   if (kind === "transport_error") {
     return true;
   }
-  if (typeof code === "number" && ([...RETRYABLE_HTTP_STATUSES, ...RETRYABLE_RPC_CODES] as number[]).includes(code)) {
+  // Match what the transport ACTUALLY retries. For HTTP status, that is the
+  // broad `isRetryableStatus` (408/429 and any 5xx) — not the narrow display
+  // list, which omitted the Cloudflare edge codes 520/522/524 the transport
+  // does retry, so `explain.error().retryable` reported false for an error the
+  // client had just retried five times. JSON-RPC codes (negative) still come
+  // from RETRYABLE_RPC_CODES, since isRetryableStatus only speaks HTTP.
+  if (
+    typeof code === "number" &&
+    (isRetryableStatus(code) || (RETRYABLE_RPC_CODES as readonly number[]).includes(code))
+  ) {
     return true;
   }
   return /timeout|temporar|temporarily|rate limit|unavailable|network|gateway/i.test(message);
