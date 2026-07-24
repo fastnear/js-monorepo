@@ -61,13 +61,13 @@ describe("local delegate signing ↔ wallet-adapter validator", () => {
   it("rejects when the signature is over a different sender", () => {
     // Sign for alice, then re-wrap the bytes claiming carol — the recomputed
     // digest changes, so signature verification must fail.
-    const { encoded } = buildSignedDelegate({ senderId: "alice.testnet" });
+    const { delegate, encoded } = buildSignedDelegate({ senderId: "alice.testnet" });
     expect(() =>
       validateSignedDelegate(encoded, {
         senderId: "carol.testnet",
         receiverId: "bob.testnet",
         maxBlockHeight: "1300",
-        actions: [{ type: "Transfer", deposit: "1000000000000000000000000" }].map(mapAction),
+        actions: delegate.actions.map(mapAction),
       }),
     ).toThrow();
   });

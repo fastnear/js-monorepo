@@ -17,6 +17,11 @@ const packages = [
   { directory: "wallet", globalName: "nearWallet" },
   { directory: "ml-dsa-65", globalName: "NearMlDsa65" },
   {
+    directory: "seed-phrase",
+    globalName: "NearSeedPhrase",
+    probes: ["generateSeedPhrase", "parseSeedPhrase"],
+  },
+  {
     directory: "intents",
     globalName: "nearIntents",
     probes: [

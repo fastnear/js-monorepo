@@ -13,9 +13,10 @@ export interface SignedDelegateExpectation {
   senderId: string;
   receiverId: string;
   actions: unknown[];
-  // Compared as a decimal string, so either form is accepted. Borsh decode
-  // now returns wide integers as strings by default.
-  maxBlockHeight: string | bigint;
+  // Compared as a decimal string, so any form is accepted. Borsh decode now
+  // returns wide integers as strings by default, while an RPC block header
+  // gives `height` as a number — both are valid inputs here.
+  maxBlockHeight: string | number | bigint;
 }
 
 function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {

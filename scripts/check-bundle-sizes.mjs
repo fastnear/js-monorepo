@@ -28,6 +28,10 @@ const budgets = [
   // strings like "100 Tgas" map instead of throwing.
   { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 5 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
+  // Carries the full 2048-word bip39 English wordlist plus ed25519 + SLIP-0010
+  // derivation, so it is inherently chunky; caps sized with headroom over the
+  // 2.1.0 baseline (raw 121 KiB / gzip 36 KiB).
+  { package: "seed-phrase", raw: 160 * 1024, gzip: 48 * 1024 },
   { package: "x402", raw: 256 * 1024, gzip: 64 * 1024 },
   // Typed fetch clients + NEP-413 payload assembly; no crypto in the
   // browser entry (local-key signing lives in the /node subpath).

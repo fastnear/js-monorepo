@@ -5,6 +5,10 @@ export default createFastNearTsupConfig({
   manifest: pkg,
   bannerName: "Seed Phrase",
   globalName: "NearSeedPhrase",
+  // @scure/bip39 reaches @noble/hashes' randomness helper, which resolves to
+  // `require("node:crypto")` under the default (node) platform — that throws
+  // on load in a browser. The browser condition uses globalThis.crypto.
+  iifePlatform: "browser",
   // @scure/bip39's wordlist type graph stalls the DTS bundler; this package
   // exposes only its own types, so external type resolution isn't needed.
   dtsResolve: false,
