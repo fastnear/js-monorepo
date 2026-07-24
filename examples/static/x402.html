@@ -18,9 +18,11 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Pin exact released versions for production use. -->
-  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@1.5.0/dist/umd/browser.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@1.5.0/dist/umd/browser.global.js"></script>
+  <!-- Track the current major (2.x). The @1.5.0 pins here predated the 2.0.0
+       release and were stale; every @fastnear/* package shares one version.
+       See examples/README.md for the CDN pinning + SRI policy. -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@2/dist/umd/browser.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@2/dist/umd/browser.global.js"></script>
 </head>
 <body>
 <div class="container">
