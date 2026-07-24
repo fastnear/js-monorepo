@@ -3,7 +3,7 @@
 Homepage: https://js.fastnear.com
 Full reference: https://js.fastnear.com/llms-full.txt
 Recipe catalog: https://js.fastnear.com/recipes.json
-Version: 2.2.0 (all @fastnear/* packages share one version)
+Version: 2.3.0 (all @fastnear/* packages share one version)
 
 Primary packages:
 - @fastnear/api

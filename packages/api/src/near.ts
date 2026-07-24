@@ -15,10 +15,12 @@ import {
   serializeSignedTransaction,
   serializeSignedDelegate,
   delegateSigningHash,
+  parseSignedDelegate,
   txToJson,
   bytesToBase64,
   toHex,
   PlainTransaction,
+  type SignedDelegateInput,
 } from "@fastnear/utils";
 
 import type {
@@ -1664,13 +1666,19 @@ export const signDelegate = async ({
 export const relayDelegate = async ({
   delegateAction,
   signature,
+  signedDelegate,
   relayerSigner,
   relayerId,
   waitUntil,
   network,
 }: {
-  delegateAction: NearDelegateAction;
-  signature: string | Uint8Array;
+  // Either the structured pair (from near.signDelegate) …
+  delegateAction?: NearDelegateAction;
+  signature?: string | Uint8Array;
+  // … or a wallet-signed delegate in any borsh envelope
+  // (signDelegateActions' { borshSerializedBase64 }, a bare base64 string, the
+  // { signedDelegateActions: [...] } response, or signDelegate's { borshBase64 }).
+  signedDelegate?: SignedDelegateInput;
   relayerSigner?: TransactionSigner;
   relayerId?: string;
   waitUntil?: string;
@@ -1679,10 +1687,23 @@ export const relayDelegate = async ({
   if (relayerSigner && !relayerId) {
     throw new Error("relayerSigner and relayerId must be paired");
   }
-  const wrapped = [actions.signedDelegate({ delegateAction, signature })];
+  let da = delegateAction;
+  let sig = signature;
+  if (signedDelegate !== undefined) {
+    const parsed = parseSignedDelegate(signedDelegate);
+    da = parsed.delegateAction;
+    sig = parsed.signature;
+  }
+  if (!da || sig === undefined) {
+    throw new Error(
+      "relayDelegate needs { delegateAction, signature } or a wallet-signed { signedDelegate }",
+    );
+  }
+  const resolved = da;
+  const wrapped = [actions.signedDelegate({ delegateAction: resolved, signature: sig })];
   if (relayerSigner) {
     return sendTx({
-      receiverId: delegateAction.senderId,
+      receiverId: resolved.senderId,
       actions: wrapped,
       waitUntil,
       network,
@@ -1691,7 +1712,7 @@ export const relayDelegate = async ({
     });
   }
   return sendTx({
-    receiverId: delegateAction.senderId,
+    receiverId: resolved.senderId,
     actions: wrapped,
     waitUntil,
     network,

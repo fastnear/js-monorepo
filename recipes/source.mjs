@@ -1674,6 +1674,7 @@ export const recipeCatalog = [
     responseNotes: [
       "The canonical result is { borshSerializedBase64: string }; legacy structured delegates and bare base64 strings remain in the public union for compatibility.",
       "Returns signed delegate actions that a relayer can submit on-chain, enabling gasless transactions for the user.",
+      "Relay it directly: near.relayDelegate({ signedDelegate: result.signedDelegateActions[0] }). Under the hood near.utils.parseSignedDelegate turns the wallet's borshSerializedBase64 into the { delegateAction, signature } shape relayDelegate needs — decoding the borsh yourself via near.exp.borsh.deserialize(near.exp.borshSchema.SignedDelegate, bytes) yields chain-schema action shapes the action builders reject with 'Not implemented action: undefined', so prefer parseSignedDelegate.",
       "The wallet must support the signDelegateActions feature (check WalletFeatures.signDelegateActions).",
       "Requests that include blockHeightTtl additionally require WalletFeatures.signDelegateActionsWithTtl.",
     ],
@@ -1682,7 +1683,8 @@ export const recipeCatalog = [
       "Prefer sign-message when you only need an off-chain signature, or function-call when the user can pay gas directly.",
     ],
     followUps: [
-      "Submit the signed delegate actions through a relayer service to execute on-chain without the signer paying gas.",
+      "Relay the result with near.relayDelegate({ signedDelegate: result.signedDelegateActions[0], relayerSigner, relayerId }) to submit it on-chain without the signer paying gas.",
+      "To inspect or transform the delegate first, near.utils.parseSignedDelegate(result.signedDelegateActions[0]) returns the { delegateAction, signature } pair (plus borshBase64).",
       "If the flow does not need a relayer, use near.recipes.functionCall for a standard wallet-signed transaction instead.",
     ],
     pagination: paginationNone,
@@ -2235,6 +2237,7 @@ export const recipeCatalog = [
       "near.signDelegate signs locally — it never opens a wallet. The sender's nonce comes from its access key; maxBlockHeight defaults to the final block height plus blockHeightTtl (600).",
       "nonce and maxBlockHeight are returned as decimal strings; borshBase64 is the NEP-366 SignedDelegate a relayer transports.",
       "Hand the result to near.relayDelegate (or any relayer) to broadcast — the relayer's full-access key pays the gas, not the sender.",
+      "A WALLET-signed delegate (nearWallet.signDelegateActions → borshSerializedBase64) relays the same way: pass it as near.relayDelegate({ signedDelegate }), or normalize it first with near.utils.parseSignedDelegate. Both signers converge on the same { delegateAction, signature } shape.",
     ],
     chooseWhen: [
       "Choose this to build gasless / meta-transactions from a server or agent that holds a key but shouldn't pay gas.",
