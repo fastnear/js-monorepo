@@ -591,10 +591,11 @@ const result = await near.createFundedTestnetAccount({
   publicKey,
 });
 
-// Store the full-access key and near.sendTx signs locally from here on —
-// no wallet, no popup:
-//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
-near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
+// Account state is keyed per network and the default is mainnet, so pass
+// "testnet" explicitly — otherwise the testnet key lands in the mainnet
+// slot. Then near.sendTx signs locally from here on, no wallet, no popup:
+//   await near.sendTx({ network: "testnet", receiverId, actions: [near.actions.transfer(cu("0.1 NEAR"))] });
+near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey }, "testnet");
 near.print(result);`,
 
   accountFromSeedPhrase: `// Load @fastnear/seed-phrase (the NearSeedPhrase global) next to near.js.
@@ -2256,6 +2257,7 @@ export const recipeCatalog = [
       "near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.",
       "Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).",
       "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account (@fastnear/api 2.1.1+). A full-access key signs any action; a slot that also sets accessKeyContractId is treated as a function-call key and only signs zero-deposit calls to that contract.",
+      "Account state is keyed per network and the default active network is mainnet, so pass \"testnet\" as the second argument to updateAccountState and network: \"testnet\" to sendTx — otherwise the testnet key is written to the mainnet slot and the send signs against mainnet RPC for an account that does not exist there.",
     ],
     chooseWhen: [
       "Choose this for the 'make me a testnet account' onboarding step in an agent or script.",
