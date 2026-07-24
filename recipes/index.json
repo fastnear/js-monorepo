@@ -125,8 +125,8 @@
       "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_SUMMARY=\"$(node -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { block_hash, storage_usage } = account;\n\nnear.print({ block_hash, storage_usage });\nEOF\n)\"\nBLOCK_HASH=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.block_hash')\"\nSTORAGE_USAGE=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.storage_usage')\"\n\nprintf 'block_hash=%s\\nstorage_usage=%s\\n' \"$BLOCK_HASH\" \"$STORAGE_USAGE\""
     },
     "versions": {
-      "current": "2.1.1",
-      "policy": "All @fastnear/* packages share one version. The hosted /*.js aliases and bare unpkg URLs resolve to the latest release; pin an exact version in production (for example https://unpkg.com/@fastnear/api@2.1.1/dist/umd/browser.global.js)."
+      "current": "2.1.2",
+      "policy": "All @fastnear/* packages share one version. The hosted /*.js aliases and bare unpkg URLs resolve to the latest release; pin an exact version in production (for example https://unpkg.com/@fastnear/api@2.1.2/dist/umd/browser.global.js)."
     }
   },
   "families": [
@@ -2389,7 +2389,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": false,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Store the full-access key and near.sendTx signs locally from here on —\n// no wallet, no popup:\n//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);\nEOF"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);\nEOF"
         },
         {
           "id": "browser-global",
@@ -2397,7 +2397,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": false,
-          "code": "// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Store the full-access key and near.sendTx signs locally from here on —\n// no wallet, no popup:\n//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);"
+          "code": "// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);"
         },
         {
           "id": "esm",
@@ -2405,7 +2405,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": false,
-          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Store the full-access key and near.sendTx signs locally from here on —\n// no wallet, no popup:\n//   await near.sendTx({ receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey });\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);"
         }
       ],
       "service": "rpc",
@@ -2416,7 +2416,8 @@
       "responseNotes": [
         "near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.",
         "Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).",
-        "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account (@fastnear/api 2.1.1+). A full-access key signs any action; a slot that also sets accessKeyContractId is treated as a function-call key and only signs zero-deposit calls to that contract."
+        "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account (@fastnear/api 2.1.1+). A full-access key signs any action; a slot that also sets accessKeyContractId is treated as a function-call key and only signs zero-deposit calls to that contract.",
+        "Account state is keyed per network and the default active network is mainnet, so pass \"testnet\" as the second argument to updateAccountState and network: \"testnet\" to sendTx — otherwise the testnet key is written to the mainnet slot and the send signs against mainnet RPC for an account that does not exist there."
       ],
       "chooseWhen": [
         "Choose this for the 'make me a testnet account' onboarding step in an agent or script.",
