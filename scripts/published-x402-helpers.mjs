@@ -306,7 +306,20 @@ async function fetchBytes(fetchImpl, url, label) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-export async function verifyPublishedX402(versionInput, fetchImpl = globalThis.fetch) {
+/**
+ * Verify a published @fastnear/x402 release end to end.
+ *
+ * `verifyNodeImports` is injectable because the default implementation shells
+ * out to a real `npm install` — fine for `yarn smoke:x402:published`, which
+ * runs against an actual publish, but far too slow for a unit test that has
+ * already stubbed `fetchImpl`. Unit tests pass a stub so the whole path stays
+ * hermetic; anything that omits it gets the real, network-bound behaviour.
+ */
+export async function verifyPublishedX402(
+  versionInput,
+  fetchImpl = globalThis.fetch,
+  { verifyNodeImports = verifyPublishedNodeImports } = {},
+) {
   const version = exactPublishedVersion(versionInput);
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required");
@@ -351,7 +364,7 @@ export async function verifyPublishedX402(versionInput, fetchImpl = globalThis.f
     throw new Error("jsDelivr IIFE bytes differ from the immutable npm tarball");
   }
   inspectPublishedIife(cdnIife.toString("utf8"));
-  verifyPublishedNodeImports(tarball, version);
+  verifyNodeImports(tarball, version);
 
   return {
     version,
