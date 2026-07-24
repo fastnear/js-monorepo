@@ -12,6 +12,7 @@ No build tools — just `<script>` tags loading IIFE bundles. All JS is inline.
 | `view-only.html` | mainnet | No | `near.view()` — fetch wNEAR token metadata |
 | `greeter.html` | testnet | Yes | Read/write greeting, NEP-413 message signing, event log |
 | `berryclub.html` | mainnet | Yes | Session keys, pixel board, buy tokens, balances |
+| `x402.html` | testnet | Yes | x402 pay-per-request over NEAR (`@fastnear/x402`) |
 
 ### Run
 
@@ -20,6 +21,25 @@ cd examples/static
 python3 -m http.server
 # open http://localhost:8000
 ```
+
+### Loading `@fastnear/*` from a CDN — pinning and SRI
+
+- **Do not put Subresource Integrity (`integrity` + `crossorigin`) on the
+  `@fastnear/*` script tags.** An SRI hash freezes exact bytes, so it breaks
+  every consumer on the next publish. Most examples float a major range
+  (`@1`) so a publish propagates without editing HTML; `x402.html` is the
+  exception and pins an exact version, because the testnet wallet-smoke
+  harness rewrites its two exact tags to local bundles — but neither style
+  takes SRI. Every `@fastnear/*` package shares one version, so keep the tags
+  in a page consistent with each other.
+- **Do put SRI on genuinely third-party, version-pinned CDN scripts** you add
+  (a specific charting lib, say): `integrity="sha384-…"` plus
+  `crossorigin="anonymous"`. Fonts are the exception — Google Fonts serves
+  user-agent-dependent CSS, which SRI cannot cover.
+
+SRI is not the lever for the supply-chain risk people usually mean here; that
+is publish-token hygiene, 2FA, and provenance on the npm side. Track that
+separately if we pursue it.
 
 ## Next.js App Router (`examples/nextjs/`)
 
