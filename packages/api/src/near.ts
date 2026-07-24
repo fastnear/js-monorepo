@@ -13,14 +13,18 @@ import {
   signerFromPrivateKey,
   serializeTransaction,
   serializeSignedTransaction,
+  serializeSignedDelegate,
+  delegateSigningHash,
   txToJson,
   bytesToBase64,
+  toHex,
   PlainTransaction,
 } from "@fastnear/utils";
 
 import type {
   NEP413Message,
   NearAction,
+  NearDelegateAction,
   NearPublicKey,
   TransactionSigner,
 } from "@fastnear/utils";
@@ -618,11 +622,13 @@ export const requestSignIn = async ({
   excludedWallets,
   features,
   network,
+  signMessageParams,
 }: {
   contractId?: string;
   excludedWallets?: string[];
   features?: Record<string, boolean>;
   network?: FastNearNetworkId;
+  signMessageParams?: { message: string; recipient: string; nonce: Uint8Array };
 } = {}) => {
   const provider = getWalletProvider();
   if (!provider) {
@@ -645,6 +651,7 @@ export const requestSignIn = async ({
     network: targetNetwork,
     excludedWallets,
     features,
+    signMessageParams,
   });
 
   if (!result) {
@@ -819,6 +826,58 @@ export const queryProtocolVersion = async ({
 
 export const queryTx = async ({ txHash, accountId, useArchival, network }: { txHash: string; accountId: string; useArchival?: boolean; network?: FastNearNetworkId }) => {
   return sendRpc("tx", [txHash, accountId], { useArchival, network });
+};
+
+/** Current gas price (yoctoNEAR/gas). Omit `blockId` for the latest block. */
+export const gasPrice = async ({ blockId, network }: { blockId?: string | number; network?: FastNearNetworkId } = {}) => {
+  return sendRpc("gas_price", [blockId ?? null], { network });
+};
+
+/** Full node status envelope (chain id, sync info, protocol version, …). */
+export const status = async ({ network }: { network?: FastNearNetworkId } = {}) => {
+  return sendRpc("status", [], { network });
+};
+
+/** Validator set for an epoch. Omit `blockId` for the current epoch. */
+export const validators = async ({ blockId, network }: { blockId?: string | number; network?: FastNearNetworkId } = {}) => {
+  return sendRpc("validators", [blockId ?? null], { network });
+};
+
+/**
+ * The implicit account id (64-char lowercase hex) for an ed25519 public key —
+ * the account that key controls with no on-chain AddKey. Only ed25519 keys map
+ * to implicit accounts.
+ */
+export const implicitAccountId = (publicKey: string): string => {
+  const { keyType, data } = decodeNearPublicKey(publicKey);
+  if (keyType !== "ed25519") {
+    throw new Error("Only ed25519 public keys map to implicit accounts");
+  }
+  return toHex(data);
+};
+
+/**
+ * Create and fund a NEAR **testnet** account through the testnet helper faucet.
+ * Testnet only — there is no mainnet faucet. POSTs `{ newAccountId, newKey }`
+ * to the helper create endpoint and returns its JSON result.
+ */
+export const createFundedTestnetAccount = async ({
+  newAccountId,
+  publicKey,
+}: {
+  newAccountId: string;
+  publicKey: string;
+}) => {
+  const response = await fetch("https://helper.testnet.near.org/account", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newAccountId, newKey: publicKey }),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Testnet faucet request failed (${response.status}): ${detail}`);
+  }
+  return response.json();
 };
 
 function shouldPrintInteractiveSeparator(): boolean {
@@ -1440,6 +1499,149 @@ export const sendTx = async ({
   );
 };
 
+export interface SignDelegateParams {
+  receiverId: string;
+  actions: NearAction[];
+  signerId?: string;
+  signer?: TransactionSigner;
+  blockHeightTtl?: number;
+  maxBlockHeight?: string | number | bigint;
+  network?: FastNearNetworkId;
+}
+
+export interface SignedDelegateResult {
+  delegateAction: {
+    senderId: string;
+    receiverId: string;
+    actions: NearAction[];
+    nonce: string;
+    maxBlockHeight: string;
+    publicKey: NearPublicKey;
+  };
+  /** Base58 ed25519/secp256k1 signature over the NEP-461 delegate hash. */
+  signature: string;
+  signatureBytes: Uint8Array;
+  /** Borsh SignedDelegate, base64 — the shape a relayer or wallet transports. */
+  borshBase64: string;
+}
+
+/**
+ * Sign a NEP-366 delegate action locally (no wallet) so a relayer can submit it
+ * and pay the gas — the gasless / meta-transaction path for servers and agents.
+ * Nonce comes from the sender's access key; `maxBlockHeight` defaults to the
+ * final block height plus `blockHeightTtl`. Hand the result to `near.relayDelegate`
+ * (or any relayer) to broadcast. OUT values are decimal strings per convention.
+ */
+export const signDelegate = async ({
+  receiverId,
+  actions: delegatedActions,
+  signerId: suppliedSignerId,
+  signer: suppliedSigner,
+  blockHeightTtl = 600,
+  maxBlockHeight: suppliedMaxBlockHeight,
+  network,
+}: SignDelegateParams): Promise<SignedDelegateResult> => {
+  const explicitSigner = suppliedSigner !== undefined;
+  if (explicitSigner !== (suppliedSignerId !== undefined)) {
+    throw new Error("signer and signerId must be paired");
+  }
+  const targetNetwork = network ?? getConfig().networkId;
+  const slot = getAccountState(targetNetwork);
+  const signerId = suppliedSignerId ?? slot.accountId;
+  if (!signerId) throw new Error("Must sign in");
+  const localSigner = suppliedSigner ?? signerFromPrivateKey(slot.privateKey as string);
+  const pubKey = localSigner.publicKey;
+
+  // Reserve the sender's nonce for this key, exactly as sendTx does, so a
+  // delegate and a normal tx from the same key can't collide on N+1.
+  const keyFingerprint = toBase58(sha256(new TextEncoder().encode(pubKey)));
+  const nonceScope = `${targetNetwork}.${signerId}.${keyFingerprint}`;
+  return reserveNonce(
+    nonceScope,
+    async () => {
+      const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
+      if (accessKey.result.error) {
+        throw new Error(`Access key error for ${signerId}: ${accessKey.result.error}`);
+      }
+      return accessKey.result.nonce;
+    },
+    async (nonce): Promise<SignedDelegateResult> => {
+      let maxBlockHeight: bigint;
+      if (suppliedMaxBlockHeight !== undefined) {
+        maxBlockHeight = BigInt(suppliedMaxBlockHeight);
+      } else {
+        const latestBlock = await queryBlock({ blockId: "final", network: targetNetwork });
+        maxBlockHeight = BigInt(latestBlock.result.header.height) + BigInt(blockHeightTtl);
+      }
+      const delegateAction: NearDelegateAction = {
+        senderId: signerId,
+        receiverId,
+        actions: delegatedActions as NearDelegateAction["actions"],
+        nonce,
+        maxBlockHeight,
+        publicKey: pubKey as NearPublicKey,
+      };
+      const signatureBytes = await localSigner.signHash(delegateSigningHash(delegateAction));
+      const borshBase64 = bytesToBase64(serializeSignedDelegate(delegateAction, signatureBytes));
+      return {
+        delegateAction: {
+          senderId: signerId,
+          receiverId,
+          actions: delegatedActions,
+          nonce: nonce.toString(),
+          maxBlockHeight: maxBlockHeight.toString(),
+          publicKey: pubKey as NearPublicKey,
+        },
+        signature: toBase58(signatureBytes),
+        signatureBytes,
+        borshBase64,
+      };
+    },
+  );
+};
+
+/**
+ * Submit a signed delegate as a relayer: wrap it in an ordinary transaction sent
+ * to the delegate's sender. Pass a full-access `relayerSigner`/`relayerId` to pay
+ * the gas from a different account; otherwise the active session relays.
+ */
+export const relayDelegate = async ({
+  delegateAction,
+  signature,
+  relayerSigner,
+  relayerId,
+  waitUntil,
+  network,
+}: {
+  delegateAction: NearDelegateAction;
+  signature: string | Uint8Array;
+  relayerSigner?: TransactionSigner;
+  relayerId?: string;
+  waitUntil?: string;
+  network?: FastNearNetworkId;
+}) => {
+  if (relayerSigner && !relayerId) {
+    throw new Error("relayerSigner and relayerId must be paired");
+  }
+  const wrapped = [actions.signedDelegate({ delegateAction, signature })];
+  if (relayerSigner) {
+    return sendTx({
+      receiverId: delegateAction.senderId,
+      actions: wrapped,
+      waitUntil,
+      network,
+      signer: relayerSigner,
+      signerId: relayerId as string,
+    });
+  }
+  return sendTx({
+    receiverId: delegateAction.senderId,
+    actions: wrapped,
+    waitUntil,
+    network,
+  });
+};
+
 /**
  * Signs a NEP-413 message using the connected wallet. Pass an explicit
  * `{ network }` to route the signature through that network's wallet
@@ -1595,6 +1797,20 @@ export const actions = {
   deployContract: ({codeBase64}: { codeBase64: string }) => ({
     type: "DeployContract" as const,
     codeBase64,
+  }),
+
+  // Wrap a NEP-366 SignedDelegate (from `near.signDelegate` or a wallet) so a
+  // relayer can submit it inside an ordinary transaction (see `near.relayDelegate`).
+  signedDelegate: ({
+    delegateAction,
+    signature,
+  }: {
+    delegateAction: NearDelegateAction;
+    signature: string | Uint8Array;
+  }) => ({
+    type: "SignedDelegate" as const,
+    delegateAction,
+    signature,
   }),
 };
 
@@ -1769,6 +1985,11 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     title: "How do I sign delegate actions for gasless transactions?",
   },
   {
+    id: "connect-and-sign-message",
+    api: "near.recipes.connect",
+    title: "How do I connect a wallet and sign a message in one step?",
+  },
+  {
     id: "explain-transaction",
     api: "near.explain.tx",
     title: "How do I build and preview a transaction before signing?",
@@ -1812,6 +2033,31 @@ const recipeDiscoveryEntries: FastNearRecipeDiscoveryEntry[] = [
     id: "function-call-testnet",
     api: "near.recipes.functionCall",
     title: "How do I send a function call on testnet without losing my mainnet session?",
+  },
+  {
+    id: "gas-price",
+    api: "near.gasPrice",
+    title: "What is the current gas price?",
+  },
+  {
+    id: "format-near-amount",
+    api: "near.utils.formatNearAmount",
+    title: "How do I show a yoctoNEAR balance as human-readable NEAR?",
+  },
+  {
+    id: "sign-delegate-local",
+    api: "near.signDelegate",
+    title: "How do I sign a gasless delegate transaction without a wallet?",
+  },
+  {
+    id: "create-testnet-account",
+    api: "near.createFundedTestnetAccount",
+    title: "How do I create and fund a new testnet account?",
+  },
+  {
+    id: "account-from-seed-phrase",
+    api: "generateSeedPhrase",
+    title: "How do I create or recover a key from a seed phrase?",
   },
 ];
 

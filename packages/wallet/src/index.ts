@@ -31,4 +31,5 @@ export type {
   SignDelegateActionsParams,
   SignDelegateActionResult,
   SignDelegateActionsResponse,
+  SignedMessage,
 } from "./connector.js";

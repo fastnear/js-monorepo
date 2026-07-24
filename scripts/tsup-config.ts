@@ -14,6 +14,11 @@ export interface FastNearTsupOptions {
   moduleEntries?: Record<string, string>;
   sourceEntries?: string[];
   iifePlatform?: Options["platform"];
+  // Bundle external dependency types into the emitted .d.ts. Defaults to true.
+  // Set false for packages whose public API exposes no third-party types but
+  // whose dependency type graph (e.g. the @scure/bip39 wordlist) stalls the
+  // DTS bundler.
+  dtsResolve?: boolean;
 }
 
 export function lockedGlobalFooter(globalName: string): string {
@@ -47,6 +52,7 @@ export function createFastNearTsupConfig({
   moduleEntries = { index: "src/index.ts" },
   sourceEntries = ["src/**/*.ts", "!src/**/*.test.ts"],
   iifePlatform,
+  dtsResolve = true,
 }: FastNearTsupOptions) {
   return defineConfig([
     {
@@ -58,7 +64,7 @@ export function createFastNearTsupConfig({
       splitting: false,
       clean: true,
       keepNames: true,
-      dts: { resolve: true, entry: moduleEntries },
+      dts: { resolve: dtsResolve, entry: moduleEntries },
       sourcemap: true,
       minify: false,
       banner: { js: banner(manifest, bannerName, "CJS") },
@@ -72,7 +78,7 @@ export function createFastNearTsupConfig({
       clean: true,
       keepNames: true,
       shims: true,
-      dts: { resolve: true, entry: moduleEntries },
+      dts: { resolve: dtsResolve, entry: moduleEntries },
       sourcemap: true,
       minify: false,
       banner: { js: banner(manifest, bannerName, "ESM") },

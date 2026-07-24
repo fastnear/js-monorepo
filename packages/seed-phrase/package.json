@@ -1,8 +1,7 @@
 {
-  "name": "@fastnear/borsh",
+  "name": "@fastnear/seed-phrase",
   "version": "2.1.0",
-  "description": "Lean borsh serializer/deserializer for NEAR Protocol",
-  "license": "MIT",
+  "description": "BIP-39 seed phrase generation and NEAR key derivation (SLIP-0010 ed25519)",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
   "main": "./dist/cjs/index.cjs",
@@ -23,8 +22,11 @@
     "url": "git+https://github.com/fastnear/js-monorepo.git"
   },
   "keywords": [
-    "binary-serialization",
-    "borsh",
+    "seed-phrase",
+    "mnemonic",
+    "bip39",
+    "slip10",
+    "ed25519",
     "near-protocol",
     "blockchain",
     "fastnear",
@@ -38,6 +40,12 @@
       "require": "./dist/cjs/index.cjs",
       "import": "./dist/esm/index.js"
     }
+  },
+  "dependencies": {
+    "@fastnear/utils": "workspace:*",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "@scure/bip39": "1.6.0"
   },
   "devDependencies": {
     "@types/node": "*",

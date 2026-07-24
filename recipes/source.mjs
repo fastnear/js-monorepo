@@ -396,6 +396,17 @@ near.print(result);`,
 
 near.print(result);`,
 
+  connectAndSignMessage: `const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);`,
+
   signDelegateActions: `const cu = near.utils.convertUnit;
 
 const result = await nearWallet.signDelegateActions({
@@ -540,6 +551,71 @@ const result = await near.recipes.functionCall({
 });
 
 near.print(result);`,
+
+  gasPrice: `// Current gas price straight from the RPC.
+// Retries and 429-handling are on by default (see near.config({ retry })).
+near.print(await near.gasPrice());`,
+
+  formatNearAmount: `// Reverse of near.utils.convertUnit: render a yoctoNEAR integer as human NEAR.
+// Wide integers are decimal strings in and out — you never touch BigInt.
+const yocto = "1500000000000000000000000";
+near.print(near.utils.formatNearAmount(yocto)); // "1.5"`,
+
+  signDelegateLocal: `// Sign a NEP-366 delegate action with a local key — no wallet. A relayer
+// broadcasts it and pays the gas. Requires a signed-in local key
+// (near.config + near.state) or an explicit { signer, signerId }.
+const signed = await near.signDelegate({
+  receiverId: "guest-book.near",
+  actions: [
+    near.actions.functionCall({
+      methodName: "add_message",
+      args: { text: "gasless hello" },
+      gas: "30 Tgas",
+      deposit: "0",
+    }),
+  ],
+  blockHeightTtl: 600,
+});
+
+// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what
+// a relayer transports. Hand it to near.relayDelegate (or any relayer).
+near.print(signed.delegateAction);`,
+
+  createTestnetAccount: `// Make a key, then create + fund a fresh testnet account via the faucet.
+const privateKey = near.utils.privateKeyFromRandom();
+const publicKey = near.utils.publicKeyFromPrivate(privateKey);
+
+const result = await near.createFundedTestnetAccount({
+  newAccountId: "my-agent.testnet",
+  publicKey,
+});
+
+// Sign locally with the new key from here on.
+near.state.updateAccountState({ accountId: "my-agent.testnet", privateKey });
+near.print(result);`,
+
+  accountFromSeedPhrase: `// Load @fastnear/seed-phrase (the NearSeedPhrase global) next to near.js.
+// Create a fresh key pair and its 12-word recovery phrase.
+const { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase();
+
+// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
+const recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);
+
+// Sign locally with the recovered key.
+near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
+near.print({ seedPhrase, publicKey });`,
+
+  accountFromSeedPhraseEsm: `import { generateSeedPhrase, parseSeedPhrase } from "@fastnear/seed-phrase";
+import * as near from "@fastnear/api";
+
+// Create a fresh key pair and its 12-word recovery phrase.
+const { seedPhrase, publicKey, privateKey } = generateSeedPhrase();
+
+// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.
+const recovered = parseSeedPhrase(seedPhrase);
+
+near.state.updateAccountState({ accountId: "you.near", privateKey: recovered.privateKey });
+near.print({ seedPhrase, publicKey });`,
 };
 
 export const supportSurface = {
@@ -557,6 +633,18 @@ export const supportSurface = {
       topic: "Constructing a transaction",
       summary:
         "Build a NEAR transaction end to end with zero BigInt snags: actions, unit gas/deposit strings, local-key and wallet signing, and inspecting via near.utils.txToJson. Wide integers are decimal strings.",
+    },
+    {
+      url: `${FASTNEAR_CDN_BASE}/meta-transactions.html`,
+      topic: "Gasless meta-transactions",
+      summary:
+        "Sign a NEP-366 delegate action locally with near.signDelegate (no wallet) and broadcast it via near.relayDelegate or any relayer that pays the gas.",
+    },
+    {
+      url: `${FASTNEAR_CDN_BASE}/accounts.html`,
+      topic: "Keys and accounts",
+      summary:
+        "Generate or recover NEAR keys from a BIP-39 seed phrase with @fastnear/seed-phrase, derive implicit account ids, and create + fund a testnet account with near.createFundedTestnetAccount.",
     },
     {
       url: `${FASTNEAR_CDN_BASE}/x402.html`,
@@ -694,6 +782,9 @@ export const familyCatalog = [
       "near.queryProtocolVersion",
       "near.queryBlock",
       "near.queryTx",
+      "near.gasPrice",
+      "near.status",
+      "near.validators",
       "near.sendTx",
       "near.ft.balance",
       "near.ft.metadata",
@@ -1051,6 +1142,33 @@ const walletSnippets = {
       language: "js",
       runnable: true,
       code: withEsmApiKeyConfig(code.functionCallTestnet, { includeWallet: true }),
+    },
+  ],
+  connectAndSignMessage: [
+    {
+      id: "terminal",
+      label: "Terminal",
+      environment: "terminal",
+      language: "bash",
+      runnable: false,
+      reason: "browser_required",
+      code: browserOnlyTerminalSnippet("Connecting and signing a message needs a browser environment with a wallet."),
+    },
+    {
+      id: "browser-global",
+      label: "Browser Global",
+      environment: "browserGlobal",
+      language: "js",
+      runnable: true,
+      code: code.connectAndSignMessage,
+    },
+    {
+      id: "esm",
+      label: "ESM",
+      environment: "esm",
+      language: "js",
+      runnable: true,
+      code: withEsmApiKeyConfig(code.connectAndSignMessage, { includeWallet: true }),
     },
   ],
 };
@@ -1464,6 +1582,48 @@ export const recipeCatalog = [
     relatedRecipes: ["connect-wallet", "sign-message", "function-call"],
   }),
   enrichRecipe({
+    id: "connect-and-sign-message",
+    title: "How do I connect a wallet and sign a message in one step?",
+    summary: "Combine sign-in and NEP-413 message signing into a single wallet popup instead of two.",
+    network: "mainnet",
+    auth: "wallet",
+    api: "near.recipes.connect",
+    example: {
+      contractId: "berryclub.ek.near",
+      signMessageParams: {
+        message: "Sign in to FastNear Berry Club",
+        recipient: "example.com",
+        nonce: "(32-byte Uint8Array)",
+      },
+    },
+    snippets: walletSnippets.connectAndSignMessage,
+  }, {
+    service: "wallet",
+    returns: "{ accountId: string; publicKey?: string; signedMessage?: SignedMessage } | undefined",
+    outputKeys: [
+      "accountId",
+      "signedMessage.accountId",
+      "signedMessage.publicKey",
+      "signedMessage.signature",
+    ],
+    responseNotes: [
+      "signedMessage is only present when signMessageParams was supplied and the wallet completed both steps.",
+      "The wallet picker is filtered to wallets advertising the signInAndSignMessage feature, so fewer wallets are offered than a plain connect.",
+      "Read the signing key from signedMessage.publicKey — several wallets omit publicKey on the account itself in this flow.",
+      "Verify the signature with near.utils.verifyNep413Signature before trusting it as proof of account ownership.",
+    ],
+    chooseWhen: [
+      "Choose this when a session needs both a connected wallet and a proof-of-ownership signature, and you want one prompt rather than two.",
+      "Prefer plain connect-wallet when no signature is needed, or sign-message when the wallet is already connected.",
+    ],
+    followUps: [
+      "Verify the returned signature with near.utils.verifyNep413Signature to authenticate the session server-side.",
+      "Once connected, send contract actions with near.recipes.functionCall.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["connect-wallet", "sign-message", "function-call"],
+  }),
+  enrichRecipe({
     id: "explain-transaction",
     title: "How do I build and preview a transaction before signing?",
     summary: "Declare actions with readable unit gas/deposit and get a stable JSON summary from near.explain.tx — no wallet, no network, no BigInt.",
@@ -1799,6 +1959,286 @@ export const recipeCatalog = [
     ],
     pagination: paginationNone,
     relatedRecipes: ["connect-testnet", "function-call", "transfer"],
+  }),
+  enrichRecipe({
+    id: "gas-price",
+    title: "What is the current gas price?",
+    summary: "Read the current gas price from the RPC with a one-line wrapper; retries and 429-handling are built in.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.gasPrice",
+    example: {},
+    snippets: [
+      {
+        id: "terminal",
+        label: "Terminal",
+        environment: "terminal",
+        language: "bash",
+        runnable: true,
+        code: wrapTerminalSnippet(code.gasPrice),
+      },
+      {
+        id: "browser-global",
+        label: "Browser Global",
+        environment: "browserGlobal",
+        language: "js",
+        runnable: true,
+        code: code.gasPrice,
+      },
+      {
+        id: "esm",
+        label: "ESM",
+        environment: "esm",
+        language: "js",
+        runnable: true,
+        code: withEsmApiKeyConfig(code.gasPrice),
+      },
+    ],
+  }, {
+    service: "rpc",
+    returns: "{ result: { gas_price: string } }",
+    outputKeys: ["result.gas_price"],
+    responseNotes: [
+      "near.gasPrice returns the raw JSON-RPC envelope; read the value from result.gas_price.",
+      "gas_price is a yoctoNEAR-per-gas decimal string — multiply by gas to estimate a fee, no BigInt required beyond your own math.",
+      "Omit the argument for the latest block, or pass { blockId } to price a specific height or hash.",
+    ],
+    chooseWhen: [
+      "Choose this to estimate transaction fees or to show the live network gas price.",
+      "Use near.status for node/sync info or near.validators for the validator set.",
+    ],
+    followUps: [
+      "Build and preview a transaction with near.explain.tx, then sign it with sendTx or a wallet.",
+      "Inspect broader chain state with near.status() and near.validators().",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["explain-transaction", "last-block-final", "function-call"],
+  }),
+  enrichRecipe({
+    id: "format-near-amount",
+    title: "How do I show a yoctoNEAR balance as human-readable NEAR?",
+    summary: "Render a yoctoNEAR integer as a human NEAR string with near.utils.formatNearAmount — the reverse of convertUnit, no BigInt.",
+    network: "mainnet",
+    auth: "none",
+    api: "near.utils.formatNearAmount",
+    example: {
+      yocto: "1500000000000000000000000",
+    },
+    snippets: [
+      {
+        id: "terminal",
+        label: "Terminal",
+        environment: "terminal",
+        language: "bash",
+        runnable: true,
+        code: wrapTerminalSnippet(code.formatNearAmount),
+      },
+      {
+        id: "browser-global",
+        label: "Browser Global",
+        environment: "browserGlobal",
+        language: "js",
+        runnable: true,
+        code: code.formatNearAmount,
+      },
+      {
+        id: "esm",
+        label: "ESM",
+        environment: "esm",
+        language: "js",
+        runnable: true,
+        code: withEsmApiKeyConfig(code.formatNearAmount),
+      },
+    ],
+  }, {
+    service: "api",
+    returns: "string",
+    outputKeys: [],
+    responseNotes: [
+      "near.utils.formatNearAmount is pure — no network, no wallet.",
+      "IN accepts a decimal string or bigint yoctoNEAR value; OUT is always a decimal string like \"1.5\", never a number or BigInt.",
+      "Pass { fracDigits } to cap decimals, or { trimZeros: false } to pad; formatUnit(amount, unit) formats other units (e.g. \"tgas\").",
+    ],
+    chooseWhen: [
+      "Choose this to display a balance read from near.view / near.ft.balance / decoded borsh as human NEAR.",
+      "Use near.utils.convertUnit for the other direction (\"1.5 NEAR\" -> yocto).",
+    ],
+    followUps: [
+      "Read a balance to format with near.ft.balance or near.queryAccount.",
+      "Construct a transfer of a parsed amount with near.actions.transfer(near.utils.convertUnit(\"1.5 NEAR\")).",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["ft-balance", "transfer", "explain-transaction"],
+  }),
+  enrichRecipe({
+    id: "sign-delegate-local",
+    title: "How do I sign a gasless delegate transaction without a wallet?",
+    summary: "Sign a NEP-366 delegate action with a local key so a relayer can broadcast it and pay the gas — the meta-transaction path for servers and agents.",
+    network: "mainnet",
+    auth: "local-key",
+    api: "near.signDelegate",
+    example: {
+      receiverId: "guest-book.near",
+      actions: [
+        {
+          type: "FunctionCall",
+          methodName: "add_message",
+          args: { text: "gasless hello" },
+          gas: "30 Tgas",
+          deposit: "0",
+        },
+      ],
+      blockHeightTtl: 600,
+    },
+    snippets: [
+      {
+        id: "terminal",
+        label: "Terminal",
+        environment: "terminal",
+        language: "bash",
+        runnable: false,
+        code: wrapTerminalSnippet(code.signDelegateLocal),
+      },
+      {
+        id: "browser-global",
+        label: "Browser Global",
+        environment: "browserGlobal",
+        language: "js",
+        runnable: false,
+        code: code.signDelegateLocal,
+      },
+      {
+        id: "esm",
+        label: "ESM",
+        environment: "esm",
+        language: "js",
+        runnable: false,
+        code: withEsmApiKeyConfig(code.signDelegateLocal),
+      },
+    ],
+  }, {
+    service: "rpc",
+    returns: "{ delegateAction, signature, signatureBytes, borshBase64 }",
+    outputKeys: ["delegateAction.senderId", "delegateAction.nonce", "delegateAction.maxBlockHeight", "signature", "borshBase64"],
+    responseNotes: [
+      "near.signDelegate signs locally — it never opens a wallet. The sender's nonce comes from its access key; maxBlockHeight defaults to the final block height plus blockHeightTtl (600).",
+      "nonce and maxBlockHeight are returned as decimal strings; borshBase64 is the NEP-366 SignedDelegate a relayer transports.",
+      "Hand the result to near.relayDelegate (or any relayer) to broadcast — the relayer's full-access key pays the gas, not the sender.",
+    ],
+    chooseWhen: [
+      "Choose this to build gasless / meta-transactions from a server or agent that holds a key but shouldn't pay gas.",
+      "Use nearWallet.signDelegateActions when a browser wallet holds the key, or near.sendTx to sign and pay yourself.",
+    ],
+    followUps: [
+      "Broadcast the signed delegate with near.relayDelegate({ delegateAction, signature, relayerSigner, relayerId }).",
+      "Preview the wrapped actions first with near.explain.tx.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["sign-delegate-actions", "explain-transaction", "function-call"],
+  }),
+  enrichRecipe({
+    id: "create-testnet-account",
+    title: "How do I create and fund a new testnet account?",
+    summary: "Generate a key and create + fund a fresh testnet account through the NEAR testnet helper faucet — the common agent onboarding step. Testnet only.",
+    network: "testnet",
+    auth: "none",
+    api: "near.createFundedTestnetAccount",
+    example: {
+      newAccountId: "my-agent.testnet",
+    },
+    snippets: [
+      {
+        id: "terminal",
+        label: "Terminal",
+        environment: "terminal",
+        language: "bash",
+        runnable: false,
+        code: wrapTerminalSnippet(code.createTestnetAccount),
+      },
+      {
+        id: "browser-global",
+        label: "Browser Global",
+        environment: "browserGlobal",
+        language: "js",
+        runnable: false,
+        code: code.createTestnetAccount,
+      },
+      {
+        id: "esm",
+        label: "ESM",
+        environment: "esm",
+        language: "js",
+        runnable: false,
+        code: withEsmApiKeyConfig(code.createTestnetAccount),
+      },
+    ],
+  }, {
+    service: "rpc",
+    returns: "{ account_id?: string }",
+    outputKeys: ["account_id"],
+    responseNotes: [
+      "near.createFundedTestnetAccount is testnet-only — it POSTs to the NEAR testnet helper faucet; there is no mainnet equivalent.",
+      "Generate the key with near.utils.privateKeyFromRandom + near.utils.publicKeyFromPrivate, or recover one from a seed phrase (see account-from-seed-phrase).",
+      "After creation, persist the private key with near.state.updateAccountState so near.sendTx signs locally for that account.",
+    ],
+    chooseWhen: [
+      "Choose this for the 'make me a testnet account' onboarding step in an agent or script.",
+      "For an existing account, add a key instead of creating one; for mainnet, fund the account another way.",
+    ],
+    followUps: [
+      "Sign a transaction locally with the new key via near.sendTx.",
+      "Derive a recoverable key from a seed phrase with account-from-seed-phrase.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["account-from-seed-phrase", "function-call", "explain-transaction"],
+  }),
+  enrichRecipe({
+    id: "account-from-seed-phrase",
+    title: "How do I create or recover a key from a seed phrase?",
+    summary: "Generate a BIP-39 seed phrase and its NEAR key, or recover the key from an existing phrase, with @fastnear/seed-phrase — byte-identical to near-cli.",
+    network: "mainnet",
+    auth: "local-key",
+    api: "generateSeedPhrase",
+    example: {
+      seedPhrase: "shoot island position soft burden budget tooth cruel issue economy destroy above",
+    },
+    snippets: [
+      {
+        id: "browser-global",
+        label: "Browser Global",
+        environment: "browserGlobal",
+        language: "js",
+        runnable: false,
+        code: code.accountFromSeedPhrase,
+      },
+      {
+        id: "esm",
+        label: "ESM",
+        environment: "esm",
+        language: "js",
+        runnable: false,
+        code: code.accountFromSeedPhraseEsm,
+      },
+    ],
+  }, {
+    service: "api",
+    returns: "{ seedPhrase, publicKey, privateKey }",
+    outputKeys: ["seedPhrase", "publicKey", "privateKey"],
+    responseNotes: [
+      "@fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.",
+      "Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.",
+      "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState to sign locally.",
+    ],
+    chooseWhen: [
+      "Choose this to onboard or recover an account key from a human-writable phrase.",
+      "Use near.utils.privateKeyFromRandom when you don't need a recovery phrase.",
+    ],
+    followUps: [
+      "Create + fund a testnet account for the derived key with create-testnet-account.",
+      "Sign a transaction locally with near.sendTx once the key is in account state.",
+    ],
+    pagination: paginationNone,
+    relatedRecipes: ["create-testnet-account", "sign-delegate-local", "function-call"],
   }),
 ];
 
