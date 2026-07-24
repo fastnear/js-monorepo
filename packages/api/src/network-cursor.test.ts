@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { memoryStore } from "@fastnear/utils";
+import { lsGet, memoryStore } from "@fastnear/utils";
 import { actions, accountId, authStatus, config, requestSignIn, sendTx, signOut, state } from "./near.js";
-import { NETWORKS } from "./state.js";
+import { NETWORKS, rebaseConfigToNetwork } from "./state.js";
 
 // The API keeps two cursors for "which network am I on":
 //
@@ -58,14 +58,16 @@ beforeEach(() => {
   state.setActiveNetwork("mainnet");
 });
 
-describe("requestSignIn promotes both network cursors", () => {
-  it("agrees on the network after a cross-network sign-in", async () => {
+describe("no-arg calls follow the active network", () => {
+  it("moves the active network without rewriting the configured default", async () => {
     state.setWalletProvider(walletProvider() as any);
 
     await requestSignIn({ network: "testnet" });
 
     expect(state.getActiveNetwork()).toBe("testnet");
-    expect(config().networkId).toBe("testnet");
+    // `config.networkId` is the caller's configured default, not a record of
+    // where the session went. Signing in must not silently rewrite it.
+    expect(state.getConfig().networkId).toBe("mainnet");
   });
 
   it("routes a no-arg sendTx to the network the user just signed in to", async () => {
@@ -99,13 +101,14 @@ describe("requestSignIn promotes both network cursors", () => {
     ).resolves.toBeDefined();
   });
 
-  it("persists the promotion, so a reload keeps the session", async () => {
+  it("persists the active network, so a reload does not drop the session", async () => {
     state.setWalletProvider(walletProvider() as any);
     await requestSignIn({ network: "testnet" });
 
-    // A reload rebuilds _activeNetwork from the persisted config.
-    expect(memoryStore.size).toBeGreaterThan(0);
-    expect(state.getConfig().networkId).toBe("testnet");
+    // A reload rebuilds the active network from storage. Deriving it from the
+    // configured default instead left the session alive in the testnet slot
+    // while the client silently resumed on mainnet.
+    expect(lsGet("activeNetwork")).toBe("testnet");
     expect(state.getAccountState("testnet").accountId).toBe("alice.testnet");
   });
 
@@ -158,6 +161,27 @@ describe("signOut does not discard caller-configured service URLs", () => {
     await signOut();
 
     expect(state.getConfig().apiKey).toBe("MY-KEY");
+  });
+
+  it("keeps every client setting on a per-call network override", async () => {
+    config({
+      networkId: "mainnet",
+      apiKey: "MY-KEY",
+      retry: { maxAttempts: 9 },
+      batch: { maxConcurrency: 3 },
+    });
+
+    // The cross-network branch of resolveConfigForCall used to name the fields
+    // that carry, and dropped `batch`. It now reuses the same split setConfig
+    // uses, so nothing is lost and nothing added later can be forgotten.
+    const crossNetwork = rebaseConfigToNetwork(state.getConfig(), "testnet");
+
+    expect(crossNetwork.apiKey).toBe("MY-KEY");
+    expect(crossNetwork.retry?.maxAttempts).toBe(9);
+    expect(crossNetwork.batch?.maxConcurrency).toBe(3);
+    // …while the chain-scoped fields move to the requested network.
+    expect(crossNetwork.networkId).toBe("testnet");
+    expect(crossNetwork.services?.rpc?.baseUrl).toBe(NETWORKS.testnet.services?.rpc?.baseUrl);
   });
 
   it("still resets the active network to the default on a no-arg sign-out", async () => {

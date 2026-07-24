@@ -104,6 +104,7 @@ import {
   setConfig,
   resetTxHistory,
   resolveConfig,
+  rebaseConfigToNetwork,
   DEFAULT_RETRY,
 } from "./state.js";
 
@@ -306,7 +307,12 @@ function resolveConfigForCall(network?: FastNearNetworkId): NetworkConfig {
   if (!network || network === active.networkId) {
     return active;
   }
-  return resolveConfig({ apiKey: active.apiKey ?? null, retry: active.retry }, NETWORKS[network]);
+  // Reuse the same chain-scoped/client-scoped split `setConfig` uses, rather
+  // than re-listing the fields that carry. This used to name `apiKey` and
+  // `retry` explicitly and silently dropped `batch` — and would have dropped
+  // any field added later. Now a per-call network override keeps everything
+  // the caller configured, exactly like switching network does.
+  return resolveConfig({}, rebaseConfigToNetwork(active, network));
 }
 
 function resolveServiceBaseUrl(family: Exclude<ServiceFamily, "rpc">, config: NetworkConfig): string {
@@ -602,7 +608,7 @@ export const getPublicKeyForContract = (options: { network?: FastNearNetworkId }
 }
 
 export const selected = (options: { network?: FastNearNetworkId } = {}) => {
-  const network = options.network ?? getConfig().networkId;
+  const network = options.network ?? getActiveNetwork();
   const slot = getAccountState(network);
 
   return {
@@ -635,7 +641,7 @@ export const requestSignIn = async ({
     throw new Error("No wallet provider set. Call useWallet() first or load the @fastnear/wallet IIFE bundle.");
   }
 
-  const targetNetwork = network ?? getConfig().networkId;
+  const targetNetwork = network ?? getActiveNetwork();
 
   // Drop any prior session on the *target* network only — leaving sessions
   // on other networks intact. With @fastnear/wallet 1.1.0+ the optional
@@ -659,26 +665,15 @@ export const requestSignIn = async ({
     return undefined;
   }
 
-  // Write the connected account into the *target network*'s slot rather
-  // than the legacy global, and promote that network on BOTH cursors.
+  // Write the connected account into the *target network*'s slot rather than
+  // the legacy global, and make that network the active one — signing in to a
+  // network is what "I am on this network now" means.
   //
-  // `setActiveNetwork` alone moves only the *read* cursor — `accountId()`,
-  // `publicKey()`, `authStatus()` all resolve through `getAccountState()` ->
-  // `_activeNetwork`. Every no-arg *write* path resolves through
-  // `getConfig().networkId` instead: `sendTx`, `signOut`, `signMessage`,
-  // `signDelegate`, `selected`, and RPC URL selection. Promoting one and not
-  // the other let them disagree, and nothing warned:
-  //
-  //   requestSignIn({});                      // mainnet session
-  //   requestSignIn({ network: "testnet" });  // active -> testnet, config -> still mainnet
-  //   accountId();                            // "alice.testnet"
-  //   sendTx({ receiverId, actions });        // signed by alice.near, on MAINNET
-  //
-  // With only a testnet session the same call threw "Must sign in" while
-  // `authStatus()` reported SignedIn. Going through `setConfig` also persists
-  // the choice, so a reload no longer resets to mainnet and loses the session.
+  // Signing in deliberately does NOT rewrite `config.networkId`: that is the
+  // caller's configured default, not a record of where the session went. Every
+  // no-arg call resolves through the active network instead, so the two never
+  // need to agree. `setActiveNetwork` persists, so this survives a reload.
   updateAccountState({ accountId: result.accountId }, targetNetwork);
-  setConfig({ networkId: targetNetwork });
   setActiveNetwork(targetNetwork);
   return result;
 };
@@ -1317,7 +1312,7 @@ export const signOut = async ({
   network,
 }: { network?: FastNearNetworkId } = {}) => {
   const provider = getWalletProvider();
-  const targetNetwork = network ?? getConfig().networkId;
+  const targetNetwork = network ?? getActiveNetwork();
 
   if (provider?.isConnected({ network: targetNetwork })) {
     await provider.disconnect({ network: targetNetwork });
@@ -1377,7 +1372,7 @@ export const sendTx = async ({
     throw new Error("signer and signerId must be paired");
   }
 
-  const targetNetwork = network ?? getConfig().networkId;
+  const targetNetwork = network ?? getActiveNetwork();
   const slot = getAccountState(targetNetwork);
   const signerId = suppliedSignerId ?? slot.accountId;
   if (!signerId) throw new Error("Must sign in");
@@ -1585,7 +1580,7 @@ export const signDelegate = async ({
   if (explicitSigner !== (suppliedSignerId !== undefined)) {
     throw new Error("signer and signerId must be paired");
   }
-  const targetNetwork = network ?? getConfig().networkId;
+  const targetNetwork = network ?? getActiveNetwork();
   const slot = getAccountState(targetNetwork);
   const signerId = suppliedSignerId ?? slot.accountId;
   if (!signerId) throw new Error("Must sign in");
@@ -1693,7 +1688,7 @@ export const signMessage = async (
   options: { network?: FastNearNetworkId } = {},
 ) => {
   const provider = getWalletProvider();
-  const targetNetwork = options.network ?? getConfig().networkId;
+  const targetNetwork = options.network ?? getActiveNetwork();
   if (!provider?.isConnected({ network: targetNetwork })) {
     throw new Error("Must sign in");
   }

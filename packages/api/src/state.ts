@@ -321,7 +321,23 @@ if (_legacyBlock) {
   lsSet("block", null);
 }
 
-let _activeNetwork: FastNearNetworkId = normalizeNetworkId(_config.networkId);
+// Two related but distinct ideas, deliberately kept apart:
+//
+//   _config.networkId  the *configured default* — where a fresh session starts,
+//                      and what `config({ networkId })` sets.
+//   _activeNetwork     *where you are right now* — moved by signing in to a
+//                      network, or by `config({ networkId })`.
+//
+// Every no-arg call resolves through `_activeNetwork`, so it is the answer to
+// "which network am I on". That makes it session state, and session state has
+// to persist: deriving it from `_config.networkId` on every load meant a reload
+// silently dropped you back on the configured default while your signed-in
+// session sat untouched in the other network's slot. Falls back to the
+// configured default when nothing is stored, which is also the upgrade path for
+// sessions written before this key existed.
+let _activeNetwork: FastNearNetworkId = normalizeNetworkId(
+  lsGet("activeNetwork") ?? _config.networkId,
+);
 
 // `_state` is a live binding pointing at the active slot. ESM live
 // bindings mean importers see the current value at read time; we
@@ -477,6 +493,7 @@ export const getActiveNetwork = (): FastNearNetworkId => _activeNetwork;
 export const setActiveNetwork = (network: FastNearNetworkId): void => {
   _activeNetwork = normalizeNetworkId(network);
   _state = _networkStates[_activeNetwork];
+  lsSet("activeNetwork", _activeNetwork);
 };
 
 // Back-compat: legacy `update(partial)` writes into the active network slot.
@@ -527,7 +544,7 @@ const NETWORK_SCOPED_CONFIG_KEYS = [
 // reset the key to null, retry to DEFAULT_RETRY and batch to {}. An
 // unauthenticated client is indistinguishable from a rate-limited one, so that
 // failed as mysterious 429s rather than as an error.
-function rebaseConfigToNetwork(
+export function rebaseConfigToNetwork(
   current: NetworkConfig,
   networkId: FastNearNetworkId,
 ): NetworkConfig {
