@@ -170,11 +170,24 @@ describe("published x402 verifier", () => {
       return new Response("missing", { status: 404 });
     };
 
-    const result = await verifyPublishedX402(version, fetchMock);
+    // The real node-import check shells out to `npm install`, which cannot
+    // finish inside the default 5s test timeout on a cold npm cache. That is
+    // integration work covered by `yarn smoke:x402:published <version>`; here
+    // we only assert the orchestration reaches it with the verified bytes.
+    const nodeImportCalls = [];
+    const result = await verifyPublishedX402(version, fetchMock, {
+      verifyNodeImports: (tarballArg, versionArg) => {
+        nodeImportCalls.push({ tarballArg, versionArg });
+      },
+    });
+
     expect(result).toMatchObject({ version, tarballUrl, iifeBytes: iife.length });
     expect(urls).toHaveLength(3);
     expect(urls[0]).toContain(version);
     expect(urls[2]).toContain(`@fastnear/x402@${version}/`);
+    expect(nodeImportCalls).toHaveLength(1);
+    expect(nodeImportCalls[0].versionArg).toBe(version);
+    expect(nodeImportCalls[0].tarballArg.equals(tarball)).toBe(true);
   });
 
   it("rejects CDN bytes that differ from npm", async () => {
@@ -187,8 +200,14 @@ describe("published x402 verifier", () => {
       return new Response(`${iife}\n// drift`);
     };
 
-    await expect(verifyPublishedX402(version, fetchMock)).rejects.toThrow(
-      "jsDelivr IIFE bytes differ",
-    );
+    // Drift must be caught *before* the node-import step; if this stub ever
+    // runs, the byte comparison stopped guarding the CDN.
+    const verifyNodeImports = () => {
+      throw new Error("node-import verification must not run after CDN drift");
+    };
+
+    await expect(
+      verifyPublishedX402(version, fetchMock, { verifyNodeImports }),
+    ).rejects.toThrow("jsDelivr IIFE bytes differ");
   });
 });
