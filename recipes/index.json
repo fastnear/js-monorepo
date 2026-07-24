@@ -1062,7 +1062,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n});\n\nnear.print(result ?? near.selected());"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n});\n\nnear.print(result ?? near.selected());"
         }
       ],
       "service": "wallet",
@@ -1141,7 +1141,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.functionCall({\n  receiverId: \"berryclub.ek.near\",\n  methodName: \"draw\",\n  args: {\n    pixels: [{ x: 10, y: 20, color: 65280 }],\n  },\n  gas: cu(\"100 Tgas\"),\n  deposit: \"0\",\n});\n\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.functionCall({\n  receiverId: \"berryclub.ek.near\",\n  methodName: \"draw\",\n  args: {\n    pixels: [{ x: 10, y: 20, color: 65280 }],\n  },\n  gas: cu(\"100 Tgas\"),\n  deposit: \"0\",\n});\n\nnear.print(result);"
         }
       ],
       "service": "wallet",
@@ -1210,7 +1210,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.transfer({\n  receiverId: \"escrow.ai.near\",\n  amount: cu(\"0.1 NEAR\"),\n});\n\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await near.recipes.transfer({\n  receiverId: \"escrow.ai.near\",\n  amount: cu(\"0.1 NEAR\"),\n});\n\nnear.print(result);"
         }
       ],
       "service": "wallet",
@@ -1277,7 +1277,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.signMessage({\n  message: \"Sign in to FastNear Berry Club\",\n  recipient: window.location.host,\n  nonce: crypto.getRandomValues(new Uint8Array(32)),\n});\n\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.signMessage({\n  message: \"Sign in to FastNear Berry Club\",\n  recipient: window.location.host,\n  nonce: crypto.getRandomValues(new Uint8Array(32)),\n});\n\nnear.print(result);"
         }
       ],
       "service": "wallet",
@@ -1365,7 +1365,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_borsh_base64:\n    result.signedDelegateActions[0]?.borshSerializedBase64,\n});"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst cu = near.utils.convertUnit;\n\nconst result = await nearWallet.signDelegateActions({\n  delegateActions: [\n    {\n      receiverId: \"berryclub.ek.near\",\n      actions: [\n        {\n          type: \"FunctionCall\",\n          methodName: \"draw\",\n          args: { pixels: [{ x: 10, y: 20, color: 65280 }] },\n          gas: cu(\"100 Tgas\"),\n          deposit: \"0\",\n        },\n      ],\n    },\n  ],\n});\n\nnear.print({\n  count: result.signedDelegateActions.length,\n  first_delegate_borsh_base64:\n    result.signedDelegateActions[0]?.borshSerializedBase64,\n});"
         }
       ],
       "service": "wallet",
@@ -1438,7 +1438,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n  signMessageParams: {\n    message: \"Sign in to FastNear Berry Club\",\n    recipient: window.location.host,\n    nonce: crypto.getRandomValues(new Uint8Array(32)),\n  },\n});\n\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\nconst result = await near.recipes.connect({\n  contractId: \"berryclub.ek.near\",\n  signMessageParams: {\n    message: \"Sign in to FastNear Berry Club\",\n    recipient: window.location.host,\n    nonce: crypto.getRandomValues(new Uint8Array(32)),\n  },\n});\n\nnear.print(result);"
         }
       ],
       "service": "wallet",
@@ -1581,7 +1581,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": true,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),\n});\nEOF"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  // scaleDecimal shifts the decimal point on the STRING. Number(balance)\n  // would round anything past 2^53 — most real FT balances.\n  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),\n});\nEOF"
         },
         {
           "id": "curl-jq",
@@ -1597,7 +1597,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": true,
-          "code": "const balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),\n});"
+          "code": "const balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  // scaleDecimal shifts the decimal point on the STRING. Number(balance)\n  // would round anything past 2^53 — most real FT balances.\n  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),\n});"
         },
         {
           "id": "esm",
@@ -1605,7 +1605,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),\n});"
+          "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\nconst balance = await near.ft.balance({\n  contractId: \"berryclub.ek.near\",\n  accountId: \"root.near\",\n});\n\nconst meta = await near.ft.metadata({ contractId: \"berryclub.ek.near\" });\n\nnear.print({\n  raw_balance: balance,\n  symbol: meta.symbol,\n  decimals: meta.decimals,\n  // scaleDecimal shifts the decimal point on the STRING. Number(balance)\n  // would round anything past 2^53 — most real FT balances.\n  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),\n});"
         }
       ],
       "service": "rpc",
@@ -1618,7 +1618,8 @@
       ],
       "responseNotes": [
         "near.ft.balance returns the raw integer balance string from ft_balance_of, scaled by the token's decimals.",
-        "Pair with near.ft.metadata to format the human-readable amount in one shot."
+        "Pair with near.ft.metadata to format the human-readable amount in one shot.",
+        "Convert raw to human with near.utils.scaleDecimal(raw, -decimals) — it shifts the decimal point on the string and returns an exact decimal string. Number(raw) / 10 ** decimals silently rounds any balance above 2^53, which is most real balances; scaleDecimal also trims trailing zeros, so pad the fraction yourself if you need fixed width."
       ],
       "chooseWhen": [
         "Choose this when you already know the FT contract and want one account's balance.",
@@ -1890,7 +1891,7 @@
           "environment": "curl",
           "language": "bash",
           "runnable": true,
-          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\n\ncurl -sS \"https://api.fastnear.com/v1/account/$ACCOUNT_ID/nft\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   | jq '{\n      contract_count: (.tokens | length),\n      preview: [.tokens[0:3][] | {contract_id, token_count: (.tokens // [] | length)}]\n    }'"
+          "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_ID=root.near\n\ncurl -sS \"https://api.fastnear.com/v1/account/$ACCOUNT_ID/nft\"   -H \"Authorization: Bearer $FASTNEAR_API_KEY\"   | jq '{\n      contract_count: (.tokens | length),\n      preview: [.tokens[0:3][] | {contract_id, last_update_block_height}]\n    }'"
         },
         {
           "id": "browser-global",
@@ -2052,7 +2053,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\n// near.recipes.connect honors a per-call network override\n// (@fastnear/api 1.1.1+), so this opens a testnet session alongside any\n// existing mainnet session — wallet state is keyed per network.\nconst result = await near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nnear.print({\n  connected: result,\n  active_networks: nearWallet.connectedNetworks(),\n});"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\n// near.recipes.connect honors a per-call network override\n// (@fastnear/api 1.1.1+), so this opens a testnet session alongside any\n// existing mainnet session — wallet state is keyed per network.\nconst result = await near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nnear.print({\n  connected: result,\n  active_networks: nearWallet.connectedNetworks(),\n});"
         }
       ],
       "service": "wallet",
@@ -2128,7 +2129,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": true,
-          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\nnear.useWallet(nearWallet);\nawait nearWallet.restore({\n  network: \"mainnet\",\n  contractId: \"berryclub.ek.near\",\n});\n\n// near.recipes.functionCall accepts a per-call network override\n// (@fastnear/api 1.1.2+) — once a testnet session is open, the api reads\n// the testnet account from its per-network state map and dispatches the\n// signed transaction through the wallet's testnet slot. The mainnet\n// session, if any, is untouched.\nawait near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nconst result = await near.recipes.functionCall({\n  network: \"testnet\",\n  receiverId: \"guest-book.testnet\",\n  methodName: \"add_message\",\n  args: { text: \"hello from a per-network call\" },\n  gas: \"30000000000000\",\n  deposit: \"0\",\n});\n\nnear.print(result);"
+          "code": "import * as near from \"@fastnear/api\";\nimport * as nearWallet from \"@fastnear/wallet\";\n\nnear.useWallet(nearWallet);\n\n// The wallet owns the session; near.sendTx reads the signer from\n// @fastnear/api's per-network state. Without this bridge every send throws\n// \"Must sign in\" even with an active wallet session.\nnearWallet.onConnect((session) =>\n  near.state.updateAccountState({ accountId: session.accountId }, session.network),\n);\n\n// Resume a session the user already approved — no popup. Snippets that call\n// near.recipes.connect below open the picker themselves.\nawait nearWallet.restore({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\n// near.recipes.functionCall accepts a per-call network override\n// (@fastnear/api 1.1.2+) — once a testnet session is open, the api reads\n// the testnet account from its per-network state map and dispatches the\n// signed transaction through the wallet's testnet slot. The mainnet\n// session, if any, is untouched.\nawait near.recipes.connect({\n  network: \"testnet\",\n  contractId: \"guest-book.testnet\",\n});\n\nconst result = await near.recipes.functionCall({\n  network: \"testnet\",\n  receiverId: \"guest-book.testnet\",\n  methodName: \"add_message\",\n  args: { text: \"hello from a per-network call\" },\n  gas: \"30000000000000\",\n  deposit: \"0\",\n});\n\nnear.print(result);"
         }
       ],
       "service": "wallet",
@@ -2319,6 +2320,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": false,
+          "reason": "needs_onchain_key",
           "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);\nEOF"
         },
         {
@@ -2327,6 +2329,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": false,
+          "reason": "needs_onchain_key",
           "code": "// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);"
         },
         {
@@ -2335,6 +2338,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": false,
+          "reason": "needs_onchain_key",
           "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Sign a NEP-366 delegate action with a local key — no wallet. A relayer\n// broadcasts it and pays the gas. Requires a signed-in local key\n// (near.config + near.state) or an explicit { signer, signerId }.\nconst signed = await near.signDelegate({\n  receiverId: \"guest-book.near\",\n  actions: [\n    near.actions.functionCall({\n      methodName: \"add_message\",\n      args: { text: \"gasless hello\" },\n      gas: \"30 Tgas\",\n      deposit: \"0\",\n    }),\n  ],\n  blockHeightTtl: 600,\n});\n\n// nonce and maxBlockHeight come back as decimal strings; borshBase64 is what\n// a relayer transports. Hand it to near.relayDelegate (or any relayer).\nnear.print(signed.delegateAction);"
         }
       ],
@@ -2389,6 +2393,7 @@
           "environment": "terminal",
           "language": "bash",
           "runnable": false,
+          "reason": "faucet_rate_limited",
           "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nnode -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);\nEOF"
         },
         {
@@ -2397,6 +2402,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": false,
+          "reason": "faucet_rate_limited",
           "code": "// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);"
         },
         {
@@ -2405,6 +2411,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": false,
+          "reason": "faucet_rate_limited",
           "code": "import * as near from \"@fastnear/api\";\n\nnear.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });\n\n// Make a key, then create + fund a fresh testnet account via the faucet.\nconst privateKey = near.utils.privateKeyFromRandom();\nconst publicKey = near.utils.publicKeyFromPrivate(privateKey);\n\nconst result = await near.createFundedTestnetAccount({\n  newAccountId: \"my-agent.testnet\",\n  publicKey,\n});\n\n// Account state is keyed per network and the default is mainnet, so pass\n// \"testnet\" explicitly — otherwise the testnet key lands in the mainnet\n// slot. Then near.sendTx signs locally from here on, no wallet, no popup:\n//   await near.sendTx({ network: \"testnet\", receiverId, actions: [near.actions.transfer(cu(\"0.1 NEAR\"))] });\nnear.state.updateAccountState({ accountId: \"my-agent.testnet\", privateKey }, \"testnet\");\nnear.print(result);"
         }
       ],
@@ -2456,6 +2463,7 @@
           "environment": "browserGlobal",
           "language": "js",
           "runnable": false,
+          "reason": "needs_second_package",
           "code": "// Load @fastnear/seed-phrase (the NearSeedPhrase global) next to near.js.\n// Create a fresh key pair and its 12-word recovery phrase.\nconst { seedPhrase, publicKey, privateKey } = NearSeedPhrase.generateSeedPhrase();\n\n// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.\nconst recovered = NearSeedPhrase.parseSeedPhrase(seedPhrase);\n\n// Store the recovered full-access key; near.sendTx signs locally from here on.\nnear.state.updateAccountState({ accountId: \"you.near\", privateKey: recovered.privateKey });\nnear.print({ seedPhrase, publicKey });"
         },
         {
@@ -2464,6 +2472,7 @@
           "environment": "esm",
           "language": "js",
           "runnable": false,
+          "reason": "needs_second_package",
           "code": "import { generateSeedPhrase, parseSeedPhrase } from \"@fastnear/seed-phrase\";\nimport * as near from \"@fastnear/api\";\n\n// Create a fresh key pair and its 12-word recovery phrase.\nconst { seedPhrase, publicKey, privateKey } = generateSeedPhrase();\n\n// Recover the exact same keys later — byte-identical to near-cli / near-seed-phrase.\nconst recovered = parseSeedPhrase(seedPhrase);\n\nnear.state.updateAccountState({ accountId: \"you.near\", privateKey: recovered.privateKey });\nnear.print({ seedPhrase, publicKey });"
         }
       ],
@@ -2477,7 +2486,7 @@
       "responseNotes": [
         "@fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.",
         "Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.",
-        "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+), or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state."
+        "generateSeedPhrase(256) makes a 24-word phrase; hand both accountId and privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+) — a slot holding a key but no accountId has nobody to sign as and throws Must sign in. Or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state."
       ],
       "chooseWhen": [
         "Choose this to onboard or recover an account key from a human-writable phrase.",

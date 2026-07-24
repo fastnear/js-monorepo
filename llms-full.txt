@@ -30,11 +30,11 @@ Version: 2.1.2 — all `@fastnear/*` packages share one version.
 
 ## Resilience and bulk reads
 
-`@fastnear/api` retries transient RPC failures (HTTP 408/429/500/502/503/504 and JSON-RPC `-429`/`-32000`) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through `near.config` and are on by default.
+`@fastnear/api` retries transient RPC failures (HTTP 408/429 and any 5xx, plus JSON-RPC `-429`/`-32000` — except deterministic `HANDLER_ERROR`s such as UNKNOWN_ACCOUNT, which fail fast) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through `near.config` and are on by default.
 
 **Retry** — `near.config({ retry })`:
 
-- `enabled` (default `true`) — set `false` to restore single-attempt behavior.
+- `enabled` (default `true`) — set `false` for a single attempt. The `timeoutMs` deadline stays armed either way.
 - `maxAttempts` (`5`) — total attempts including the first.
 - `baseBackoffMs` (`250`) / `maxBackoffMs` (`30000`) — full-jitter exponential backoff bounds.
 - `timeoutMs` (`15000`) — per-attempt AbortController timeout (`0` disables it).
@@ -276,7 +276,7 @@ Browser wallet session and signing surface from @fastnear/wallet: connect, send 
 
 - `near.query*` (`queryAccount`, `queryBlock`, `queryAccessKey`, `queryTx`) are JSON-RPC passthroughs and return the raw envelope `{ jsonrpc, result, id }` — read your data from the `.result` field.
 - `near.view`, `near.recipes.*`, `near.ft.*`, `near.nft.*` and the indexed REST families (`near.tx.*`, `near.api.v1.*`, `near.transfers.*`, `near.neardata.*`, `near.fastdata.kv.*`) return the flat data shape directly. The recipes layer in particular is what flattens `near.queryAccount` results into `{ amount, block_height, storage_usage, ... }` for `near.recipes.viewAccount`.
-- **Wide integers are strings.** Amounts, gas, deposits, nonces and other `u64`/`u128` values come back as **decimal strings** (JSON-safe, matching NEAR JSON-RPC). Constructing a transaction accepts `string | number | bigint` and unit strings like `"100 Tgas"` / `"0.01 NEAR"`; inspect a built transaction with `near.utils.txToJson` rather than `JSON.stringify`-ing a raw `bigint`. You never need `BigInt` to build, send, or read a transaction. (`@fastnear/borsh` `deserialize` takes `{ bigints: "bigint" }` to opt back in.)
+- **Wide integers.** What `@fastnear` **decodes** — `@fastnear/borsh` `deserialize`, `near.view`, `near.ft.*`, `near.utils.txToJson` — returns `u64`/`u128` as **decimal strings**. Results relayed straight from the RPC keep NEAR's own types, so yocto fields (`deposit`, `tokens_burnt`, `amount`) are strings while `gas_burnt` and access-key `nonce` are JSON numbers. Constructing a transaction accepts `string | number | bigint` and unit strings like `"100 Tgas"` / `"0.01 NEAR"`; inspect a built transaction with `near.utils.txToJson` rather than `JSON.stringify`-ing a raw `bigint`. You never need `BigInt` to build, send, or read a transaction. (`@fastnear/borsh` `deserialize` takes `{ bigints: "bigint" }` to opt back in.)
 
 ## Low-level API entrypoints
 
@@ -1723,8 +1723,17 @@ near.print(result ?? near.selected());
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -1822,8 +1831,17 @@ near.print(result);
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -1912,8 +1930,17 @@ near.print(result);
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -1995,8 +2022,17 @@ near.print(result);
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -2118,8 +2154,17 @@ near.print({
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -2228,8 +2273,17 @@ near.print(result);
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
   network: "mainnet",
   contractId: "berryclub.ek.near",
@@ -2401,6 +2455,7 @@ Response notes:
 
 - near.ft.balance returns the raw integer balance string from ft_balance_of, scaled by the token's decimals.
 - Pair with near.ft.metadata to format the human-readable amount in one shot.
+- Convert raw to human with near.utils.scaleDecimal(raw, -decimals) — it shifts the decimal point on the string and returns an exact decimal string. Number(raw) / 10 ** decimals silently rounds any balance above 2^53, which is most real balances; scaleDecimal also trims trailing zeros, so pad the fraction yourself if you need fixed width.
 
 Follow-ups:
 
@@ -2438,7 +2493,9 @@ near.print({
   raw_balance: balance,
   symbol: meta.symbol,
   decimals: meta.decimals,
-  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+  // scaleDecimal shifts the decimal point on the STRING. Number(balance)
+  // would round anything past 2^53 — most real FT balances.
+  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),
 });
 EOF
 ```
@@ -2476,7 +2533,9 @@ near.print({
   raw_balance: balance,
   symbol: meta.symbol,
   decimals: meta.decimals,
-  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+  // scaleDecimal shifts the decimal point on the STRING. Number(balance)
+  // would round anything past 2^53 — most real FT balances.
+  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),
 });
 ```
 
@@ -2498,7 +2557,9 @@ near.print({
   raw_balance: balance,
   symbol: meta.symbol,
   decimals: meta.decimals,
-  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+  // scaleDecimal shifts the decimal point on the STRING. Number(balance)
+  // would round anything past 2^53 — most real FT balances.
+  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),
 });
 ```
 
@@ -2915,7 +2976,7 @@ ACCOUNT_ID=root.near
 
 curl -sS "https://api.fastnear.com/v1/account/$ACCOUNT_ID/nft"   -H "Authorization: Bearer $FASTNEAR_API_KEY"   | jq '{
       contract_count: (.tokens | length),
-      preview: [.tokens[0:3][] | {contract_id, token_count: (.tokens // [] | length)}]
+      preview: [.tokens[0:3][] | {contract_id, last_update_block_height}]
     }'
 ```
 
@@ -3166,11 +3227,20 @@ near.print({
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
-  network: "mainnet",
-  contractId: "berryclub.ek.near",
+  network: "testnet",
+  contractId: "guest-book.testnet",
 });
 
 // near.recipes.connect honors a per-call network override
@@ -3275,11 +3345,20 @@ near.print(result);
 import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
-  network: "mainnet",
-  contractId: "berryclub.ek.near",
+  network: "testnet",
+  contractId: "guest-book.testnet",
 });
 
 // near.recipes.functionCall accepts a per-call network override
@@ -3715,7 +3794,7 @@ Response notes:
 
 - @fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.
 - Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.
-- generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+), or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.
+- generateSeedPhrase(256) makes a 24-word phrase; hand both accountId and privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+) — a slot holding a key but no accountId has nobody to sign as and throws Must sign in. Or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.
 
 Follow-ups:
 

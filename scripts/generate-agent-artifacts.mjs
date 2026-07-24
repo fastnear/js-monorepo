@@ -479,11 +479,11 @@ function renderResilienceSection(headingPrefix = "###") {
   const h = headingPrefix;
   return `${h} Resilience and bulk reads
 
-\`@fastnear/api\` retries transient RPC failures (HTTP 408/429/500/502/503/504 and JSON-RPC \`-429\`/\`-32000\`) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through \`near.config\` and are on by default.
+\`@fastnear/api\` retries transient RPC failures (HTTP 408/429 and any 5xx, plus JSON-RPC \`-429\`/\`-32000\` — except deterministic \`HANDLER_ERROR\`s such as UNKNOWN_ACCOUNT, which fail fast) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through \`near.config\` and are on by default.
 
 **Retry** — \`near.config({ retry })\`:
 
-- \`enabled\` (default \`true\`) — set \`false\` to restore single-attempt behavior.
+- \`enabled\` (default \`true\`) — set \`false\` for a single attempt. The \`timeoutMs\` deadline stays armed either way.
 - \`maxAttempts\` (\`5\`) — total attempts including the first.
 - \`baseBackoffMs\` (\`250\`) / \`maxBackoffMs\` (\`30000\`) — full-jitter exponential backoff bounds.
 - \`timeoutMs\` (\`15000\`) — per-attempt AbortController timeout (\`0\` disables it).
@@ -901,7 +901,7 @@ Mental model:
 Result shapes:
 - near.query* (queryAccount, queryBlock, queryAccessKey, queryTx) return the raw JSON-RPC envelope { jsonrpc, result, id } — read your data from the .result field.
 - near.view, near.recipes.*, near.ft.*, near.nft.*, near.tx.*, near.api.v1.*, near.transfers.*, near.neardata.*, and near.fastdata.kv.* return the data shape directly (no envelope).
-- Wide integers are strings: amounts, gas, deposits, nonces and other u64/u128 values come back as decimal strings (JSON-safe, matching NEAR RPC). Constructing a tx accepts string | number | bigint and unit strings like "100 Tgas" / "0.01 NEAR"; inspect a built transaction with near.utils.txToJson (never JSON.stringify a bigint). You never need BigInt to build, send, or read a transaction.
+- Wide integers: what @fastnear DECODES (borsh deserialize, near.view, near.ft.*, near.utils.txToJson) returns u64/u128 as decimal strings. Results relayed straight from the RPC keep NEAR's own types, so yocto fields (deposit, tokens_burnt, amount) are strings while gas_burnt and access-key nonce are JSON numbers. Constructing a tx accepts string | number | bigint and unit strings like "100 Tgas" / "0.01 NEAR"; inspect a built transaction with near.utils.txToJson (never JSON.stringify a bigint). You never need BigInt to build, send, or read a transaction.
 
 Trial credits / API keys:
 - ${supportSurface.trialCreditsUrl}
@@ -975,7 +975,7 @@ ${renderList(family.entrypoints.map((entrypoint) => `\`${entrypoint}\``))}
 
 - ` + "`near.query*`" + ` (` + "`queryAccount`" + `, ` + "`queryBlock`" + `, ` + "`queryAccessKey`" + `, ` + "`queryTx`" + `) are JSON-RPC passthroughs and return the raw envelope ` + "`{ jsonrpc, result, id }`" + ` — read your data from the ` + "`.result`" + ` field.
 - ` + "`near.view`" + `, ` + "`near.recipes.*`" + `, ` + "`near.ft.*`" + `, ` + "`near.nft.*`" + ` and the indexed REST families (` + "`near.tx.*`" + `, ` + "`near.api.v1.*`" + `, ` + "`near.transfers.*`" + `, ` + "`near.neardata.*`" + `, ` + "`near.fastdata.kv.*`" + `) return the flat data shape directly. The recipes layer in particular is what flattens ` + "`near.queryAccount`" + ` results into ` + "`{ amount, block_height, storage_usage, ... }`" + ` for ` + "`near.recipes.viewAccount`" + `.
-- **Wide integers are strings.** Amounts, gas, deposits, nonces and other ` + "`u64`" + `/` + "`u128`" + ` values come back as **decimal strings** (JSON-safe, matching NEAR JSON-RPC). Constructing a transaction accepts ` + "`string | number | bigint`" + ` and unit strings like ` + "`\"100 Tgas\"`" + ` / ` + "`\"0.01 NEAR\"`" + `; inspect a built transaction with ` + "`near.utils.txToJson`" + ` rather than ` + "`JSON.stringify`" + `-ing a raw ` + "`bigint`" + `. You never need ` + "`BigInt`" + ` to build, send, or read a transaction. (` + "`@fastnear/borsh`" + ` ` + "`deserialize`" + ` takes ` + "`{ bigints: \"bigint\" }`" + ` to opt back in.)
+- **Wide integers.** What ` + "`@fastnear`" + ` **decodes** — ` + "`@fastnear/borsh`" + ` ` + "`deserialize`" + `, ` + "`near.view`" + `, ` + "`near.ft.*`" + `, ` + "`near.utils.txToJson`" + ` — returns ` + "`u64`" + `/` + "`u128`" + ` as **decimal strings**. Results relayed straight from the RPC keep NEAR's own types, so yocto fields (` + "`deposit`" + `, ` + "`tokens_burnt`" + `, ` + "`amount`" + `) are strings while ` + "`gas_burnt`" + ` and access-key ` + "`nonce`" + ` are JSON numbers. Constructing a transaction accepts ` + "`string | number | bigint`" + ` and unit strings like ` + "`\"100 Tgas\"`" + ` / ` + "`\"0.01 NEAR\"`" + `; inspect a built transaction with ` + "`near.utils.txToJson`" + ` rather than ` + "`JSON.stringify`" + `-ing a raw ` + "`bigint`" + `. You never need ` + "`BigInt`" + ` to build, send, or read a transaction. (` + "`@fastnear/borsh`" + ` ` + "`deserialize`" + ` takes ` + "`{ bigints: \"bigint\" }`" + ` to opt back in.)
 
 ## Low-level API entrypoints
 

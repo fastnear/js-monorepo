@@ -19,11 +19,11 @@ Use the low-level APIs when you already know the FastNear family and want exact 
 
 ### Resilience and bulk reads
 
-`@fastnear/api` retries transient RPC failures (HTTP 408/429/500/502/503/504 and JSON-RPC `-429`/`-32000`) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through `near.config` and are on by default.
+`@fastnear/api` retries transient RPC failures (HTTP 408/429 and any 5xx, plus JSON-RPC `-429`/`-32000` — except deterministic `HANDLER_ERROR`s such as UNKNOWN_ACCOUNT, which fail fast) with full-jitter backoff, and exposes an explicit bulk read API. Both are configurable through `near.config` and are on by default.
 
 **Retry** — `near.config({ retry })`:
 
-- `enabled` (default `true`) — set `false` to restore single-attempt behavior.
+- `enabled` (default `true`) — set `false` for a single attempt. The `timeoutMs` deadline stays armed either way.
 - `maxAttempts` (`5`) — total attempts including the first.
 - `baseBackoffMs` (`250`) / `maxBackoffMs` (`30000`) — full-jitter exponential backoff bounds.
 - `timeoutMs` (`15000`) — per-attempt AbortController timeout (`0` disables it).
