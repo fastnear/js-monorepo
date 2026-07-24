@@ -2,7 +2,7 @@
 
 Prefer https://js.fastnear.com/recipes.json when you need structured task data.
 Concise map: https://js.fastnear.com/llms.txt
-Version: 2.1.2 — all `@fastnear/*` packages share one version.
+Version: 2.2.0 — all `@fastnear/*` packages share one version.
 
 ## Load it
 

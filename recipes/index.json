@@ -125,8 +125,8 @@
       "code": "# Assumes FASTNEAR_API_KEY is already set in your shell.\nACCOUNT_SUMMARY=\"$(node -e \"$(curl -fsSL https://js.fastnear.com/agents.js)\" <<'EOF'\nconst account = await near.recipes.viewAccount(\"root.near\");\n\nconst { block_hash, storage_usage } = account;\n\nnear.print({ block_hash, storage_usage });\nEOF\n)\"\nBLOCK_HASH=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.block_hash')\"\nSTORAGE_USAGE=\"$(printf '%s\\n' \"$ACCOUNT_SUMMARY\" | jq -r '.storage_usage')\"\n\nprintf 'block_hash=%s\\nstorage_usage=%s\\n' \"$BLOCK_HASH\" \"$STORAGE_USAGE\""
     },
     "versions": {
-      "current": "2.1.2",
-      "policy": "All @fastnear/* packages share one version. The hosted /*.js aliases and bare unpkg URLs resolve to the latest release; pin an exact version in production (for example https://unpkg.com/@fastnear/api@2.1.2/dist/umd/browser.global.js)."
+      "current": "2.2.0",
+      "policy": "All @fastnear/* packages share one version. The hosted /*.js aliases and bare unpkg URLs resolve to the latest release; pin an exact version in production (for example https://unpkg.com/@fastnear/api@2.2.0/dist/umd/browser.global.js)."
     }
   },
   "families": [
