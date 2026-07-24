@@ -14,16 +14,36 @@ node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})" <<'EOF'
 ${body}
 EOF`;
 
-const withEsmApiKeyConfig = (body, { includeWallet = false } = {}) => {
+const withEsmApiKeyConfig = (
+  body,
+  {
+    includeWallet = false,
+    network = "mainnet",
+    contractId = "berryclub.ek.near",
+  } = {},
+) => {
   const imports = includeWallet
-    ? `import * as near from "@fastnear/api";
+    ? // Wallet snippets are browser code — @fastnear/wallet drives a DOM picker.
+      // So: no process.env (bundlers do not shim it, and a key in browser JS is
+      // public anyway), and an explicit bridge from the wallet's session into
+      // @fastnear/api's own per-network state.
+      `import * as near from "@fastnear/api";
 import * as nearWallet from "@fastnear/wallet";
 
-near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
 near.useWallet(nearWallet);
+
+// The wallet owns the session; near.sendTx reads the signer from
+// @fastnear/api's per-network state. Without this bridge every send throws
+// "Must sign in" even with an active wallet session.
+nearWallet.onConnect((session) =>
+  near.state.updateAccountState({ accountId: session.accountId }, session.network),
+);
+
+// Resume a session the user already approved — no popup. Snippets that call
+// near.recipes.connect below open the picker themselves.
 await nearWallet.restore({
-  network: "mainnet",
-  contractId: "berryclub.ek.near",
+  network: "${network}",
+  contractId: "${contractId}",
 });`
     : `import * as near from "@fastnear/api";
 
@@ -215,7 +235,7 @@ curl -sS "https://api.fastnear.com/v1/account/$ACCOUNT_ID/nft" \
   -H "Authorization: Bearer $FASTNEAR_API_KEY" \
   | jq '{
       contract_count: (.tokens | length),
-      preview: [.tokens[0:3][] | {contract_id, token_count: (.tokens // [] | length)}]
+      preview: [.tokens[0:3][] | {contract_id, last_update_block_height}]
     }'`;
 
 const curlJqArchivalSnapshotSnippet = `# NEAR's public archival RPC — no apiKey required.
@@ -444,7 +464,9 @@ near.print({
   raw_balance: balance,
   symbol: meta.symbol,
   decimals: meta.decimals,
-  human_amount: (Number(balance) / 10 ** meta.decimals).toFixed(meta.decimals),
+  // scaleDecimal shifts the decimal point on the STRING. Number(balance)
+  // would round anything past 2^53 — most real FT balances.
+  human_amount: near.utils.scaleDecimal(balance, -meta.decimals),
 });`,
 
   ftMetadata: `const meta = await near.ft.metadata({
@@ -1191,7 +1213,11 @@ const walletSnippets = {
       environment: "esm",
       language: "js",
       runnable: true,
-      code: withEsmApiKeyConfig(code.connectTestnet, { includeWallet: true }),
+      code: withEsmApiKeyConfig(code.connectTestnet, {
+        includeWallet: true,
+        network: "testnet",
+        contractId: "guest-book.testnet",
+      }),
     },
   ],
   functionCallTestnet: [
@@ -1218,7 +1244,11 @@ const walletSnippets = {
       environment: "esm",
       language: "js",
       runnable: true,
-      code: withEsmApiKeyConfig(code.functionCallTestnet, { includeWallet: true }),
+      code: withEsmApiKeyConfig(code.functionCallTestnet, {
+        includeWallet: true,
+        network: "testnet",
+        contractId: "guest-book.testnet",
+      }),
     },
   ],
   connectAndSignMessage: [
@@ -1788,6 +1818,7 @@ export const recipeCatalog = [
     responseNotes: [
       "near.ft.balance returns the raw integer balance string from ft_balance_of, scaled by the token's decimals.",
       "Pair with near.ft.metadata to format the human-readable amount in one shot.",
+      "Convert raw to human with near.utils.scaleDecimal(raw, -decimals) — it shifts the decimal point on the string and returns an exact decimal string. Number(raw) / 10 ** decimals silently rounds any balance above 2^53, which is most real balances; scaleDecimal also trims trailing zeros, so pad the fraction yourself if you need fixed width.",
     ],
     chooseWhen: [
       "Choose this when you already know the FT contract and want one account's balance.",
@@ -2174,6 +2205,7 @@ export const recipeCatalog = [
         environment: "terminal",
         language: "bash",
         runnable: false,
+        reason: "needs_onchain_key",
         code: wrapTerminalSnippet(code.signDelegateLocal),
       },
       {
@@ -2182,6 +2214,7 @@ export const recipeCatalog = [
         environment: "browserGlobal",
         language: "js",
         runnable: false,
+        reason: "needs_onchain_key",
         code: code.signDelegateLocal,
       },
       {
@@ -2190,6 +2223,7 @@ export const recipeCatalog = [
         environment: "esm",
         language: "js",
         runnable: false,
+        reason: "needs_onchain_key",
         code: withEsmApiKeyConfig(code.signDelegateLocal),
       },
     ],
@@ -2230,6 +2264,7 @@ export const recipeCatalog = [
         environment: "terminal",
         language: "bash",
         runnable: false,
+        reason: "faucet_rate_limited",
         code: wrapTerminalSnippet(code.createTestnetAccount),
       },
       {
@@ -2238,6 +2273,7 @@ export const recipeCatalog = [
         environment: "browserGlobal",
         language: "js",
         runnable: false,
+        reason: "faucet_rate_limited",
         code: code.createTestnetAccount,
       },
       {
@@ -2246,6 +2282,7 @@ export const recipeCatalog = [
         environment: "esm",
         language: "js",
         runnable: false,
+        reason: "faucet_rate_limited",
         code: withEsmApiKeyConfig(code.createTestnetAccount),
       },
     ],
@@ -2287,6 +2324,7 @@ export const recipeCatalog = [
         environment: "browserGlobal",
         language: "js",
         runnable: false,
+        reason: "needs_second_package",
         code: code.accountFromSeedPhrase,
       },
       {
@@ -2295,6 +2333,7 @@ export const recipeCatalog = [
         environment: "esm",
         language: "js",
         runnable: false,
+        reason: "needs_second_package",
         code: code.accountFromSeedPhraseEsm,
       },
     ],
@@ -2305,7 +2344,7 @@ export const recipeCatalog = [
     responseNotes: [
       "@fastnear/seed-phrase is a separate package (not on the near global) so the bip39 wordlist never bloats @fastnear/api; load it as the NearSeedPhrase global or import it in ESM/Node.",
       "Derivation matches near-seed-phrase / near-cli (SLIP-0010 ed25519 at m/44'/397'/0'), so a phrase recovers the same key across every NEAR tool.",
-      "generateSeedPhrase(256) makes a 24-word phrase; hand privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+), or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.",
+      "generateSeedPhrase(256) makes a 24-word phrase; hand both accountId and privateKey to near.state.updateAccountState and near.sendTx signs locally with it (@fastnear/api 2.1.1+) — a slot holding a key but no accountId has nobody to sign as and throws Must sign in. Or pass near.utils.signerFromPrivateKey(privateKey) with a matching signerId to sign without touching stored state.",
     ],
     chooseWhen: [
       "Choose this to onboard or recover an account key from a human-writable phrase.",
