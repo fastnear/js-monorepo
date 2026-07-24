@@ -21,7 +21,11 @@ describe("createFundedTestnetAccount", () => {
     global.fetch = originalFetch;
   });
 
-  it("POSTs { newAccountId, newKey } to the testnet helper and returns its JSON", async () => {
+  // The field name is `newAccountPublicKey`, not near-api-js's older `newKey`.
+  // This assertion previously locked in the wrong spelling, so the mock passed
+  // while every real call returned 400. Verified against the live helper:
+  // `newKey` -> 400 with an internal TypeError, `newAccountPublicKey` -> 200.
+  it("POSTs { newAccountId, newAccountPublicKey } to the testnet helper and returns its JSON", async () => {
     let captured: { url: any; init: any } | undefined;
     global.fetch = vi.fn(async (url: any, init: any) => {
       captured = { url, init };
@@ -34,7 +38,10 @@ describe("createFundedTestnetAccount", () => {
     expect(result).toEqual({ account_id: "alice.testnet" });
     expect(captured?.url).toBe("https://helper.testnet.near.org/account");
     expect(captured?.init.method).toBe("POST");
-    expect(JSON.parse(captured?.init.body)).toEqual({ newAccountId: "alice.testnet", newKey: publicKey });
+    expect(JSON.parse(captured?.init.body)).toEqual({
+      newAccountId: "alice.testnet",
+      newAccountPublicKey: publicKey,
+    });
   });
 
   it("throws with the faucet status and body on failure", async () => {
