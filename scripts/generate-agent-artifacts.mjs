@@ -4,8 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   FASTNEAR_AGENT_ENTRY,
+  FASTNEAR_CDN_BASE,
+  FASTNEAR_LLMS_ENTRY,
+  FASTNEAR_LLMS_FULL_ENTRY,
   FASTNEAR_RECIPE_CATALOG_ENTRY,
   generatedArtifact,
+  publishedPackages,
   recipeCatalog,
   explainSurface,
   mlDsa65Surface,
@@ -17,6 +21,50 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
+
+// Injected rather than hard-coded in source.mjs so the advertised version can
+// never drift from the version that actually ships. An agent reading the
+// artifacts previously saw only historical 1.1.x strings.
+const releaseVersion = JSON.parse(
+  readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+).version;
+
+supportSurface.versions = {
+  current: releaseVersion,
+  policy:
+    "All @fastnear/* packages share one version. The hosted /*.js aliases and bare unpkg URLs " +
+    "resolve to the latest release; pin an exact version in production " +
+    `(for example https://unpkg.com/@fastnear/api@${releaseVersion}/dist/umd/browser.global.js).`,
+};
+
+// One description per published package. Keyed off `publishedPackages` so a new
+// workspace cannot be added to the catalog without also describing it here —
+// the three hand-maintained copies of this list had already drifted apart.
+const packageSummaries = {
+  "@fastnear/api":
+    "low-level NEAR RPC and FastNear family APIs, plus `near.recipes` task helpers and `near.explain`",
+  "@fastnear/wallet": "wallet connection and transaction/signing provider",
+  "@fastnear/utils": "units, crypto, serialization, storage helpers",
+  "@fastnear/seed-phrase":
+    "BIP-39 seed phrase generation and recovery, SLIP-0010 ed25519 derivation on NEAR's `m/44'/397'/0'` path",
+  "@fastnear/ml-dsa-65":
+    "opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing",
+  "@fastnear/x402":
+    "official x402 v2 NEAR adapters for paid fetch, local-key clients, resource servers, and facilitators",
+  "@fastnear/intents":
+    "NEAR Intents: 1Click quotes, NEP-413 intent signing, and verifier deposits/withdrawals",
+};
+
+const missingSummaries = publishedPackages.filter((name) => !packageSummaries[name]);
+if (missingSummaries.length > 0) {
+  throw new Error(
+    `publishedPackages entries missing a summary in generate-agent-artifacts.mjs: ${missingSummaries.join(", ")}`,
+  );
+}
+
+const packageSummaryLines = publishedPackages
+  .map((name) => `- \`${name}\`: ${packageSummaries[name]}`)
+  .join("\n");
 
 const filesToWrite = new Map();
 
@@ -33,6 +81,14 @@ const requiredRecipeFields = [
 
 function renderList(items, prefix = "- ") {
   return items.map((item) => `${prefix}${item}`).join("\n");
+}
+
+// The `wallet` family is browser-only and has no HTTP endpoints, so its
+// defaultBaseUrls is null rather than a pair of invented URLs.
+function renderFamilyBaseUrls(family) {
+  const urls = family.defaultBaseUrls;
+  if (!urls) return "none — browser wallet session, not an HTTP service";
+  return `mainnet \`${urls.mainnet}\`, testnet \`${urls.testnet}\``;
 }
 
 function renderPagination(pagination) {
@@ -61,6 +117,18 @@ function assertCatalogContract() {
       if (!(field in recipe)) {
         throw new Error(`Recipe ${recipe.id} is missing required field ${field}`);
       }
+    }
+  }
+
+  // Every recipe's `service` must name a real family, or an agent resolving
+  // service -> base URL / auth style / entrypoints hits a dead key. `wallet`
+  // was declared by 8 of 27 recipes with no matching family for months.
+  const familyIds = new Set(generatedArtifact.families.map((family) => family.id));
+  for (const recipe of recipeCatalog) {
+    if (!familyIds.has(recipe.service)) {
+      throw new Error(
+        `Recipe ${recipe.id} declares service "${recipe.service}", which is not a family id (${[...familyIds].join(", ")})`,
+      );
     }
   }
 
@@ -398,7 +466,7 @@ ${generatedArtifact.families.map((family) => `#### ${family.id}
 ${family.summary}
 
 - Auth style: \`${family.authStyle}\`
-- Default base URLs: mainnet \`${family.defaultBaseUrls.mainnet}\`, testnet \`${family.defaultBaseUrls.testnet}\`
+- Default base URLs: ${renderFamilyBaseUrls(family)}
 - Pagination: ${renderPagination(family.pagination)}
 - Best for:
 ${renderList(family.bestFor)}
@@ -709,14 +777,20 @@ function renderLlmsTxt() {
   return `# FastNear JS monorepo
 
 Homepage: https://js.fastnear.com
+Full reference: ${FASTNEAR_LLMS_FULL_ENTRY}
+Recipe catalog: ${FASTNEAR_RECIPE_CATALOG_ENTRY}
+Version: ${releaseVersion} (all @fastnear/* packages share one version)
 
 Primary packages:
-- @fastnear/api
-- @fastnear/wallet
-- @fastnear/utils
-- @fastnear/ml-dsa-65
-- @fastnear/x402
-- @fastnear/intents
+${publishedPackages.map((name) => `- ${name}`).join("\n")}
+
+Load in a browser:
+- <script src="${FASTNEAR_CDN_BASE}/near.js"></script> defines the \`near\` global
+- <script src="${FASTNEAR_CDN_BASE}/wallet.js"></script> defines the \`nearWallet\` global
+
+Load from npm:
+- npm install ${publishedPackages.slice(0, 2).join(" ")}
+- import * as near from "@fastnear/api"; import * as nearWallet from "@fastnear/wallet";
 
 Low-level-first runtime surfaces:
 - near.config({ apiKey })
@@ -848,15 +922,19 @@ ${recipeCatalog.map((recipe) => `- ${recipe.id}: ${recipe.title} (${recipe.servi
 function renderLlmsFull() {
   return `# FastNear JS monorepo (full)
 
-Prefer ` + "`recipes/index.json`" + ` when you need structured task data.
+Prefer ${FASTNEAR_RECIPE_CATALOG_ENTRY} when you need structured task data.
+Concise map: ${FASTNEAR_LLMS_ENTRY}
+Version: ${releaseVersion} — all ` + "`@fastnear/*`" + ` packages share one version.
+
+## Load it
+
+- Browser: ` + "`" + `<script src="${FASTNEAR_CDN_BASE}/near.js"></script>` + "`" + ` defines the ` + "`near`" + ` global; ` + "`" + `<script src="${FASTNEAR_CDN_BASE}/wallet.js"></script>` + "`" + ` defines ` + "`nearWallet`" + `.
+- npm: ` + "`npm install @fastnear/api @fastnear/wallet`" + `, then ` + "`import * as near from \"@fastnear/api\"`" + `.
+- Terminal: ` + "`" + `node -e "$(curl -fsSL ${FASTNEAR_AGENT_ENTRY})"` + "`" + ` — no install.
 
 ## Packages
 
-- ` + "`@fastnear/api`" + `: low-level NEAR RPC and FastNear family APIs, plus ` + "`near.recipes`" + ` task helpers and ` + "`near.explain`" + `
-- ` + "`@fastnear/wallet`" + `: wallet connection and transaction/signing provider
-- ` + "`@fastnear/utils`" + `: units, crypto, serialization, storage helpers
-- ` + "`@fastnear/ml-dsa-65`" + `: opt-in protocol-v85 ML-DSA-65 account-key generation, encoding, hashing, and transaction signing
-- ` + "`@fastnear/x402`" + `: official x402 v2 NEAR adapters for paid fetch, local-key clients, resource servers, and facilitators
+${packageSummaryLines}
 
 ## Unified config
 
@@ -885,7 +963,7 @@ ${generatedArtifact.families.map((family) => `### ${family.id}
 ${family.summary}
 
 - Auth style: \`${family.authStyle}\`
-- Default base URLs: mainnet \`${family.defaultBaseUrls.mainnet}\`, testnet \`${family.defaultBaseUrls.testnet}\`
+- Default base URLs: ${renderFamilyBaseUrls(family)}
 - Pagination: ${renderPagination(family.pagination)}
 - Best for:
 ${renderList(family.bestFor)}

@@ -127,6 +127,48 @@ EOF`;
   }
 }
 
+// Every js.fastnear.com URL the catalog advertises must actually resolve.
+// This is the guard that would have caught /seed-phrase.js 404ing while
+// accounts.html told agents to load it, and llms-full.txt being referenced by
+// a path (recipes/index.json) that only exists in the repo.
+async function assertAdvertisedUrlsResolve(publicCatalog) {
+  const urls = new Set();
+  const collect = (value) => {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(/https:\/\/js\.fastnear\.com\/[^\s"'`)<>\\]+/g)) {
+        urls.add(match[0].replace(/[.,;:]+$/, ""));
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (value && typeof value === "object") {
+      Object.values(value).forEach(collect);
+    }
+  };
+  collect(publicCatalog);
+
+  const failures = [];
+  for (const url of [...urls].sort()) {
+    let status = 0;
+    try {
+      const response = await fetch(url, { redirect: "follow" });
+      status = response.status;
+    } catch (error) {
+      failures.push(`${url} -> ${error instanceof Error ? error.message : error}`);
+      continue;
+    }
+    if (status >= 400) failures.push(`${url} -> ${status}`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Catalog advertises URLs that do not resolve:\n${failures.join("\n")}`);
+  }
+  console.log(`Verified ${urls.size} advertised js.fastnear.com URLs resolve`);
+}
+
 async function main() {
   const [
     nearAsset,
@@ -226,6 +268,8 @@ async function main() {
       }
     }
   }
+
+  await assertAdvertisedUrlsResolve(publicCatalog);
 
   runPublicTerminalSmoke();
 }

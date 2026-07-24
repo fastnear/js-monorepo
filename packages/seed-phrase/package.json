@@ -1,6 +1,6 @@
 {
   "name": "@fastnear/seed-phrase",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "BIP-39 seed phrase generation and NEAR key derivation (SLIP-0010 ed25519)",
   "type": "module",
   "types": "./dist/esm/index.d.ts",
