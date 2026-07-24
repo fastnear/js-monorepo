@@ -660,10 +660,25 @@ export const requestSignIn = async ({
   }
 
   // Write the connected account into the *target network*'s slot rather
-  // than the legacy global, and promote that network to active so that
-  // back-compat callers (`near.accountId()` without args, etc.) resolve
-  // to the just-connected session.
+  // than the legacy global, and promote that network on BOTH cursors.
+  //
+  // `setActiveNetwork` alone moves only the *read* cursor — `accountId()`,
+  // `publicKey()`, `authStatus()` all resolve through `getAccountState()` ->
+  // `_activeNetwork`. Every no-arg *write* path resolves through
+  // `getConfig().networkId` instead: `sendTx`, `signOut`, `signMessage`,
+  // `signDelegate`, `selected`, and RPC URL selection. Promoting one and not
+  // the other let them disagree, and nothing warned:
+  //
+  //   requestSignIn({});                      // mainnet session
+  //   requestSignIn({ network: "testnet" });  // active -> testnet, config -> still mainnet
+  //   accountId();                            // "alice.testnet"
+  //   sendTx({ receiverId, actions });        // signed by alice.near, on MAINNET
+  //
+  // With only a testnet session the same call threw "Must sign in" while
+  // `authStatus()` reported SignedIn. Going through `setConfig` also persists
+  // the choice, so a reload no longer resets to mainnet and loses the session.
   updateAccountState({ accountId: result.accountId }, targetNetwork);
+  setConfig({ networkId: targetNetwork });
   setActiveNetwork(targetNetwork);
   return result;
 };
@@ -1327,7 +1342,12 @@ export const signOut = async ({
   // shape: callers using single-session signOut expect the active config
   // to flip back to mainnet defaults afterwards.
   if (network === undefined) {
-    setConfig(NETWORKS[DEFAULT_NETWORK_ID]);
+    // Request only the network id, not the whole `NETWORKS[...]` object.
+    // Passing the full default as the *requested* config made its `services`
+    // block an explicit override, so signing out reset every caller-configured
+    // base URL — a private RPC or indexer silently reverted to the public
+    // FastNear endpoints, even when the network never changed.
+    setConfig({ networkId: DEFAULT_NETWORK_ID });
     setActiveNetwork(DEFAULT_NETWORK_ID);
   }
 };
