@@ -88,11 +88,16 @@ export interface RecipeViewContractParams {
   args?: any;
   argsBase64?: string;
   blockId?: string;
+  // Every `near.recipes.*` takes a per-call network override. The read
+  // recipes accepted one at runtime but never declared it, so TypeScript
+  // callers could not pass what the catalog documents.
+  network?: "mainnet" | "testnet";
 }
 
 export interface RecipeViewAccountParams {
   accountId: string;
   blockId?: string;
+  network?: "mainnet" | "testnet";
 }
 
 export type RecipeViewAccountInput = string | RecipeViewAccountParams;
@@ -100,6 +105,7 @@ export type RecipeViewAccountInput = string | RecipeViewAccountParams;
 export interface RecipeInspectTransactionParams {
   txHash: string;
   accountId?: string;
+  network?: "mainnet" | "testnet";
 }
 
 export type RecipeInspectTransactionInput = string | RecipeInspectTransactionParams;

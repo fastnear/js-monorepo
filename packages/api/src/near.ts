@@ -673,7 +673,19 @@ export const requestSignIn = async ({
   // caller's configured default, not a record of where the session went. Every
   // no-arg call resolves through the active network instead, so the two never
   // need to agree. `setActiveNetwork` persists, so this survives a reload.
-  updateAccountState({ accountId: result.accountId }, targetNetwork);
+  //
+  // Keep the provider's public key when it gives us one — it was being dropped,
+  // so `near.publicKey()` and `getPublicKeyForContract()` returned null for
+  // every wallet session even though the value was right here. Written
+  // conditionally so a provider that omits it can't clobber a key already
+  // derived from a stored private key.
+  updateAccountState(
+    {
+      accountId: result.accountId,
+      ...(result.publicKey ? { publicKey: result.publicKey } : {}),
+    },
+    targetNetwork,
+  );
   setActiveNetwork(targetNetwork);
   return result;
 };
@@ -2122,8 +2134,12 @@ function inspectTransactionRecipe(
 async function inspectTransactionRecipe(
   input: RecipeInspectTransactionInput
 ): Promise<FastNearTxTransactionRow | null> {
-  const { txHash } = normalizeRecipeInspectTransactionParams(input);
-  const result = await tx.transactions({ txHashes: [txHash] });
+  // `network` has to be forwarded, not just accepted. Destructuring only
+  // `txHash` dropped the documented per-call override on the floor, so
+  // inspecting a testnet transaction silently queried mainnet and returned
+  // null — a miss that reads exactly like "no such transaction".
+  const { txHash, network } = normalizeRecipeInspectTransactionParams(input);
+  const result = await tx.transactions({ txHashes: [txHash], network });
   return result?.transactions?.[0] ?? null;
 }
 

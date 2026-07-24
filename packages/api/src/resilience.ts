@@ -113,7 +113,11 @@ export async function runWithRetry<T = any>(
   for (let attempt = 1; ; attempt++) {
     let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (cfg.enabled && cfg.timeoutMs > 0) {
+    // The deadline is deliberately NOT gated on `cfg.enabled`. That switch
+    // turns off *retries*; it should not also disarm the per-attempt timeout.
+    // It used to, so `retry: { enabled: false }` left a hung RPC hanging
+    // forever while `getConfig().retry.timeoutMs` still reported it armed.
+    if (cfg.timeoutMs > 0) {
       controller = new AbortController();
       timer = setTimeout(() => controller!.abort(), cfg.timeoutMs);
     }

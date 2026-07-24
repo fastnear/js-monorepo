@@ -221,7 +221,17 @@ export function resolveConfig(
     services,
   };
 
-  if (Object.prototype.hasOwnProperty.call(requested, "apiKey")) {
+  // An explicit `undefined` means "I didn't have one to give", not "clear it".
+  // Guarding on `hasOwnProperty` alone made `config({ apiKey: undefined })`
+  // destroy a previously-set key — which is what
+  // `config({ apiKey: process.env.FASTNEAR_API_KEY })` evaluates to whenever
+  // the variable is unset. The client then silently dropped to unauthenticated
+  // and the symptom was rate limiting, not a missing key. Explicit `null`
+  // still clears it deliberately.
+  if (
+    Object.prototype.hasOwnProperty.call(requested, "apiKey") &&
+    requested.apiKey !== undefined
+  ) {
     next.apiKey = normalizeApiKey(requested.apiKey);
   } else {
     next.apiKey = normalizeApiKey(baseConfig.apiKey);
