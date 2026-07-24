@@ -25,11 +25,13 @@ python3 -m http.server
 ### Loading `@fastnear/*` from a CDN — pinning and SRI
 
 - **Do not put Subresource Integrity (`integrity` + `crossorigin`) on the
-  `@fastnear/*` script tags.** They deliberately resolve to a major range
-  (`@2`) so a publish propagates without editing HTML. An SRI hash freezes
-  exact bytes, so adding one there breaks every consumer on the next publish.
-  Every `@fastnear/*` package shares one version, so pin them all to the same
-  range.
+  `@fastnear/*` script tags.** An SRI hash freezes exact bytes, so it breaks
+  every consumer on the next publish. Most examples float a major range
+  (`@1`) so a publish propagates without editing HTML; `x402.html` is the
+  exception and pins an exact version, because the testnet wallet-smoke
+  harness rewrites its two exact tags to local bundles — but neither style
+  takes SRI. Every `@fastnear/*` package shares one version, so keep the tags
+  in a page consistent with each other.
 - **Do put SRI on genuinely third-party, version-pinned CDN scripts** you add
   (a specific charting lib, say): `integrity="sha384-…"` plus
   `crossorigin="anonymous"`. Fonts are the exception — Google Fonts serves

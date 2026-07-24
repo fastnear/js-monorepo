@@ -18,11 +18,14 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Track the current major (2.x). The @1.5.0 pins here predated the 2.0.0
-       release and were stale; every @fastnear/* package shares one version.
-       See examples/README.md for the CDN pinning + SRI policy. -->
-  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@2/dist/umd/browser.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@2/dist/umd/browser.global.js"></script>
+  <!-- Exact version pins, kept in lockstep with the current release. These are
+       intentionally exact (not a @1 / @2 range): the testnet wallet-smoke
+       harness (scripts/x402-testnet-helpers.mjs) rewrites these two exact tags
+       to local /bundles/*.js, and its matcher only accepts an exact X.Y.Z or
+       @next. The @1.5.0 pins here predated the 2.0.0 release; bumped to 2.1.2.
+       No SRI — see examples/README.md for the CDN pinning + SRI policy. -->
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/wallet@2.1.2/dist/umd/browser.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fastnear/x402@2.1.2/dist/umd/browser.global.js"></script>
 </head>
 <body>
 <div class="container">
