@@ -871,11 +871,18 @@ export const createFundedTestnetAccount = async ({
   const response = await fetch("https://helper.testnet.near.org/account", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ newAccountId, newKey: publicKey }),
+    // The helper expects `newAccountPublicKey`. Sending near-api-js's older
+    // `newKey` spelling makes it dereference an undefined field and answer 400
+    // with an internal TypeError, which reads like a caller-side mistake.
+    body: JSON.stringify({ newAccountId, newAccountPublicKey: publicKey }),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Testnet faucet request failed (${response.status}): ${detail}`);
+    throw new Error(
+      `Testnet faucet rejected the request (${response.status})` +
+        `${detail ? `: ${detail}` : ""}` +
+        " — the faucet is rate limited per IP and only creates <name>.testnet accounts.",
+    );
   }
   return response.json();
 };
