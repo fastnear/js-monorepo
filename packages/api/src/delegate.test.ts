@@ -176,4 +176,44 @@ describe("relayDelegate", () => {
       }),
     ).rejects.toThrow(/must be paired/);
   });
+
+  it("accepts a wallet-shaped { signedDelegate } directly, no hand-normalization", async () => {
+    mockRpc({ nonce: 10, height: 1000 });
+    const senderSigner = edSigner(1);
+    // signDelegate's borshBase64 is byte-identical to what a wallet's
+    // signDelegateActions returns as { borshSerializedBase64 }.
+    const signed = await signDelegate({
+      receiverId: "counter.testnet",
+      actions: [
+        actions.functionCall({ methodName: "increment", gas: "30 Tgas", deposit: "0" }),
+        actions.transfer("1"),
+      ],
+      signerId: "alice.testnet",
+      signer: senderSigner,
+      network: "testnet",
+    });
+
+    const relayerSigner = edSigner(9);
+    // The whole point of #46: this used to throw "Not implemented action:
+    // undefined" if you decoded the borsh yourself and passed it in.
+    await expect(
+      relayDelegate({
+        signedDelegate: { borshSerializedBase64: signed.borshBase64 },
+        relayerSigner,
+        relayerId: "relayer.testnet",
+        network: "testnet",
+      }),
+    ).resolves.toBeDefined();
+
+    const sent = (global.fetch as any).mock.calls
+      .map(([, r]: any[]) => rpcMethod(r))
+      .some((m: any) => m.method === "send_tx");
+    expect(sent).toBe(true);
+  });
+
+  it("errors clearly when given neither the pair nor a signedDelegate", async () => {
+    await expect(relayDelegate({ network: "testnet" } as any)).rejects.toThrow(
+      /needs \{ delegateAction, signature \} or a wallet-signed \{ signedDelegate \}/,
+    );
+  });
 });

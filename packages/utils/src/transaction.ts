@@ -1,14 +1,16 @@
-import { serialize as borshSerialize } from "@fastnear/borsh";
+import { serialize as borshSerialize, deserialize as borshDeserialize } from "@fastnear/borsh";
 import {
   assertNearValidatorPublicKey,
   decodeNearPublicKey,
   keyFromString,
+  keyToString,
   keyTypeFromString,
   NEAR_KEY_DESCRIPTORS,
   sha256,
+  type NearKeyType,
   type NearPublicKey,
 } from "./crypto.js";
-import { base64ToBytes, fromBase58 } from "./misc.js";
+import { base64ToBytes, bytesToBase64, fromBase58, toBase58 } from "./misc.js";
 import { convertUnit } from "./units.js";
 import { getBorshSchema } from "@fastnear/borsh-schema";
 
@@ -388,4 +390,224 @@ export function delegateSigningHash(delegate: NearDelegateAction): Uint8Array {
   new DataView(prefixed.buffer).setUint32(0, NEP461_DELEGATE_TAG, true);
   prefixed.set(body, 4);
   return sha256(prefixed);
+}
+
+// ── parseSignedDelegate: the inverse of serializeSignedDelegate ──────────────
+//
+// A wallet's `signDelegateActions` hands back borsh bytes (as base64), but
+// `relayDelegate` / `actions.signedDelegate` want the flat
+// `{ delegateAction, signature }` shape `signDelegate` returns. Borsh-decoding
+// those bytes yields the chain-schema shape — enum variants as
+// `{ transfer: { … } }`, byte arrays as number[], wide ints as decimal strings,
+// keys/signatures as `{ ed25519Key: { data } }`. Feeding that straight back
+// into the action builders throws `Not implemented action: undefined`, because
+// `mapAction` switches on `.type`, which the borsh shape doesn't carry. So the
+// work here is inverting `mapAction` / `mapPublicKey` / `mapSignature` exactly.
+
+// Reverse the descriptor table (keyType -> variant) into variant -> keyType, so
+// this can't drift from the forward `mapPublicKey` / `mapSignature`.
+const PUBLIC_KEY_VARIANT_TO_TYPE: Record<string, NearKeyType> = Object.fromEntries(
+  (Object.entries(NEAR_KEY_DESCRIPTORS) as [NearKeyType, { publicKeyVariant: string }][])
+    .map(([keyType, d]) => [d.publicKeyVariant, keyType]),
+);
+const SIGNATURE_VARIANT_TO_TYPE: Record<string, NearKeyType> = Object.fromEntries(
+  (Object.entries(NEAR_KEY_DESCRIPTORS) as [NearKeyType, { signatureVariant: string }][])
+    .map(([keyType, d]) => [d.signatureVariant, keyType]),
+);
+
+const toBytes = (data: number[] | Uint8Array): Uint8Array =>
+  data instanceof Uint8Array ? data : Uint8Array.from(data);
+
+/** Single `{ variant: value }` enum pair from a borsh-decoded enum. */
+function enumEntry(obj: unknown): [string, any] {
+  if (!obj || typeof obj !== "object") {
+    throw new Error(`parseSignedDelegate: expected a borsh enum object, got ${typeof obj}`);
+  }
+  const entries = Object.entries(obj as Record<string, unknown>);
+  if (entries.length !== 1) {
+    throw new Error(`parseSignedDelegate: expected exactly one enum variant, got ${entries.length}`);
+  }
+  return entries[0] as [string, any];
+}
+
+function unmapPublicKey(decoded: unknown): NearPublicKey {
+  const [variant, value] = enumEntry(decoded);
+  const keyType = PUBLIC_KEY_VARIANT_TO_TYPE[variant];
+  if (!keyType) throw new Error(`parseSignedDelegate: unknown public-key variant "${variant}"`);
+  return keyToString(toBytes(value.data), keyType) as NearPublicKey;
+}
+
+function unmapAccessKey(decoded: { nonce: NearInteger; permission: unknown }): NearAccessKey {
+  const [variant, value] = enumEntry(decoded.permission);
+  if (variant === "fullAccess") {
+    return { nonce: decoded.nonce, permission: "FullAccess" };
+  }
+  if (variant === "functionCall") {
+    return {
+      nonce: decoded.nonce,
+      permission: {
+        receiverId: value.receiverId,
+        methodNames: value.methodNames ?? [],
+        allowance: value.allowance ?? null,
+      },
+    };
+  }
+  throw new Error(`parseSignedDelegate: unknown access-key permission "${variant}"`);
+}
+
+/** Invert `mapAction` for the eight ClassicAction variants a delegate can carry. */
+function unmapClassicAction(decoded: unknown): NearClassicAction {
+  const [variant, value] = enumEntry(decoded);
+  switch (variant) {
+    case "createAccount":
+      return { type: "CreateAccount" };
+    case "deployContract":
+      return { type: "DeployContract", codeBase64: bytesToBase64(toBytes(value.code)) };
+    case "functionCall":
+      // Round-trip the args as base64 (byte-perfect); mapAction re-emits
+      // argsBase64 verbatim, so args that aren't valid JSON survive intact.
+      return {
+        type: "FunctionCall",
+        methodName: value.methodName,
+        argsBase64: bytesToBase64(toBytes(value.args)),
+        gas: value.gas,
+        deposit: value.deposit,
+      };
+    case "transfer":
+      return { type: "Transfer", deposit: value.deposit };
+    case "stake":
+      return { type: "Stake", stake: value.stake, publicKey: unmapPublicKey(value.publicKey) };
+    case "addKey":
+      return {
+        type: "AddKey",
+        publicKey: unmapPublicKey(value.publicKey),
+        accessKey: unmapAccessKey(value.accessKey),
+      };
+    case "deleteKey":
+      return { type: "DeleteKey", publicKey: unmapPublicKey(value.publicKey) };
+    case "deleteAccount":
+      return { type: "DeleteAccount", beneficiaryId: value.beneficiaryId };
+    default:
+      throw new Error(`parseSignedDelegate: cannot parse delegate action variant "${variant}"`);
+  }
+}
+
+/**
+ * What `parseSignedDelegate` accepts. All of these ultimately carry the borsh
+ * bytes a wallet's `signDelegateActions` produced (`BorshSerializedSignedDelegate`
+ * or a bare base64 string), plus the `{ signedDelegateActions: [...] }` envelope
+ * `nearWallet.signDelegateActions` returns and the `{ borshBase64 }` our own
+ * `signDelegate` returns.
+ */
+export type SignedDelegateInput =
+  | string
+  | { borshSerializedBase64: string }
+  | { borshBase64: string }
+  | { signedDelegateActions: unknown[] };
+
+export interface ParsedSignedDelegate {
+  delegateAction: NearDelegateAction;
+  signature: string;
+  signatureBytes: Uint8Array;
+  borshBase64: string;
+}
+
+/** Pull the borsh base64 out of whatever wallet-shaped envelope carried it. */
+function extractBorshBase64(input: SignedDelegateInput): string {
+  if (typeof input === "string") return input;
+  if (input && typeof input === "object") {
+    const o = input as Record<string, unknown>;
+    if (typeof o.borshSerializedBase64 === "string") return o.borshSerializedBase64;
+    if (typeof o.borshBase64 === "string") return o.borshBase64;
+    if (Array.isArray(o.signedDelegateActions)) {
+      const entries = o.signedDelegateActions;
+      if (entries.length !== 1) {
+        throw new Error(
+          `parseSignedDelegate: expected exactly one signed delegate, got ${entries.length}. ` +
+            `Pass a single entry from signedDelegateActions[].`,
+        );
+      }
+      return extractBorshBase64(entries[0] as SignedDelegateInput);
+    }
+    if ("delegateHash" in o && "signedDelegate" in o) {
+      throw new Error(
+        "parseSignedDelegate: the legacy { delegateHash, signedDelegate } wallet result is not " +
+          "supported — request the borshSerializedBase64 form via WalletFeatures.signDelegateActions.",
+      );
+    }
+  }
+  throw new Error(
+    "parseSignedDelegate: unrecognized input; expected a base64 string, " +
+      "{ borshSerializedBase64 }, { borshBase64 }, or { signedDelegateActions: [entry] }.",
+  );
+}
+
+/**
+ * Turn a wallet-signed NEP-366 delegate into the `{ delegateAction, signature }`
+ * shape `relayDelegate` and `actions.signedDelegate` accept — the inverse of
+ * `serializeSignedDelegate`. The output is drop-in equal to `signDelegate`'s
+ * structured return, so a wallet-relayed delegate needs no hand-normalization.
+ */
+export function parseSignedDelegate(input: SignedDelegateInput): ParsedSignedDelegate {
+  const inputBase64 = extractBorshBase64(input);
+  const inputBytes = base64ToBytes(inputBase64);
+  let decoded: {
+    delegateAction: {
+      senderId: string;
+      receiverId: string;
+      actions: unknown[];
+      nonce: NearInteger;
+      maxBlockHeight: NearInteger;
+      publicKey: unknown;
+    };
+    signature: unknown;
+  };
+  try {
+    decoded = borshDeserialize(SCHEMA.SignedDelegate, inputBytes) as typeof decoded;
+  } catch (e) {
+    // Borsh's own errors ("buffer overrun") leak no context — every other bad
+    // path here throws a "parseSignedDelegate: …" message, so match that.
+    throw new Error(
+      `parseSignedDelegate: could not decode a borsh SignedDelegate (invalid or truncated base64): ${
+        (e as Error).message
+      }`,
+    );
+  }
+  const da = decoded.delegateAction;
+  const [sigVariant, sigValue] = enumEntry(decoded.signature);
+  if (!SIGNATURE_VARIANT_TO_TYPE[sigVariant]) {
+    throw new Error(`parseSignedDelegate: unknown signature variant "${sigVariant}"`);
+  }
+  const signatureBytes = toBytes(sigValue.data);
+  const delegateAction: NearDelegateAction = {
+    senderId: da.senderId,
+    receiverId: da.receiverId,
+    actions: da.actions.map(unmapClassicAction),
+    nonce: da.nonce,
+    maxBlockHeight: da.maxBlockHeight,
+    publicKey: unmapPublicKey(da.publicKey),
+  };
+
+  // Borsh's decoder stops as soon as the schema is satisfied and ignores any
+  // trailing bytes, so decoding alone can't tell canonical input from a
+  // valid-prefix-plus-garbage buffer. Re-serialize the parsed delegate (borsh
+  // is canonical, so this reproduces the exact bytes of any well-formed input)
+  // and require it to match — this rejects trailing/non-canonical bytes and
+  // makes borshBase64 the guaranteed-canonical forward payload.
+  const canonical = serializeSignedDelegate(delegateAction, signatureBytes);
+  if (canonical.length !== inputBytes.length || canonical.some((b, i) => b !== inputBytes[i])) {
+    throw new Error(
+      "parseSignedDelegate: input is not canonical NEP-366 borsh — it has trailing or malformed " +
+        "bytes after the SignedDelegate",
+    );
+  }
+
+  return {
+    delegateAction,
+    // Bare base58, matching signDelegate — mapSignature pairs it with the
+    // delegate's publicKey keyType when it re-serializes.
+    signature: toBase58(signatureBytes),
+    signatureBytes,
+    borshBase64: bytesToBase64(canonical),
+  };
 }
