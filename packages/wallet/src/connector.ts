@@ -3,6 +3,7 @@ import {
   type NearWalletBase,
   type SignAndSendTransactionParams,
   type SignAndSendTransactionsParams,
+  type SignedMessage,
   type SignMessageParams,
 } from "@fastnear/near-connect";
 import { toConnectorActions } from "./connector-actions.js";
@@ -21,6 +22,7 @@ export type {
   SignDelegateActionsResponse,
   WalletManifest,
 } from "./delegate-actions.js";
+export type { SignedMessage } from "@fastnear/near-connect";
 
 type Network = "mainnet" | "testnet";
 
@@ -51,12 +53,18 @@ export interface ConnectOptions {
     linkText?: string;
     icon?: string;
   } | null;
+  // NEP-413 message to sign in the *same* wallet popup as sign-in. When set,
+  // near-connect filters the picker to wallets advertising the
+  // `signInAndSignMessage` feature and returns the signature on `ConnectResult`.
+  signMessageParams?: Omit<SignMessageParams, "signerId" | "network">;
 }
 
 export interface ConnectResult {
   accountId: string;
   publicKey?: string;
   network?: Network;
+  // Only present when `connect()` was called with `signMessageParams`.
+  signedMessage?: SignedMessage;
 }
 
 type ConnectCallback = (result: ConnectResult) => void;
@@ -68,6 +76,7 @@ interface NetworkState {
   connector: NearConnector | null;
   connectedWallet: NearWalletBase | null;
   currentAccountId: string | null;
+  currentPublicKey: string | null;
 }
 
 // Per-network state. Each network can hold its own active session, so signing
@@ -75,8 +84,8 @@ interface NetworkState {
 // compatible callers (no `network` argument) are routed to `activeNetwork`,
 // which tracks the most recent successful connect/restore.
 const networkStates: Record<Network, NetworkState> = {
-  mainnet: { connector: null, connectedWallet: null, currentAccountId: null },
-  testnet: { connector: null, connectedWallet: null, currentAccountId: null },
+  mainnet: { connector: null, connectedWallet: null, currentAccountId: null, currentPublicKey: null },
+  testnet: { connector: null, connectedWallet: null, currentAccountId: null, currentPublicKey: null },
 };
 let activeNetwork: Network = "mainnet";
 
@@ -139,6 +148,7 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
     const acct = event?.accounts?.[0];
     if (!acct) return;
     state.currentAccountId = acct.accountId;
+    state.currentPublicKey = acct.publicKey ?? null;
     activeNetwork = network;
     const result: ConnectResult = {
       accountId: acct.accountId,
@@ -153,6 +163,7 @@ function getOrCreateConnector(options?: ConnectOptions): NearConnector {
   state.connector.on("wallet:signOut", () => {
     state.connectedWallet = null;
     state.currentAccountId = null;
+    state.currentPublicKey = null;
     for (const cb of disconnectListeners) {
       try { cb({ network }); } catch (_) { /* listener error */ }
     }
@@ -178,6 +189,7 @@ export async function restore(options?: ConnectOptions): Promise<ConnectResult |
     if (result?.wallet && result?.accounts?.length) {
       state.connectedWallet = result.wallet;
       state.currentAccountId = result.accounts[0].accountId;
+      state.currentPublicKey = result.accounts[0].publicKey ?? null;
       activeNetwork = network;
       const connectResult: ConnectResult = {
         accountId: state.currentAccountId || '',
@@ -304,6 +316,12 @@ export async function switchNetwork(
  *
  * Pass `{ network: "testnet" }` to connect on testnet without affecting an
  * existing mainnet session.
+ *
+ * Pass `{ signMessageParams }` to sign a NEP-413 message in the *same* popup
+ * as sign-in — one wallet prompt instead of two. The signature comes back on
+ * `result.signedMessage`. Note that near-connect only filters the picker to
+ * wallets supporting this when `walletId` is omitted; naming a wallet that
+ * lacks the `signInAndSignMessage` feature rejects the connect.
  */
 export async function connect(
   options?: ConnectOptions & { walletId?: string }
@@ -311,12 +329,38 @@ export async function connect(
   const network = resolveNetwork(options);
   const state = networkStates[network];
   const c = getOrCreateConnector(options);
+
+  // near-connect emits `wallet:signInAndSignMessage` *synchronously* from
+  // inside `c.connect()`, before it resolves — so the listener has to be
+  // attached first, and a handler that throws would escape through our
+  // catch below and masquerade as a user cancellation. Hence the try/catch
+  // inside the handler and the unconditional `off` in the finally.
+  const captured: { signedMessage?: SignedMessage } = {};
+  const captureSignedMessage = (event: any) => {
+    try {
+      const acct = event?.accounts?.[0];
+      if (acct?.signedMessage) captured.signedMessage = acct.signedMessage;
+    } catch (_) {
+      /* never let a capture failure abort a successful sign-in */
+    }
+  };
+  if (options?.signMessageParams) {
+    c.on("wallet:signInAndSignMessage", captureSignedMessage);
+  }
+
   let wallet;
   try {
-    wallet = await c.connect({ walletId: options?.walletId });
+    wallet = await c.connect({
+      walletId: options?.walletId,
+      signMessageParams: options?.signMessageParams,
+    });
   } catch (_) {
-    // User closed the modal or wallet rejected
+    // User closed the modal, or the wallet rejected / lacks the feature
     return null;
+  } finally {
+    if (options?.signMessageParams) {
+      c.off("wallet:signInAndSignMessage", captureSignedMessage);
+    }
   }
   state.connectedWallet = wallet;
   activeNetwork = network;
@@ -328,16 +372,20 @@ export async function connect(
       const info = await c.getConnectedWallet();
       if (info?.accounts?.length) {
         state.currentAccountId = info.accounts[0].accountId;
+        state.currentPublicKey = info.accounts[0].publicKey ?? null;
       }
     } catch (_) {
       // ignore
     }
   }
 
+  // Wallets that sign a message during sign-in often omit `publicKey` on the
+  // account itself and only carry it on the signature, so fall back to that.
   return {
     accountId: state.currentAccountId ?? "",
-    publicKey: undefined,
+    publicKey: state.currentPublicKey ?? captured.signedMessage?.publicKey ?? undefined,
     network,
+    signedMessage: captured.signedMessage,
   };
 }
 
@@ -353,6 +401,7 @@ export async function disconnect(options?: { network?: Network }): Promise<void>
   }
   state.connectedWallet = null;
   state.currentAccountId = null;
+  state.currentPublicKey = null;
 }
 
 /**
@@ -500,7 +549,7 @@ export function walletName(opts?: { network?: Network }): string | null {
 export function reset(opts?: { network?: Network }): void {
   const targets: Network[] = opts?.network ? [opts.network] : Array.from(NETWORKS);
   for (const n of targets) {
-    networkStates[n] = { connector: null, connectedWallet: null, currentAccountId: null };
+    networkStates[n] = { connector: null, connectedWallet: null, currentAccountId: null, currentPublicKey: null };
   }
   if (!opts?.network) activeNetwork = "mainnet";
 }

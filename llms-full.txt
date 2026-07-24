@@ -2119,6 +2119,103 @@ near.print({
 });
 ```
 
+## How do I connect a wallet and sign a message in one step?
+
+- ID: `connect-and-sign-message`
+- API: `near.recipes.connect`
+- Service: `wallet`
+- Returns: `{ accountId: string; publicKey?: string; signedMessage?: SignedMessage } | undefined`
+- Network: `mainnet`
+- Auth: `wallet`
+- Summary: Combine sign-in and NEP-413 message signing into a single wallet popup instead of two.
+- Output keys: `accountId`, `signedMessage.accountId`, `signedMessage.publicKey`, `signedMessage.signature`
+- Pagination: none; request fields: none; response fields: none; filters must stay stable: no
+
+Choose this when:
+
+- Choose this when a session needs both a connected wallet and a proof-of-ownership signature, and you want one prompt rather than two.
+- Prefer plain connect-wallet when no signature is needed, or sign-message when the wallet is already connected.
+
+Response notes:
+
+- signedMessage is only present when signMessageParams was supplied and the wallet completed both steps.
+- The wallet picker is filtered to wallets advertising the signInAndSignMessage feature, so fewer wallets are offered than a plain connect.
+- Read the signing key from signedMessage.publicKey — several wallets omit publicKey on the account itself in this flow.
+- Verify the signature with near.utils.verifyNep413Signature before trusting it as proof of account ownership.
+
+Follow-ups:
+
+- Verify the returned signature with near.utils.verifyNep413Signature to authenticate the session server-side.
+- Once connected, send contract actions with near.recipes.functionCall.
+
+Related recipes:
+
+- `connect-wallet`
+- `sign-message`
+- `function-call`
+
+Example inputs:
+
+```json
+{
+  "contractId": "berryclub.ek.near",
+  "signMessageParams": {
+    "message": "Sign in to FastNear Berry Club",
+    "recipient": "example.com",
+    "nonce": "(32-byte Uint8Array)"
+  }
+}
+```
+
+### Terminal
+
+```bash
+# Browser wallet required.
+# Connecting and signing a message needs a browser environment with a wallet.
+# Use the browser-global or ESM snippet for this task.
+```
+
+### Browser Global
+
+```js
+const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);
+```
+
+### ESM
+
+```js
+import * as near from "@fastnear/api";
+import * as nearWallet from "@fastnear/wallet";
+
+near.config({ apiKey: process.env.FASTNEAR_API_KEY || undefined });
+near.useWallet(nearWallet);
+await nearWallet.restore({
+  network: "mainnet",
+  contractId: "berryclub.ek.near",
+  manifest: "./manifest.json",
+});
+
+const result = await near.recipes.connect({
+  contractId: "berryclub.ek.near",
+  signMessageParams: {
+    message: "Sign in to FastNear Berry Club",
+    recipient: window.location.host,
+    nonce: crypto.getRandomValues(new Uint8Array(32)),
+  },
+});
+
+near.print(result);
+```
+
 ## How do I build and preview a transaction before signing?
 
 - ID: `explain-transaction`

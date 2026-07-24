@@ -917,6 +917,40 @@ describe("near.recipes", () => {
     expect(selected().account).toBe("root.near");
   });
 
+  it("forwards signMessageParams through connect and returns the signed message", async () => {
+    const signedMessage = {
+      accountId: "root.near",
+      publicKey: "ed25519:frommessage",
+      signature: "c2ln",
+    };
+    const signMessageParams = {
+      message: "Sign in to FastNear Berry Club",
+      recipient: "example.com",
+      nonce: new Uint8Array(32),
+    };
+    const provider = createWalletProvider({
+      isConnected: vi.fn().mockReturnValue(false),
+      connect: vi.fn().mockResolvedValue({ accountId: "root.near", signedMessage }),
+    });
+    useWallet(provider as any);
+    config({ networkId: "mainnet" });
+
+    const result = await recipes.connect({
+      contractId: "berryclub.ek.near",
+      signMessageParams,
+    });
+
+    expect(provider.connect).toHaveBeenCalledWith({
+      contractId: "berryclub.ek.near",
+      network: "mainnet",
+      excludedWallets: undefined,
+      features: undefined,
+      signMessageParams,
+    });
+    expect((result as any)?.signedMessage).toEqual(signedMessage);
+    expect(selected().account).toBe("root.near");
+  });
+
   it("delegates signMessage to the connected wallet provider", async () => {
     const provider = createWalletProvider();
     useWallet(provider as any);

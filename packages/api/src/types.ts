@@ -134,6 +134,14 @@ export interface RecipeConnectParams {
   // falls back to `near.config().networkId`. With @fastnear/wallet 1.1.0+
   // the per-network sessions live alongside each other on the same page.
   network?: "mainnet" | "testnet";
+  // NEP-413 message signed in the same wallet popup as sign-in. Requires a
+  // wallet advertising the `signInAndSignMessage` feature; the picker is
+  // filtered to those, so omit `walletId` when using this.
+  signMessageParams?: {
+    message: string;
+    recipient: string;
+    nonce: Uint8Array;
+  };
 }
 
 export interface FastNearRecipeDiscoveryEntry {
