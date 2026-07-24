@@ -445,23 +445,37 @@ export const events = {
     });
   },
 
-  onAccount: (callback: (accountId: string) => void) => {
+  // onAccount / onTx return an unsubscribe function so a caller with a
+  // lifecycle (a React effect, an SPA route, a test) can detach without
+  // holding onto the callback reference. offAccount / offTx accept the
+  // callback directly, matching near-connect's identity-based `off`. Both
+  // are idempotent: unsubscribing twice, or removing an unregistered
+  // callback, is a no-op that returns false.
+  onAccount: (callback: (accountId: string) => void): (() => void) => {
     events._eventListeners.account.add(callback);
     if (_unbroadcastedEvents.account.length > 0) {
       const accountEvent = _unbroadcastedEvents.account;
       _unbroadcastedEvents.account = [];
       accountEvent.forEach(events.notifyAccountListeners);
     }
+    return () => events.offAccount(callback);
   },
 
-  onTx: (callback: (tx: TxStatus) => void): void => {
+  offAccount: (callback: (accountId: string) => void): boolean =>
+    events._eventListeners.account.delete(callback),
+
+  onTx: (callback: (tx: TxStatus) => void): (() => void) => {
     events._eventListeners.tx.add(callback);
     if (_unbroadcastedEvents.tx.length > 0) {
       const txEvent = _unbroadcastedEvents.tx;
       _unbroadcastedEvents.tx = [];
       txEvent.forEach(events.notifyTxListeners);
     }
-  }
+    return () => events.offTx(callback);
+  },
+
+  offTx: (callback: (tx: TxStatus) => void): boolean =>
+    events._eventListeners.tx.delete(callback),
 }
 
 // Mutators
