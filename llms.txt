@@ -59,7 +59,7 @@ ML-DSA-65 account-key surface:
 - Full access-key form: ml-dsa-65:<base58 public key>
 - Access-key-list form: ml-dsa-65-hash:<base58 SHA3-256 digest>
 - Handle domain tag: near:ml-dsa-65-pubkey-hash:v1
-- Quickstarts: ml-dsa-65-generate, ml-dsa-65-explicit-send, ml-dsa-65-enroll-delete, ml-dsa-65-reconcile
+- Quickstarts: ml-dsa-65-generate, ml-dsa-65-enroll, ml-dsa-65-explicit-send, ml-dsa-65-enroll-delete, ml-dsa-65-reconcile
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })

@@ -2538,6 +2538,7 @@
     "safety": [
       "Check the selected RPC's active protocol_version and require 85 or later before adding or using an ML-DSA-65 key; do not use node software versions or latest_protocol_version as activation signals.",
       "Never print or persist generated seeds or expanded secret keys. Keep a temporary recovery record public-only: network, account ID, full public key, and hash handle.",
+      "Public keys, secret keys, and signatures all use the same ml-dsa-65: string prefix, so signer.exportSecretKey() is indistinguishable by shape from signer.publicKey. Distinguish them by decoded byte length (1,952 vs 4,032), never by prefix, and never let a secret reach a log line or a recovery record.",
       "After an AddKey attempt, do not trust a single absence read: submit a finalized classical DeleteKey nonce barrier, confirm absence at finality, and only then remove the public recovery record.",
       "ML-DSA-65 public keys are 1,952 bytes and signatures are 3,309 bytes, so transactions and key-management actions are substantially larger than classical equivalents.",
       "NEAR charges 100 Ggas (100,000,000,000 gas) for each outer or delegated ML-DSA-65 signature verification.",
@@ -2551,6 +2552,13 @@
         "summary": "Generate the opt-in signer, retain only public recovery metadata, and always destroy the signer when its lifecycle ends.",
         "language": "js",
         "code": "import { generateSigner } from \"@fastnear/ml-dsa-65\";\n\nconst signer = generateSigner();\n\ntry {\n  // Public values are safe to retain for enrollment and cleanup.\n  const recovery = {\n    network: \"testnet\",\n    accountId: \"device.testnet\",\n    publicKey: signer.publicKey,\n    publicKeyHandle: signer.publicKeyHandle,\n  };\n\n  console.log(recovery);\n  // Never log or persist signer.exportSeed() or signer.exportSecretKey().\n} finally {\n  signer.destroy();\n}"
+      },
+      {
+        "id": "ml-dsa-65-enroll",
+        "title": "Enroll an ML-DSA-65 public key with a classical AddKey",
+        "summary": "Add the signer's full public key to the account using an existing classical full-access key. Enrollment always starts from a classical signer; an ML-DSA-65 key cannot add itself.",
+        "language": "js",
+        "code": "import {\n  actions,\n  queryAccessKey,\n  queryProtocolVersion,\n  sendTx,\n} from \"@fastnear/api\";\nimport { signerFromPrivateKey } from \"@fastnear/utils\";\n\nexport async function enrollMlDsa65Key({ accountId, classicalPrivateKey, signer }) {\n  const protocolVersion = await queryProtocolVersion({ network: \"testnet\" });\n  if (protocolVersion < 85) {\n    throw new Error(`testnet protocol ${protocolVersion} does not support ML-DSA-65`);\n  }\n\n  // The AddKey itself is signed by an existing classical full-access key.\n  const classicalSigner = signerFromPrivateKey(classicalPrivateKey);\n\n  await sendTx({\n    signerId: accountId,\n    signer: classicalSigner,\n    receiverId: accountId,\n    // Pass the full ml-dsa-65:<base58> key. Never the ml-dsa-65-hash: handle.\n    actions: [actions.addFullAccessKey({ publicKey: signer.publicKey })],\n    waitUntil: \"FINAL\",\n    network: \"testnet\",\n  });\n\n  // Read back with the full key: direct access-key lookup accepts it, while\n  // access-key list responses expose only signer.publicKeyHandle.\n  return queryAccessKey({\n    accountId,\n    publicKey: signer.publicKey,\n    blockId: \"final\",\n    network: \"testnet\",\n  });\n}"
       },
       {
         "id": "ml-dsa-65-explicit-send",
