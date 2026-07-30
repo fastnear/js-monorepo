@@ -135,8 +135,20 @@ function assertCatalogContract() {
   if (mlDsa65Surface.protocolVersion !== 85) {
     throw new Error(`Expected ML-DSA-65 protocol version 85, received ${mlDsa65Surface.protocolVersion}`);
   }
-  if (mlDsa65Surface.quickstarts.length !== 4) {
-    throw new Error("Expected four ML-DSA-65 quickstarts");
+  // The hosted /post-quantum page renders generate -> enroll -> send in order, so
+  // pin the ids rather than the count: a rename would silently break that page.
+  const expectedMlDsa65Quickstarts = [
+    "ml-dsa-65-generate",
+    "ml-dsa-65-enroll",
+    "ml-dsa-65-explicit-send",
+    "ml-dsa-65-enroll-delete",
+    "ml-dsa-65-reconcile",
+  ];
+  const actualMlDsa65Quickstarts = mlDsa65Surface.quickstarts.map((quickstart) => quickstart.id);
+  if (actualMlDsa65Quickstarts.join(",") !== expectedMlDsa65Quickstarts.join(",")) {
+    throw new Error(
+      `Expected ML-DSA-65 quickstarts [${expectedMlDsa65Quickstarts.join(", ")}], received [${actualMlDsa65Quickstarts.join(", ")}]`,
+    );
   }
   for (const quickstart of mlDsa65Surface.quickstarts) {
     for (const field of ["id", "title", "summary", "language", "code"]) {

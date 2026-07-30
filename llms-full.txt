@@ -448,6 +448,7 @@ Use the full public key for AddKey, direct access-key lookup, signing, and Delet
 
 - Check the selected RPC's active protocol_version and require 85 or later before adding or using an ML-DSA-65 key; do not use node software versions or latest_protocol_version as activation signals.
 - Never print or persist generated seeds or expanded secret keys. Keep a temporary recovery record public-only: network, account ID, full public key, and hash handle.
+- Public keys, secret keys, and signatures all use the same ml-dsa-65: string prefix, so signer.exportSecretKey() is indistinguishable by shape from signer.publicKey. Distinguish them by decoded byte length (1,952 vs 4,032), never by prefix, and never let a secret reach a log line or a recovery record.
 - After an AddKey attempt, do not trust a single absence read: submit a finalized classical DeleteKey nonce barrier, confirm absence at finality, and only then remove the public recovery record.
 - ML-DSA-65 public keys are 1,952 bytes and signatures are 3,309 bytes, so transactions and key-management actions are substantially larger than classical equivalents.
 - NEAR charges 100 Ggas (100,000,000,000 gas) for each outer or delegated ML-DSA-65 signature verification.
@@ -478,6 +479,51 @@ try {
   // Never log or persist signer.exportSeed() or signer.exportSecretKey().
 } finally {
   signer.destroy();
+}
+```
+
+### Enroll an ML-DSA-65 public key with a classical AddKey
+
+Recipe ID: `ml-dsa-65-enroll`
+
+Add the signer's full public key to the account using an existing classical full-access key. Enrollment always starts from a classical signer; an ML-DSA-65 key cannot add itself.
+
+```js
+import {
+  actions,
+  queryAccessKey,
+  queryProtocolVersion,
+  sendTx,
+} from "@fastnear/api";
+import { signerFromPrivateKey } from "@fastnear/utils";
+
+export async function enrollMlDsa65Key({ accountId, classicalPrivateKey, signer }) {
+  const protocolVersion = await queryProtocolVersion({ network: "testnet" });
+  if (protocolVersion < 85) {
+    throw new Error(`testnet protocol ${protocolVersion} does not support ML-DSA-65`);
+  }
+
+  // The AddKey itself is signed by an existing classical full-access key.
+  const classicalSigner = signerFromPrivateKey(classicalPrivateKey);
+
+  await sendTx({
+    signerId: accountId,
+    signer: classicalSigner,
+    receiverId: accountId,
+    // Pass the full ml-dsa-65:<base58> key. Never the ml-dsa-65-hash: handle.
+    actions: [actions.addFullAccessKey({ publicKey: signer.publicKey })],
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+
+  // Read back with the full key: direct access-key lookup accepts it, while
+  // access-key list responses expose only signer.publicKeyHandle.
+  return queryAccessKey({
+    accountId,
+    publicKey: signer.publicKey,
+    blockId: "final",
+    network: "testnet",
+  });
 }
 ```
 
