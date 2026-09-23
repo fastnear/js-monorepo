@@ -17,20 +17,26 @@ const budgets = [
   // reverse unit formatter (formatNearAmount), and parseSignedDelegate — the
   // inverse action/key/signature mapper, which additionally pulls in the borsh
   // *decode* path (deserialize) so a wallet-signed delegate round-trips.
-  { package: "utils", baselineGzip: 35_696, maxGzipGrowth: 4 * 1024 - 1 },
+  // Gas keys (protocol 85) added ~2.0 KiB gzip: the two gas-key permission
+  // variants, TransferToGasKey/WithdrawFromGasKey, TransactionV1 with its
+  // nonce/nonce-mode enums and V0/V1 selection, and their inverse mappers.
+  { package: "utils", baselineGzip: 35_696, maxGzipGrowth: 6 * 1024 - 1 },
   // The api IIFE re-exports the @fastnear/utils surface (NEP-413 signing, the
   // NEP-366 local delegate signer + parseSignedDelegate inverse mapper with the
   // borsh decode path, and the reverse unit formatter) and adds the
   // near.signDelegate/relayDelegate (now accepting a wallet-signed delegate),
   // gasPrice/status/validators, and implicitAccountId/createFundedTestnetAccount
-  // surfaces.
-  { package: "api", baselineGzip: 49_371, maxGzipGrowth: 7 * 1024 - 1 },
+  // surfaces. Gas keys added ~3.9 KiB gzip on top: the inlined utils growth
+  // plus the gas-key action builders, queryGasKeyNonces, gasKeyInfoFromPermission,
+  // sendTx's lane-aware TransactionV1 branch, and key-list pagination.
+  { package: "api", baselineGzip: 49_371, maxGzipGrowth: 11 * 1024 - 1 },
   { package: "wallet", baselineGzip: 21_323 },
   // The timeout-aware Meteor bridge includes local Borsh/action binding and
   // signature verification before accepting a wallet response; action mapping
   // now also carries the shared NEAR unit coercion (convertUnit) so gas/deposit
-  // strings like "100 Tgas" map instead of throwing.
-  { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 5 * 1024 - 1 },
+  // strings like "100 Tgas" map instead of throwing. Gas keys added ~2.1 KiB
+  // gzip: the inlined utils growth plus the guards that refuse gas-key shapes.
+  { package: "wallet-adapter", baselineGzip: 41_529, maxGzipGrowth: 7 * 1024 - 1 },
   { package: "ml-dsa-65", raw: 75 * 1024, gzip: 20 * 1024 },
   // Carries the full 2048-word bip39 English wordlist plus ed25519 + SLIP-0010
   // derivation, so it is inherently chunky; caps sized with headroom over the
