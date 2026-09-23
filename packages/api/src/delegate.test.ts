@@ -17,11 +17,15 @@ function rpcMethod(request: any): { method: string; params: any } {
   return { method: body.method, params: body.params };
 }
 
-function mockRpc({ nonce = 10, height = 1000 }: { nonce?: number; height?: number } = {}) {
+function mockRpc({
+  nonce = 10,
+  height = 1000,
+  permission = "FullAccess" as any,
+}: { nonce?: number; height?: number; permission?: any } = {}) {
   global.fetch = vi.fn(async (_url: any, request: any) => {
     const { method, params } = rpcMethod(request);
     if (method === "query" && params.request_type === "view_access_key") {
-      return jsonResponse({ result: { nonce, permission: "FullAccess" } });
+      return jsonResponse({ result: { nonce, permission } });
     }
     if (method === "block") {
       return jsonResponse({
@@ -215,5 +219,49 @@ describe("relayDelegate", () => {
     await expect(relayDelegate({ network: "testnet" } as any)).rejects.toThrow(
       /needs \{ delegateAction, signature \} or a wallet-signed \{ signedDelegate \}/,
     );
+  });
+});
+
+describe("signDelegate and gas keys", () => {
+  const methods = () => (global.fetch as any).mock.calls.map(([, r]: any[]) => rpcMethod(r).method);
+
+  it("refuses a gas-key signer before deriving a block height", async () => {
+    mockRpc({ nonce: 0, permission: { GasKeyFullAccess: { balance: "1000", num_nonces: 2 } } });
+    await expect(
+      signDelegate({
+        signer: edSigner(1),
+        signerId: "alice.testnet",
+        receiverId: "app.testnet",
+        actions: [actions.transfer("1")],
+        network: "testnet",
+      }),
+    ).rejects.toThrow("is a gas key");
+    expect(methods()).toEqual(["query"]);
+  });
+
+  it("refuses WithdrawFromGasKey inside a delegate without any RPC call", async () => {
+    mockRpc();
+    await expect(
+      signDelegate({
+        signer: edSigner(1),
+        signerId: "alice.testnet",
+        receiverId: "alice.testnet",
+        actions: [actions.withdrawFromGasKey({ publicKey: edSigner(2).publicKey, amount: "1" }) as any],
+        network: "testnet",
+      }),
+    ).rejects.toThrow("WithdrawFromGasKeyNotAllowedInDelegate");
+    expect(methods()).toEqual([]);
+  });
+
+  it("carries TransferToGasKey in a delegate", async () => {
+    mockRpc();
+    const result = await signDelegate({
+      signer: edSigner(1),
+      signerId: "alice.testnet",
+      receiverId: "bob.testnet",
+      actions: [actions.transferToGasKey({ publicKey: edSigner(2).publicKey, deposit: "1" })],
+      network: "testnet",
+    });
+    expect(result.delegateAction.actions[0]).toMatchObject({ type: "TransferToGasKey" });
   });
 });

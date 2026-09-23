@@ -55,10 +55,28 @@ export const nearChainSchema = new (class BorshSchema {
   FullAccessPermission: Schema = {
     struct: {},
   };
+  // Gas keys (protocol 85+): a prepaid balance that pays gas, and `numNonces`
+  // independent nonce lanes. `balance` is u128 yoctoNEAR, `numNonces` is u16.
+  GasKeyInfo: Schema = {
+    struct: {
+      balance: "u128",
+      numNonces: "u16",
+    },
+  };
+  // nearcore: `GasKeyFunctionCall(GasKeyInfo, FunctionCallPermission)` — a tuple
+  // variant. A two-field struct in the same order encodes the identical bytes.
+  GasKeyFunctionCallPermission: Schema = {
+    struct: {
+      gasKeyInfo: this.GasKeyInfo,
+      functionCall: this.FunctionCallPermission,
+    },
+  };
   AccessKeyPermission: Schema = {
     enum: [
-      { struct: { functionCall: this.FunctionCallPermission } },
-      { struct: { fullAccess: this.FullAccessPermission } },
+      { struct: { functionCall: this.FunctionCallPermission } },             // 0
+      { struct: { fullAccess: this.FullAccessPermission } },                 // 1
+      { struct: { gasKeyFunctionCall: this.GasKeyFunctionCallPermission } }, // 2
+      { struct: { gasKeyFullAccess: this.GasKeyInfo } },                     // 3
     ],
   };
   AccessKey: Schema = {
@@ -110,16 +128,39 @@ export const nearChainSchema = new (class BorshSchema {
       beneficiaryId: "string",
     },
   };
+  // Fund a gas key's balance (Action discriminant 12). Any account may send it.
+  TransferToGasKey: Schema = {
+    struct: {
+      publicKey: this.PublicKey,
+      deposit: "u128",
+    },
+  };
+  // Move balance from a gas key back to its account (Action discriminant 13).
+  // Signer must be the owning account; not allowed inside a delegate action.
+  WithdrawFromGasKey: Schema = {
+    struct: {
+      publicKey: this.PublicKey,
+      amount: "u128",
+    },
+  };
+  // Actions a NEP-366 DelegateAction may carry (nearcore `NonDelegateAction`,
+  // which shares `Action`'s discriminants). Discriminants 9-11 (global-contract
+  // and state-init actions) are not modelled, so the gas-key entries pin their
+  // wire tags explicitly. Tag 13 is kept here so a delegate carrying it decodes
+  // to a clear "not delegatable" error upstream rather than a codec error; the
+  // chain itself rejects WithdrawFromGasKey inside delegates from protocol 87.
   ClassicAction: Schema = {
     enum: [
-      { struct: { createAccount: this.CreateAccount } },
-      { struct: { deployContract: this.DeployContract } },
-      { struct: { functionCall: this.FunctionCall } },
-      { struct: { transfer: this.Transfer } },
-      { struct: { stake: this.Stake } },
-      { struct: { addKey: this.AddKey } },
-      { struct: { deleteKey: this.DeleteKey } },
-      { struct: { deleteAccount: this.DeleteAccount } },
+      { struct: { createAccount: this.CreateAccount } },             // 0
+      { struct: { deployContract: this.DeployContract } },           // 1
+      { struct: { functionCall: this.FunctionCall } },               // 2
+      { struct: { transfer: this.Transfer } },                       // 3
+      { struct: { stake: this.Stake } },                             // 4
+      { struct: { addKey: this.AddKey } },                           // 5
+      { struct: { deleteKey: this.DeleteKey } },                     // 6
+      { struct: { deleteAccount: this.DeleteAccount } },             // 7
+      { tag: 12, struct: { transferToGasKey: this.TransferToGasKey } },
+      { tag: 13, struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
     ],
   };
   DelegateAction: Schema = {
@@ -140,15 +181,18 @@ export const nearChainSchema = new (class BorshSchema {
   };
   Action: Schema = {
     enum: [
-      { struct: { createAccount: this.CreateAccount } },
-      { struct: { deployContract: this.DeployContract } },
-      { struct: { functionCall: this.FunctionCall } },
-      { struct: { transfer: this.Transfer } },
-      { struct: { stake: this.Stake } },
-      { struct: { addKey: this.AddKey } },
-      { struct: { deleteKey: this.DeleteKey } },
-      { struct: { deleteAccount: this.DeleteAccount } },
-      { struct: { signedDelegate: this.SignedDelegate } },
+      { struct: { createAccount: this.CreateAccount } },             // 0
+      { struct: { deployContract: this.DeployContract } },           // 1
+      { struct: { functionCall: this.FunctionCall } },               // 2
+      { struct: { transfer: this.Transfer } },                       // 3
+      { struct: { stake: this.Stake } },                             // 4
+      { struct: { addKey: this.AddKey } },                           // 5
+      { struct: { deleteKey: this.DeleteKey } },                     // 6
+      { struct: { deleteAccount: this.DeleteAccount } },             // 7
+      { struct: { signedDelegate: this.SignedDelegate } },           // 8
+      // 9-11 (DeployGlobalContract, UseGlobalContract, DeterministicStateInit) not modelled.
+      { tag: 12, struct: { transferToGasKey: this.TransferToGasKey } },
+      { tag: 13, struct: { withdrawFromGasKey: this.WithdrawFromGasKey } },
     ],
   };
   Transaction: Schema = {
@@ -164,6 +208,43 @@ export const nearChainSchema = new (class BorshSchema {
   SignedTransaction: Schema = {
     struct: {
       transaction: this.Transaction,
+      signature: this.Signature,
+    },
+  };
+  // ── TransactionV1 (protocol 85+; required to sign with a gas key) ──────────
+  // nearcore `TransactionNonce`: 0 = Nonce { nonce }, 1 = GasKeyNonce { nonce, nonce_index }.
+  TransactionNonce: Schema = {
+    enum: [
+      { struct: { nonce: { struct: { nonce: "u64" } } } },
+      { struct: { gasKeyNonce: { struct: { nonce: "u64", nonceIndex: "u16" } } } },
+    ],
+  };
+  // nearcore `NonceMode`: 0 = Monotonic (nonce > current), 1 = Strict (nonce == current + 1).
+  NonceMode: Schema = {
+    enum: [
+      { struct: { monotonic: { struct: {} } } },
+      { struct: { strict: { struct: {} } } },
+    ],
+  };
+  // Wire format: `Transaction::V1` is a single 0x01 byte followed by the V1 body
+  // (V0 has no prefix). The prefix is modelled as a leading `version` field so
+  // plain borsh reproduces the exact bytes that are hashed and signed. Encoders
+  // must set `version: 1`.
+  TransactionV1: Schema = {
+    struct: {
+      version: "u8",
+      signerId: "string",
+      publicKey: this.PublicKey,
+      nonce: this.TransactionNonce,
+      receiverId: "string",
+      blockHash: { array: { type: "u8", len: 32 } },
+      actions: { array: { type: this.Action } },
+      nonceMode: this.NonceMode,
+    },
+  };
+  SignedTransactionV1: Schema = {
+    struct: {
+      transaction: this.TransactionV1,
       signature: this.Signature,
     },
   };

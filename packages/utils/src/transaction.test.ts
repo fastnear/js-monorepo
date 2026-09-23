@@ -4,8 +4,12 @@ import {
   serializeTransaction,
   serializeSignedTransaction,
   mapAction,
+  isTransactionV1,
+  MAX_GAS_KEY_NONCES,
+  SCHEMA,
   PlainTransaction,
 } from "./transaction.js";
+import { serialize } from "@fastnear/borsh";
 import {
   keyFromString,
   keyToString,
@@ -431,5 +435,257 @@ describe("mapAction — SignedDelegate", () => {
         signature,
       }),
     ).toThrow("must match delegateAction.publicKey");
+  });
+});
+
+// ── Gas keys ─────────────────────────────────────────────────────────
+//
+// Golden bytes: Rust-verified against near-primitives 0.38.0-rc.2 (nearcore
+// fast-2.14.0-rc.2) via `borsh::to_vec` on the real types; the same vectors
+// are pinned in @fastnear/borsh-schema with full provenance. Public key =
+// ed25519 with bytes 00..1f.
+
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+const GK_PK_BYTES = Uint8Array.from({ length: 32 }, (_, i) => i);
+const GK_PK = keyToString(GK_PK_BYTES, "ed25519");
+const GK_PK_HEX = "00" + hex(GK_PK_BYTES);
+const GK_FULL_ACCESS_AK_HEX = "000000000000000003000000000000000000000000000000000300";
+const GK_FUNCTION_CALL_AK_HEX =
+  "00000000000000000200000000000000000000000000000000030000080000006170702e6e6561720100000003000000666f6f";
+
+describe("gas keys — public key fixture", () => {
+  it("is the documented base58 form", () => {
+    expect(GK_PK).toBe("ed25519:1thX6LZfHDZZKUs92febYZhYRcXddmzfzF2NvTkPNE");
+  });
+});
+
+describe("gas keys — mapAction AddKey", () => {
+  it("GasKeyFullAccess maps to gasKeyFullAccess { balance: 0, numNonces } and matches the golden bytes", () => {
+    const mapped = mapAction({
+      type: "AddKey",
+      publicKey: GK_PK,
+      accessKey: { permission: "GasKeyFullAccess", numNonces: 3 },
+    }) as any;
+    expect(mapped.addKey.accessKey).toEqual({
+      nonce: 0n,
+      permission: { gasKeyFullAccess: { balance: 0n, numNonces: 3 } },
+    });
+    expect(hex(serialize(SCHEMA.Action, mapped))).toBe("05" + GK_PK_HEX + GK_FULL_ACCESS_AK_HEX);
+  });
+
+  it("GasKeyFunctionCall maps the tuple as gasKeyInfo then functionCall with a null allowance", () => {
+    const mapped = mapAction({
+      type: "AddKey",
+      publicKey: GK_PK,
+      accessKey: {
+        permission: "GasKeyFunctionCall",
+        numNonces: 3,
+        receiverId: "app.near",
+        methodNames: ["foo"],
+      },
+    }) as any;
+    expect(mapped.addKey.accessKey.permission).toEqual({
+      gasKeyFunctionCall: {
+        gasKeyInfo: { balance: 0n, numNonces: 3 },
+        functionCall: { allowance: null, receiverId: "app.near", methodNames: ["foo"] },
+      },
+    });
+    expect(hex(serialize(SCHEMA.Action, mapped))).toBe("05" + GK_PK_HEX + GK_FUNCTION_CALL_AK_HEX);
+  });
+
+  it("rejects an allowance on a GasKeyFunctionCall key", () => {
+    expect(() =>
+      mapAction({
+        type: "AddKey",
+        publicKey: GK_PK,
+        accessKey: {
+          permission: "GasKeyFunctionCall",
+          numNonces: 1,
+          receiverId: "app.near",
+          allowance: "1 NEAR",
+        },
+      }),
+    ).toThrow("cannot carry an allowance");
+  });
+
+  it("GasKeyFunctionCall still requires a receiverId", () => {
+    expect(() =>
+      mapAction({
+        type: "AddKey",
+        publicKey: GK_PK,
+        accessKey: { permission: "GasKeyFunctionCall", numNonces: 1 },
+      }),
+    ).toThrow("require a receiverId");
+  });
+
+  it("validates numNonces as an integer in 1..MAX_GAS_KEY_NONCES", () => {
+    expect(MAX_GAS_KEY_NONCES).toBe(1024);
+    for (const numNonces of [0, 1025, 1.5, -1, "3", undefined]) {
+      expect(() =>
+        mapAction({
+          type: "AddKey",
+          publicKey: GK_PK,
+          accessKey: { permission: "GasKeyFullAccess", numNonces: numNonces as any },
+        }),
+        `numNonces ${String(numNonces)}`,
+      ).toThrow("numNonces between 1 and 1024");
+    }
+    for (const numNonces of [1, 1024]) {
+      const mapped = mapAction({
+        type: "AddKey",
+        publicKey: GK_PK,
+        accessKey: { permission: "GasKeyFullAccess", numNonces },
+      }) as any;
+      expect(mapped.addKey.accessKey.permission.gasKeyFullAccess.numNonces).toBe(numNonces);
+    }
+  });
+
+  it("re-encodes a nonzero balance verbatim (chain payloads round-trip)", () => {
+    const mapped = mapAction({
+      type: "AddKey",
+      publicKey: GK_PK,
+      accessKey: { permission: "GasKeyFullAccess", numNonces: 2, balance: "0.5 NEAR" },
+    }) as any;
+    expect(mapped.addKey.accessKey.permission.gasKeyFullAccess.balance).toBe(5n * 10n ** 23n);
+  });
+
+  it("still rejects unknown permission strings loudly", () => {
+    expect(() =>
+      mapAction({
+        type: "AddKey",
+        publicKey: GK_PK,
+        accessKey: { permission: "GasKey" as any },
+      }),
+    ).toThrow("Unsupported access-key permission: GasKey");
+  });
+});
+
+describe("gas keys — TransferToGasKey / WithdrawFromGasKey", () => {
+  it("TransferToGasKey accepts a unit-suffixed deposit and encodes discriminant 12", () => {
+    const mapped = mapAction({ type: "TransferToGasKey", publicKey: GK_PK, deposit: "1 NEAR" }) as any;
+    expect(mapped.transferToGasKey.deposit).toBe(10n ** 24n);
+    const bytes = serialize(SCHEMA.Action, mapped);
+    expect(bytes[0]).toBe(12);
+    expect(hex(bytes)).toBe("0c" + GK_PK_HEX + "000000a1edccce1bc2d3000000000000");
+  });
+
+  it("WithdrawFromGasKey maps amount and encodes discriminant 13", () => {
+    const mapped = mapAction({ type: "WithdrawFromGasKey", publicKey: GK_PK, amount: "0.01 NEAR" }) as any;
+    expect(mapped.withdrawFromGasKey.amount).toBe(10n ** 22n);
+    const bytes = serialize(SCHEMA.Action, mapped);
+    expect(bytes[0]).toBe(13);
+    expect(hex(bytes)).toBe("0d" + GK_PK_HEX + "000040b2bac9e0191e02000000000000");
+  });
+
+  it("accepts ML-DSA-65 public keys and rejects hash handles", () => {
+    const pq = keyToString(new Uint8Array(1952), "ml-dsa-65");
+    const mapped = mapAction({ type: "TransferToGasKey", publicKey: pq, deposit: "1" }) as any;
+    expect(mapped.transferToGasKey.publicKey).toHaveProperty("mlDsa65Key");
+    expect(() =>
+      mapAction({
+        type: "WithdrawFromGasKey",
+        publicKey: "ml-dsa-65-hash:11111111111111111111111111111111" as any,
+        amount: "1",
+      }),
+    ).toThrow("handles cannot be used");
+  });
+
+  it("WithdrawFromGasKey cannot ride inside a SignedDelegate", () => {
+    const { priv, pub } = keyPair("ed25519");
+    expect(() =>
+      mapAction({
+        type: "SignedDelegate",
+        delegateAction: {
+          ...fakeDelegate(pub),
+          actions: [{ type: "WithdrawFromGasKey", publicKey: pub, amount: "1" } as any],
+        },
+        signature: signHash(new Uint8Array(32), priv),
+      }),
+    ).toThrow("WithdrawFromGasKeyNotAllowedInDelegate");
+  });
+});
+
+describe("gas keys — TransactionV1", () => {
+  const V1_TX_HEX =
+    "01" +
+    "0a000000" + "616c6963652e6e656172" +
+    GK_PK_HEX +
+    "01" + "0500000000000000" + "0200" +
+    "08000000" + "626f622e6e656172" +
+    "00".repeat(32) +
+    "01000000" + "03" + "01000000000000000000000000000000" +
+    "00";
+  const V1_TX_SHA256 = "d7927894465b6c094e4100e9ae2b1d9fb5174bb18415484fd61ef67d2241f0ae";
+
+  function goldenTx(extra: Partial<PlainTransaction> = {}): PlainTransaction {
+    return {
+      signerId: "alice.near",
+      publicKey: GK_PK,
+      nonce: 5,
+      receiverId: "bob.near",
+      blockHash: toBase58(new Uint8Array(32)),
+      actions: [{ type: "Transfer", deposit: "1" }],
+      nonceIndex: 2,
+      ...extra,
+    };
+  }
+
+  it("a nonceIndex selects V1 and reproduces the golden bytes and hash", () => {
+    const tx = goldenTx();
+    expect(isTransactionV1(tx)).toBe(true);
+    const bytes = serializeTransaction(tx);
+    expect(hex(bytes)).toBe(V1_TX_HEX);
+    expect(hex(sha256(bytes))).toBe(V1_TX_SHA256);
+  });
+
+  it("mapTransaction emits the V1 shape with a leading version byte", () => {
+    const mapped = mapTransaction(goldenTx()) as any;
+    expect(mapped.version).toBe(1);
+    expect(mapped.nonce).toEqual({ gasKeyNonce: { nonce: 5n, nonceIndex: 2 } });
+    expect(mapped.nonceMode).toEqual({ monotonic: {} });
+  });
+
+  it("nonceMode alone selects V1 with a plain nonce; strict sets the trailing byte", () => {
+    const tx = goldenTx({ nonceIndex: undefined, nonceMode: "strict" });
+    expect(isTransactionV1(tx)).toBe(true);
+    const mapped = mapTransaction(tx) as any;
+    expect(mapped.nonce).toEqual({ nonce: { nonce: 5n } });
+    expect(mapped.nonceMode).toEqual({ strict: {} });
+    const bytes = serializeTransaction(tx);
+    expect(bytes[0]).toBe(1);
+    expect(bytes[bytes.length - 1]).toBe(1);
+    expect(serializeTransaction(goldenTx({ nonceMode: "monotonic" })).at(-1)).toBe(0);
+  });
+
+  it("V0 bytes are unchanged when no V1 field is present", () => {
+    const tx = goldenTx({ nonceIndex: undefined });
+    expect(isTransactionV1(tx)).toBe(false);
+    const bytes = serializeTransaction(tx);
+    // No version prefix: the first four bytes are the u32 length of "alice.near".
+    expect(hex(bytes.slice(0, 4))).toBe("0a000000");
+    expect(hex(bytes)).toBe(hex(serialize(SCHEMA.Transaction, mapTransaction(tx))));
+    expect((mapTransaction(tx) as any).version).toBeUndefined();
+  });
+
+  it("rejects an out-of-range or non-integer nonceIndex and an unknown nonceMode", () => {
+    for (const nonceIndex of [-1, 1024, 1.5, "2"]) {
+      expect(() => serializeTransaction(goldenTx({ nonceIndex: nonceIndex as any })), String(nonceIndex))
+        .toThrow("nonceIndex must be an integer in 0..1023");
+    }
+    expect(() => serializeTransaction(goldenTx({ nonceMode: "loose" as any }))).toThrow(
+      "Unsupported nonceMode: loose",
+    );
+  });
+
+  it("serializeSignedTransaction (V1) = V1 bytes ‖ signature, signed over sha256 of the V1 bytes", () => {
+    const { priv, pub } = keyPair("ed25519");
+    const tx = goldenTx({ publicKey: pub });
+    const txBytes = serializeTransaction(tx);
+    const sig = signHash(sha256(txBytes), priv);
+    const signed = serializeSignedTransaction(tx, sig);
+    expect(hex(signed)).toBe(hex(txBytes) + "00" + hex(sig));
+    expect(signed[0]).toBe(1);
   });
 });

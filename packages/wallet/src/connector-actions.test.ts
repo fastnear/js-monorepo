@@ -44,3 +44,38 @@ describe("toConnectorAction AddKey", () => {
     expect(converted.params.accessKey.permission).toBe(permission);
   });
 });
+
+describe("toConnectorAction refuses gas-key shapes", () => {
+  // near-connect has no gas-key actions or permissions; these must never reach
+  // a wallet as unknown objects or be reshaped into a plain key.
+  const publicKey = "ed25519:11111111111111111111111111111111";
+
+  it("throws for AddKey with a GasKeyFullAccess permission", () => {
+    expect(() =>
+      toConnectorAction({
+        type: "AddKey",
+        publicKey,
+        accessKey: { nonce: 0, permission: "GasKeyFullAccess", numNonces: 2 },
+      }),
+    ).toThrow("Adding a gas key (GasKeyFullAccess) is not supported through the wallet connector");
+  });
+
+  it("throws for AddKey with a GasKeyFunctionCall permission", () => {
+    expect(() =>
+      toConnectorAction({
+        type: "AddKey",
+        publicKey,
+        accessKey: { nonce: 0, permission: "GasKeyFunctionCall", numNonces: 2, receiverId: "c.testnet", methodNames: [] },
+      }),
+    ).toThrow("not supported through the wallet connector");
+  });
+
+  it("throws for TransferToGasKey and WithdrawFromGasKey instead of passing them through", () => {
+    expect(() => toConnectorAction({ type: "TransferToGasKey", publicKey, deposit: "1" })).toThrow(
+      "TransferToGasKey is not supported through the wallet connector",
+    );
+    expect(() => toConnectorAction({ type: "WithdrawFromGasKey", publicKey, amount: "1" })).toThrow(
+      "WithdrawFromGasKey is not supported through the wallet connector",
+    );
+  });
+});

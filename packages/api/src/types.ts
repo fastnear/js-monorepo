@@ -8,15 +8,37 @@ export interface AccessKeyWithError {
   };
 }
 
+export interface FunctionCallPermissionView {
+  allowance: string | null;
+  receiver_id: string;
+  method_names: string[];
+}
+
+/**
+ * Gas key (protocol 85+): a prepaid yoctoNEAR `balance` that pays this key's
+ * gas, and `num_nonces` independent nonce lanes (see `queryGasKeyNonces`).
+ */
+export interface GasKeyInfoView {
+  balance: string;
+  num_nonces: number;
+}
+
 export type AccessKeyPermissionView =
   | "FullAccess"
-  | {
-      FunctionCall: {
-        allowance: string | null;
-        receiver_id: string;
-        method_names: string[];
-      };
-    };
+  | { FunctionCall: FunctionCallPermissionView }
+  | { GasKeyFullAccess: GasKeyInfoView }
+  // RPC flattens the (GasKeyInfo, FunctionCallPermission) tuple into one object.
+  | { GasKeyFunctionCall: GasKeyInfoView & FunctionCallPermissionView };
+
+/** `query` / `view_gas_key_nonces`: one nonce per lane, in lane order. */
+export interface GasKeyNoncesResponse {
+  result: {
+    nonces: Array<number | string>;
+    block_height?: number;
+    block_hash?: string;
+    error?: string;
+  };
+}
 
 export interface AccessKeyInfoView {
   /** Full classical key, or an ml-dsa-65-hash: handle for ML-DSA-65. */
@@ -30,6 +52,8 @@ export interface AccessKeyInfoView {
 export interface AccessKeyListResponse {
   result: {
     keys: AccessKeyInfoView[];
+    /** Pagination cursor: present when truncated; pass it as `afterKey` for the next page. */
+    last_key?: NearPublicKeyHandle | null;
     block_height?: number;
     block_hash?: string;
   };
@@ -171,6 +195,10 @@ export interface ExplainedAction {
   accessKey?: any;
   codeBase64?: string | null;
   codeLength?: number | null;
+  /** WithdrawFromGasKey. */
+  amount?: string | null;
+  /** AddKey with a gas-key permission. */
+  numNonces?: number | null;
 }
 
 export interface ExplainedTransaction {
@@ -311,6 +339,10 @@ export interface FastNearTxTransactionRecord {
   signer_id: string;
   receiver_id: string;
   actions?: any[];
+  /** Present when the transaction was signed with a gas key (TransactionV1). */
+  nonce_index?: number;
+  /** Present for TransactionV1 in strict mode; omitted when monotonic. */
+  nonce_mode?: "monotonic" | "strict";
   [key: string]: any;
 }
 

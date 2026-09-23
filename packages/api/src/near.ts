@@ -19,6 +19,9 @@ import {
   txToJson,
   bytesToBase64,
   toHex,
+  assertDelegatable,
+  isGasKeyPermission,
+  MAX_GAS_KEY_NONCES,
   PlainTransaction,
   type SignedDelegateInput,
 } from "@fastnear/utils";
@@ -27,9 +30,12 @@ import type {
   NEP413Message,
   NearAction,
   NearDelegateAction,
+  NearNonceMode,
   NearPublicKey,
   TransactionSigner,
 } from "@fastnear/utils";
+
+export { MAX_GAS_KEY_NONCES, isGasKeyPermission };
 
 import {
   _state,
@@ -51,6 +57,7 @@ import type { NetworkConfig } from "./state.js";
 import type {
   AccessKeyWithError,
   AccessKeyListResponse,
+  AccessKeyPermissionView,
   BlockView,
   ExplainedAction,
   ExplainedError,
@@ -89,6 +96,9 @@ import type {
   FastNearTxReceiptResponse,
   FastNearTxTransactionRow,
   FastNearTxTransactionsResponse,
+  FunctionCallPermissionView,
+  GasKeyInfoView,
+  GasKeyNoncesResponse,
   LastKnownBlock,
   RecipeConnectParams,
   RecipeFunctionCallParams,
@@ -126,18 +136,62 @@ export const MaxBlockDelayMs = 1000 * 60 * 60 * 6; // 6 hours
 // Successful activation checks are immutable for the lifetime of a process:
 // NEAR protocol versions only move forward. Failed checks are deliberately not
 // cached so a long-running process can start using the feature after an upgrade.
-const mlDsa65SupportedRpcUrls = new Set<string>();
+// Protocol 85 enabled ML-DSA-65 keys, gas keys and TransactionV1 together, so
+// one gate serves all of them; `feature` names the caller's need in the error.
+const protocol85RpcUrls = new Set<string>();
+
+async function ensureProtocol85(targetNetwork: FastNearNetworkId, feature: string): Promise<void> {
+  const rpcUrl = resolveRpcUrl(resolveConfigForCall(targetNetwork));
+  if (protocol85RpcUrls.has(rpcUrl)) return;
+  const protocolVersion = await queryProtocolVersion({ network: targetNetwork });
+  if (protocolVersion < 85) {
+    throw new Error(`${feature} requires v85+; got ${protocolVersion}`);
+  }
+  protocol85RpcUrls.add(rpcUrl);
+}
 
 function isMlDsa65Key(value: unknown): value is `ml-dsa-65:${string}` {
   return typeof value === "string" && value.startsWith("ml-dsa-65:");
 }
 
-function inspectAction(action: any): boolean {
+function assertGasKeyNumNonces(numNonces: unknown): asserts numNonces is number {
+  if (
+    !Number.isInteger(numNonces) ||
+    (numNonces as number) < 1 ||
+    (numNonces as number) > MAX_GAS_KEY_NONCES
+  ) {
+    throw new Error(
+      `numNonces must be an integer between 1 and ${MAX_GAS_KEY_NONCES} ` +
+        "(each nonce is an independent transaction lane; the AddKey fee scales with it)",
+    );
+  }
+}
+
+interface ActionInspection {
+  usesMlDsa: boolean;
+  usesGasKeys: boolean;
+}
+
+function inspectAction(action: any): ActionInspection {
   const type = action?.type;
+  let usesGasKeys = false;
   if (type === "Stake") {
     assertNearValidatorPublicKey(action.publicKey);
   } else if (type === "AddKey" || type === "DeleteKey") {
     decodeNearPublicKey(action.publicKey);
+    if (type === "AddKey" && isGasKeyPermission(action.accessKey?.permission)) {
+      usesGasKeys = true;
+      // The chain rejects AddKey with a funded gas key; the codec keeps the
+      // field so decoded payloads re-encode, so police it here at ingress.
+      if (BigInt(action.accessKey.balance ?? 0) !== 0n) {
+        throw new Error(
+          "AddKey gas-key balance must be 0; fund the key afterwards with TransferToGasKey",
+        );
+      }
+    }
+  } else if (type === "TransferToGasKey" || type === "WithdrawFromGasKey") {
+    decodeNearPublicKey(action.publicKey);
+    usesGasKeys = true;
   }
   let usesMlDsa = isMlDsa65Key(action?.publicKey) ||
     isMlDsa65Key(action?.signature);
@@ -148,15 +202,24 @@ function inspectAction(action: any): boolean {
     if (action.publicKey !== undefined && action.publicKey !== delegate.publicKey) {
       throw new Error("SignedDelegate publicKey must match delegateAction.publicKey");
     }
-    usesMlDsa = inspectActions(delegate.actions) || usesMlDsa;
+    const nested = inspectActions(delegate.actions);
+    usesMlDsa ||= nested.usesMlDsa;
+    usesGasKeys ||= nested.usesGasKeys;
   }
-  return usesMlDsa;
+  return { usesMlDsa, usesGasKeys };
 }
 
-function inspectActions(actions: readonly any[]): boolean {
-  return actions.reduce(
-    (usesMlDsa, action) => inspectAction(action) || usesMlDsa,
-    false,
+function inspectActions(actions: readonly any[]): ActionInspection {
+  // Inspect every action (validation side effects), then merge the flags.
+  return actions.reduce<ActionInspection>(
+    (acc, action) => {
+      const one = inspectAction(action);
+      return {
+        usesMlDsa: acc.usesMlDsa || one.usesMlDsa,
+        usesGasKeys: acc.usesGasKeys || one.usesGasKeys,
+      };
+    },
+    { usesMlDsa: false, usesGasKeys: false },
   );
 }
 
@@ -824,26 +887,95 @@ export const queryAccessKey = async ({
   );
 };
 
+/**
+ * List an account's access keys. Accounts with more than 100 keys are refused
+ * unpaginated (`TOO_MANY_ACCESS_KEYS`): pass `limit` and page with `afterKey`
+ * set to the last `public_key` of the previous page.
+ */
 export const queryAccessKeyList = async ({
                                       accountId,
                                       blockId,
+                                      afterKey,
+                                      limit,
                                       useArchival,
                                       network,
                                     }: {
   accountId: string;
   blockId?: string;
+  /** Resume after this public key (as listed, e.g. an ml-dsa-65-hash: handle). */
+  afterKey?: string;
+  /** Page size (RPC caps unpaginated lists at 100 keys). */
+  limit?: number;
   useArchival?: boolean;
   network?: FastNearNetworkId;
 }): Promise<AccessKeyListResponse> => {
   return sendRpc(
     "query",
     withBlockId(
-      { request_type: "view_access_key_list", account_id: accountId },
+      {
+        request_type: "view_access_key_list",
+        account_id: accountId,
+        ...(afterKey !== undefined ? { after_key: afterKey } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      },
       blockId,
     ),
     { useArchival, network },
   );
 };
+
+/**
+ * Per-lane nonces of a gas key (`query` / `view_gas_key_nonces`). A gas key's
+ * `view_access_key` nonce is always 0; these are the values a TransactionV1
+ * must exceed on its chosen `nonceIndex`. A non-gas key fails with UNKNOWN_GAS_KEY.
+ */
+export const queryGasKeyNonces = async ({
+                                     accountId,
+                                     publicKey,
+                                     blockId,
+                                     useArchival,
+                                     network,
+                                   }: {
+  accountId: string;
+  publicKey: string;
+  blockId?: string;
+  useArchival?: boolean;
+  network?: FastNearNetworkId;
+}): Promise<GasKeyNoncesResponse> => {
+  return sendRpc(
+    "query",
+    withBlockId(
+      { request_type: "view_gas_key_nonces", account_id: accountId, public_key: publicKey },
+      blockId,
+    ),
+    { useArchival, network },
+  );
+};
+
+/** What `gasKeyInfoFromPermission` returns for a gas key. */
+export interface GasKeyPermissionInfo extends GasKeyInfoView {
+  /** Set for GasKeyFunctionCall keys (same rules as a FunctionCall key); null for GasKeyFullAccess. */
+  functionCall: FunctionCallPermissionView | null;
+}
+
+/**
+ * Pull the gas-key info out of an access-key permission view, or null for a
+ * classical key. Shared by sendTx's signer detection, recipes and smokes.
+ */
+export function gasKeyInfoFromPermission(
+  permission: AccessKeyPermissionView | null | undefined,
+): GasKeyPermissionInfo | null {
+  if (!permission || typeof permission !== "object") return null;
+  if ("GasKeyFullAccess" in permission) {
+    const { balance, num_nonces } = permission.GasKeyFullAccess;
+    return { balance, num_nonces, functionCall: null };
+  }
+  if ("GasKeyFunctionCall" in permission) {
+    const { balance, num_nonces, allowance, receiver_id, method_names } = permission.GasKeyFunctionCall;
+    return { balance, num_nonces, functionCall: { allowance, receiver_id, method_names } };
+  }
+  return null;
+}
 
 /** Return the active protocol version reported by the selected RPC. */
 export const queryProtocolVersion = async ({
@@ -1375,6 +1507,15 @@ type SendTxCommon = {
   actions: NearAction[];
   waitUntil?: string;
   network?: FastNearNetworkId;
+  /**
+   * Gas keys only: which nonce lane (0..numNonces-1) this transaction advances.
+   * Lanes are independent sequences, so sends on different lanes don't wait on
+   * each other. Defaults to 0 when the signer key is a gas key; rejected for a
+   * classical key. Requires local signing (TransactionV1).
+   */
+  nonceIndex?: number;
+  /** TransactionV1 nonce rule: "monotonic" (default, nonce > stored) or "strict" (exactly stored + 1). */
+  nonceMode?: NearNonceMode;
 };
 
 export type SendTxParams = SendTxCommon & (
@@ -1389,6 +1530,8 @@ export const sendTx = async ({
                                network,
                                signer: suppliedSigner,
                                signerId: suppliedSignerId,
+                               nonceIndex,
+                               nonceMode,
                              }: SendTxParams) => {
   const explicitSigner = suppliedSigner !== undefined;
   if (explicitSigner !== (suppliedSignerId !== undefined)) {
@@ -1404,16 +1547,22 @@ export const sendTx = async ({
   const privKey = slot.privateKey;
   const txId = generateTxId();
   if (pubKey) decodeNearPublicKey(pubKey);
-  const actionUsesMlDsa = inspectActions(actions);
-  if (isMlDsa65Key(pubKey) || actionUsesMlDsa) {
-    const rpcUrl = resolveRpcUrl(resolveConfigForCall(targetNetwork));
-    if (!mlDsa65SupportedRpcUrls.has(rpcUrl)) {
-      const protocolVersion = await queryProtocolVersion({ network: targetNetwork });
-      if (protocolVersion < 85) {
-        throw new Error(`ML-DSA-65 requires v85+; got ${protocolVersion}`);
-      }
-      mlDsa65SupportedRpcUrls.add(rpcUrl);
-    }
+  const inspection = inspectActions(actions);
+  if (isMlDsa65Key(pubKey) || inspection.usesMlDsa) {
+    await ensureProtocol85(targetNetwork, "ML-DSA-65");
+  }
+  if (
+    nonceIndex !== undefined &&
+    (!Number.isInteger(nonceIndex) || nonceIndex < 0 || nonceIndex >= MAX_GAS_KEY_NONCES)
+  ) {
+    throw new Error(
+      `nonceIndex must be an integer in 0..${MAX_GAS_KEY_NONCES - 1}, got ${String(nonceIndex)}`,
+    );
+  }
+  const laneIndex = nonceIndex ?? 0;
+  const requestsV1 = nonceIndex !== undefined || nonceMode !== undefined;
+  if (inspection.usesGasKeys || requestsV1) {
+    await ensureProtocol85(targetNetwork, "Gas keys (TransactionV1)");
   }
 
   // Local signing needs a stored private key. If the slot also carries an
@@ -1435,6 +1584,11 @@ export const sendTx = async ({
       (receiverId === scopedContractId && canSignWithLAK(actions)));
 
   if (!explicitSigner && !canSignLocally) {
+    if (requestsV1) {
+      throw new Error(
+        "nonceIndex/nonceMode require local signing (TransactionV1); wallet providers do not sign gas-key transactions",
+      );
+    }
     const jsonTx = { signerId, receiverId, actions };
     updateTxHistory({ status: "Pending", txId, tx: jsonTx, finalState: false });
 
@@ -1485,8 +1639,13 @@ export const sendTx = async ({
   const blockKey = `block.${targetNetwork}`;
 
   // Hold the per-key slot through submission so N+1 cannot land before N.
+  // Gas keys have independent nonce lanes: lane 0 keeps the classic scope (an
+  // explicit `nonceIndex: 0` and an omitted one share a cache) and higher lanes
+  // get their own suffix.
   const keyFingerprint = toBase58(sha256(new TextEncoder().encode(pubKey)));
-  const nonceScope = `${targetNetwork}.${signerId}.${keyFingerprint}`;
+  const nonceScope =
+    `${targetNetwork}.${signerId}.${keyFingerprint}` + (laneIndex > 0 ? `.n${laneIndex}` : "");
+  let signsWithGasKey = false;
   return reserveNonce(
     nonceScope,
     async () => {
@@ -1495,8 +1654,17 @@ export const sendTx = async ({
         throw new Error(`Access key error for ${signerId}: ${accessKey.result.error}`);
       }
       const permission = accessKey.result.permission;
-      if (permission !== "FullAccess") {
-        const functionCall = permission?.FunctionCall;
+      const gasKey = gasKeyInfoFromPermission(permission);
+      const functionCall: FunctionCallPermissionView | null = gasKey
+        ? gasKey.functionCall
+        : permission && permission !== "FullAccess" && "FunctionCall" in permission
+          ? permission.FunctionCall
+          : null;
+      const fullAccess =
+        permission === "FullAccess" || (gasKey !== null && gasKey.functionCall === null);
+      if (!fullAccess) {
+        // Function-call keys (classical or gas) may only sign one zero-deposit
+        // call to their receiver, optionally limited to the listed methods.
         if (!functionCall || !canSignWithLAK(actions) ||
           receiverId !== functionCall.receiver_id ||
           (functionCall.method_names.length > 0 &&
@@ -1504,7 +1672,37 @@ export const sendTx = async ({
           throw new Error(`fastnear: signer key is not permitted for ${receiverId}`);
         }
       }
-      return accessKey.result.nonce;
+      if (!gasKey) {
+        if (nonceIndex !== undefined) {
+          throw new Error(
+            `nonceIndex is only valid for gas keys; ${pubKey} on ${signerId} is a ` +
+              `${fullAccess ? "full-access" : "function-call"} key`,
+          );
+        }
+        return accessKey.result.nonce;
+      }
+      if (laneIndex >= gasKey.num_nonces) {
+        throw new Error(
+          `nonceIndex ${laneIndex} is out of range: gas key ${pubKey} on ${signerId} has ` +
+            `${gasKey.num_nonces} nonce lane(s) (0..${gasKey.num_nonces - 1})`,
+        );
+      }
+      // A gas key's access-key nonce is always 0; the real nonces live per lane
+      // and can only be advanced by a TransactionV1 that names the lane.
+      await ensureProtocol85(targetNetwork, "Gas keys (TransactionV1)");
+      const laneNonces = await queryGasKeyNonces({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
+      if (laneNonces.result.error) {
+        throw new Error(`Gas key nonce error for ${signerId}: ${laneNonces.result.error}`);
+      }
+      const laneNonce = laneNonces.result.nonces?.[laneIndex];
+      if (laneNonce === undefined) {
+        throw new Error(
+          `view_gas_key_nonces returned ${laneNonces.result.nonces?.length ?? 0} lane(s) for ` +
+            `${pubKey}; lane ${laneIndex} is unavailable`,
+        );
+      }
+      signsWithGasKey = true;
+      return laneNonce;
     },
     async (nonce) => {
       let lastKnownBlock = lsGet(blockKey) as LastKnownBlock | null;
@@ -1531,6 +1729,10 @@ export const sendTx = async ({
         receiverId,
         blockHash,
         actions,
+        // A gas key must sign TransactionV1 naming its lane. A classical key
+        // stays on V0 unless the caller asked for a nonce mode explicitly.
+        ...(signsWithGasKey ? { nonceIndex: laneIndex } : {}),
+        ...(nonceMode !== undefined ? { nonceMode } : {}),
       };
 
       const txBytes = serializeTransaction(plainTransactionObj);
@@ -1607,6 +1809,7 @@ export const signDelegate = async ({
   const slot = getAccountState(targetNetwork);
   const signerId = suppliedSignerId ?? slot.accountId;
   if (!signerId) throw new Error("Must sign in");
+  assertDelegatable(delegatedActions);
   const localSigner = suppliedSigner ?? signerFromPrivateKey(slot.privateKey as string);
   const pubKey = localSigner.publicKey;
 
@@ -1620,6 +1823,13 @@ export const signDelegate = async ({
       const accessKey = await queryAccessKey({ accountId: signerId, publicKey: pubKey, network: targetNetwork });
       if (accessKey.result.error) {
         throw new Error(`Access key error for ${signerId}: ${accessKey.result.error}`);
+      }
+      if (gasKeyInfoFromPermission(accessKey.result.permission)) {
+        throw new Error(
+          `signDelegate: ${pubKey} on ${signerId} is a gas key. A NEP-366 DelegateAction carries a ` +
+            "plain access-key nonce and DelegateV2 is rejected from protocol 87, so gas keys cannot " +
+            "sign delegates — use a full-access or function-call key.",
+        );
       }
       return accessKey.result.nonce;
     },
@@ -1857,6 +2067,66 @@ export const actions = {
     },
   }),
 
+  // Gas keys (protocol 85+): a prepaid balance pays this key's gas, and
+  // `numNonces` independent nonce lanes let sends run in parallel. A gas key is
+  // created empty — fund it with `transferToGasKey`, drain it with
+  // `withdrawFromGasKey`, and remove it with `deleteKey` (which burns whatever
+  // balance is left, and refuses above 1 NEAR).
+  addFullAccessGasKey: ({publicKey, numNonces}: { publicKey: string; numNonces: number }) => {
+    assertGasKeyNumNonces(numNonces);
+    return {
+      type: "AddKey" as const,
+      publicKey: publicKey as NearPublicKey,
+      accessKey: {nonce: 0, permission: "GasKeyFullAccess" as const, numNonces},
+    };
+  },
+
+  // No `allowance` parameter: the chain rejects one on a gas key, since gas is
+  // paid from the key's own balance.
+  addLimitedAccessGasKey: ({
+                             publicKey,
+                             numNonces,
+                             accountId,
+                             methodNames,
+                           }: {
+    publicKey: string;
+    numNonces: number;
+    accountId: string;
+    methodNames: string[];
+  }) => {
+    assertGasKeyNumNonces(numNonces);
+    if (typeof accountId !== "string" || !accountId) {
+      throw new Error("addLimitedAccessGasKey requires accountId (the contract the key may call)");
+    }
+    return {
+      type: "AddKey" as const,
+      publicKey: publicKey as NearPublicKey,
+      accessKey: {
+        nonce: 0,
+        permission: "GasKeyFunctionCall" as const,
+        numNonces,
+        receiverId: accountId,
+        methodNames: methodNames ?? [],
+      },
+    };
+  },
+
+  // Fund a gas key. Any account may send this; `deposit` leaves the sender's
+  // balance and the transaction's receiver is the key's owner.
+  transferToGasKey: ({publicKey, deposit}: { publicKey: string; deposit: string }) => ({
+    type: "TransferToGasKey" as const,
+    publicKey: publicKey as NearPublicKey,
+    deposit,
+  }),
+
+  // Move `amount` from the gas key back to the account. The signer must be the
+  // owning account (signerId === receiverId); not allowed inside a delegate.
+  withdrawFromGasKey: ({publicKey, amount}: { publicKey: string; amount: string }) => ({
+    type: "WithdrawFromGasKey" as const,
+    publicKey: publicKey as NearPublicKey,
+    amount,
+  }),
+
   deleteKey: ({publicKey}: { publicKey: string }) => ({
     type: "DeleteKey" as const,
     publicKey: publicKey as NearPublicKey,
@@ -1923,12 +2193,33 @@ export const explain = {
           publicKey: params.publicKey ?? null,
           params,
         };
-      case "AddKey":
+      case "AddKey": {
+        const accessKey = params.accessKey ?? null;
         return {
           kind: "action",
           type,
           publicKey: params.publicKey ?? null,
-          accessKey: params.accessKey ?? null,
+          accessKey,
+          ...(isGasKeyPermission(accessKey?.permission)
+            ? { numNonces: accessKey.numNonces ?? null }
+            : {}),
+          params,
+        };
+      }
+      case "TransferToGasKey":
+        return {
+          kind: "action",
+          type,
+          publicKey: params.publicKey ?? null,
+          deposit: params.deposit ?? null,
+          params,
+        };
+      case "WithdrawFromGasKey":
+        return {
+          kind: "action",
+          type,
+          publicKey: params.publicKey ?? null,
+          amount: params.amount ?? null,
           params,
         };
       case "DeleteKey":

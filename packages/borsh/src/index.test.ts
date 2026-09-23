@@ -507,3 +507,62 @@ describe("edge cases", () => {
     checkRoundtrip(bytes, { array: { type: "u8", len: 32 } }, bytes);
   });
 });
+
+// ── Enums with explicit discriminants ────────────────────────────────
+//
+// nearcore's `Action` enum uses `#[borsh(use_discriminant = true)]` and this
+// schema does not model every variant, so a variant may pin its wire tag
+// instead of relying on its array position.
+
+describe("enums with explicit tags", () => {
+  const sparse: Schema = {
+    enum: [
+      { struct: { a: { struct: { x: "u8" } } } },            // implicit 0
+      { tag: 12, struct: { b: { struct: { y: "u16" } } } },  // explicit 12
+      { tag: 13, struct: { c: { struct: {} } } },            // explicit 13
+    ],
+  };
+
+  it("encodes and decodes a tagged variant with its tag, not its position", () => {
+    checkRoundtrip({ b: { y: 300 } }, sparse, [12, 44, 1]);
+    checkRoundtrip({ c: {} }, sparse, [13]);
+  });
+
+  it("implicit variants keep their positional discriminant alongside tagged ones", () => {
+    checkRoundtrip({ a: { x: 7 } }, sparse, [0, 7]);
+  });
+
+  it("a byte that matches no effective tag throws the out-of-range error", () => {
+    expect(() => deserialize(sparse, Uint8Array.from([1]))).toThrow(
+      "Borsh: enum index 1 out of range",
+    );
+    expect(() => deserialize(sparse, Uint8Array.from([9]))).toThrow(
+      "Borsh: enum index 9 out of range",
+    );
+  });
+
+  it("tags equal to their positions are byte-identical to an untagged schema", () => {
+    const untagged: Schema = {
+      enum: [
+        { struct: { a: { struct: { x: "u8" } } } },
+        { struct: { b: { struct: { y: "u16" } } } },
+      ],
+    };
+    const tagged: Schema = {
+      enum: [
+        { tag: 0, struct: { a: { struct: { x: "u8" } } } },
+        { tag: 1, struct: { b: { struct: { y: "u16" } } } },
+      ],
+    };
+    const value = { b: { y: 5 } };
+    expect(serialize(tagged, value)).toEqual(serialize(untagged, value));
+    expect(deserialize(tagged, serialize(untagged, value))).toEqual(value);
+  });
+
+  it("rejects a tag outside 0..255 instead of wrapping the byte", () => {
+    const bad: Schema = { enum: [{ tag: 256, struct: { a: { struct: {} } } }] };
+    expect(() => serialize(bad, { a: {} })).toThrow(
+      'Borsh: enum tag 256 for "a" must be an integer in 0..255',
+    );
+  });
+});

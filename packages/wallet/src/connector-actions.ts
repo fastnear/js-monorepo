@@ -1,6 +1,21 @@
 import type { ConnectorAction } from "@fastnear/near-connect";
 
+// Gas keys (protocol 85+) are a local-signing feature: near-connect has no
+// gas-key actions or permissions, so passing these through would reach the
+// wallet as unknown objects (or, worse, be reshaped into a plain key).
+const GAS_KEY_PERMISSIONS = new Set(["GasKeyFullAccess", "GasKeyFunctionCall"]);
+
+function unsupportedByWallet(what: string): Error {
+  return new Error(
+    `${what} is not supported through the wallet connector (near-connect has no gas-key actions); ` +
+      "sign it locally with near.sendTx({ signer, signerId, ... })",
+  );
+}
+
 function normalizeAddKeyAccessKey(accessKey: any): any {
+  if (GAS_KEY_PERMISSIONS.has(accessKey?.permission)) {
+    throw unsupportedByWallet(`Adding a gas key (${accessKey.permission})`);
+  }
   if (accessKey?.permission !== "FunctionCall") return accessKey;
   const {
     permission: _permission,
@@ -45,6 +60,9 @@ export function toConnectorAction(action: any): ConnectorAction {
       return { type: "CreateAccount" } as ConnectorAction;
     case "DeployContract":
       return { type: "DeployContract", params: { code: rest.code ?? rest.codeBase64 } } as ConnectorAction;
+    case "TransferToGasKey":
+    case "WithdrawFromGasKey":
+      throw unsupportedByWallet(type);
     default:
       // Pass through if already in connector format (has params).
       return action;

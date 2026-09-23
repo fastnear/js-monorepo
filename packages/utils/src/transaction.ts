@@ -71,12 +71,40 @@ export interface NearFunctionCallPermission {
   allowance?: NearInteger | null;
 }
 
+/** Maximum nonce lanes a gas key may declare (nearcore `MAX_NONCES_FOR_GAS_KEY`). */
+export const MAX_GAS_KEY_NONCES = 1024;
+
+/**
+ * Gas-key permission kinds (protocol 85+). A gas key carries a prepaid balance
+ * that pays for gas plus `numNonces` independent nonce lanes. `GasKeyFunctionCall`
+ * additionally restricts calls like a FunctionCall key, but may not carry an
+ * allowance — gas comes from the key balance, so the chain rejects one.
+ */
+export type NearGasKeyPermissionKind = "GasKeyFullAccess" | "GasKeyFunctionCall";
+
+export const isGasKeyPermission = (
+  permission: unknown,
+): permission is NearGasKeyPermissionKind =>
+  permission === "GasKeyFullAccess" || permission === "GasKeyFunctionCall";
+
 export interface NearAccessKey {
   nonce?: NearInteger;
-  permission: "FullAccess" | "FunctionCall" | NearFunctionCallPermission;
+  permission:
+    | "FullAccess"
+    | "FunctionCall"
+    | NearGasKeyPermissionKind
+    | NearFunctionCallPermission;
   receiverId?: string;
   methodNames?: string[];
   allowance?: NearInteger | null;
+  /** Gas keys: nonce lanes, 1..MAX_GAS_KEY_NONCES. Required for the GasKey* permissions. */
+  numNonces?: number;
+  /**
+   * Gas keys: yoctoNEAR balance. Must be 0 (omit it) when adding a key — fund it
+   * afterwards with TransferToGasKey. Present so keys decoded from chain payloads
+   * (parseSignedDelegate) round-trip byte-for-byte.
+   */
+  balance?: NearInteger;
 }
 
 export interface NearAddKeyAction {
@@ -95,6 +123,24 @@ export interface NearDeleteAccountAction {
   beneficiaryId: string;
 }
 
+/** Fund a gas key's balance. Any account may send it; `deposit` leaves the sender. */
+export interface NearTransferToGasKeyAction {
+  type: "TransferToGasKey";
+  publicKey: NearPublicKey;
+  deposit: NearInteger;
+}
+
+/**
+ * Move `amount` from a gas key's balance back to its account. Signer must be the
+ * owning account, and it cannot ride inside a NEP-366 delegate (protocol 87+).
+ */
+export interface NearWithdrawFromGasKeyAction {
+  type: "WithdrawFromGasKey";
+  publicKey: NearPublicKey;
+  amount: NearInteger;
+}
+
+/** Actions a NEP-366 DelegateAction may carry. */
 export type NearClassicAction =
   | NearCreateAccountAction
   | NearDeployContractAction
@@ -103,7 +149,8 @@ export type NearClassicAction =
   | NearStakeAction
   | NearAddKeyAction
   | NearDeleteKeyAction
-  | NearDeleteAccountAction;
+  | NearDeleteAccountAction
+  | NearTransferToGasKeyAction;
 
 export interface NearDelegateAction {
   senderId: string;
@@ -121,7 +168,13 @@ export interface NearSignedDelegateAction {
   publicKey?: NearPublicKey;
 }
 
-export type NearAction = NearClassicAction | NearSignedDelegateAction;
+export type NearAction =
+  | NearClassicAction
+  | NearWithdrawFromGasKeyAction
+  | NearSignedDelegateAction;
+
+/** TransactionV1 nonce validation: "monotonic" (nonce > stored) or "strict" (nonce == stored + 1). */
+export type NearNonceMode = "monotonic" | "strict";
 
 export interface PlainTransaction {
   signerId: string;
@@ -130,7 +183,21 @@ export interface PlainTransaction {
   receiverId: string;
   blockHash: string;
   actions: NearAction[];
+  /**
+   * Gas keys only: which nonce lane (0..numNonces-1) this transaction advances.
+   * Presence selects TransactionV1 with a GasKeyNonce; a gas key cannot sign V0.
+   */
+  nonceIndex?: number;
+  /** TransactionV1 only. Defaults to "monotonic"; any value selects TransactionV1. */
+  nonceMode?: NearNonceMode;
 }
+
+/** Wire prefix byte of `Transaction::V1` (V0 has none). */
+export const TRANSACTION_V1_VERSION = 1;
+
+/** A transaction needs the V1 wire format when it carries any V1-only field. */
+export const isTransactionV1 = (tx: PlainTransaction): boolean =>
+  tx.nonceIndex !== undefined || tx.nonceMode !== undefined;
 
 export interface PlainSignedTransaction {
   transaction: object;
@@ -184,20 +251,54 @@ function mapSignature(signature: string | Uint8Array, signerKeyString: string) {
   return { [NEAR_KEY_DESCRIPTORS[keyType].signatureVariant]: { data } };
 }
 
+/**
+ * Map a flat transaction into the borsh chain-schema shape. Without V1-only
+ * fields the result is the V0 shape (byte-identical to before gas keys); with
+ * `nonceIndex` and/or `nonceMode` it is the TransactionV1 shape, including the
+ * leading `version` byte the chain hashes and signs.
+ */
 export function mapTransaction(jsonTransaction: PlainTransaction) {
-  return {
+  const nonce = BigInt(jsonTransaction.nonce);
+  const common = {
     signerId: jsonTransaction.signerId,
     publicKey: mapPublicKey(jsonTransaction.publicKey),
-    nonce: BigInt(jsonTransaction.nonce),
     receiverId: jsonTransaction.receiverId,
     blockHash: fromBase58(jsonTransaction.blockHash),
     actions: jsonTransaction.actions.map(mapAction),
+  };
+  if (!isTransactionV1(jsonTransaction)) {
+    return { ...common, nonce };
+  }
+
+  const { nonceIndex, nonceMode } = jsonTransaction;
+  if (nonceMode !== undefined && nonceMode !== "monotonic" && nonceMode !== "strict") {
+    throw new Error(
+      `Unsupported nonceMode: ${String(nonceMode)} (expected "monotonic" or "strict")`,
+    );
+  }
+  if (
+    nonceIndex !== undefined &&
+    (!Number.isInteger(nonceIndex) || nonceIndex < 0 || nonceIndex >= MAX_GAS_KEY_NONCES)
+  ) {
+    throw new Error(
+      `nonceIndex must be an integer in 0..${MAX_GAS_KEY_NONCES - 1}, got ${String(nonceIndex)}`,
+    );
+  }
+  return {
+    version: TRANSACTION_V1_VERSION,
+    ...common,
+    nonce:
+      nonceIndex !== undefined
+        ? { gasKeyNonce: { nonce, nonceIndex } }
+        : { nonce: { nonce } },
+    nonceMode: nonceMode === "strict" ? { strict: {} } : { monotonic: {} },
   };
 }
 
 export function serializeTransaction(jsonTransaction: PlainTransaction) {
   const transaction = mapTransaction(jsonTransaction);
-  return borshSerialize(SCHEMA.Transaction, transaction);
+  const schema = isTransactionV1(jsonTransaction) ? SCHEMA.TransactionV1 : SCHEMA.Transaction;
+  return borshSerialize(schema, transaction);
 }
 
 export function serializeSignedTransaction(
@@ -211,7 +312,72 @@ export function serializeSignedTransaction(
     signature: mapSignature(signature, jsonTransaction.publicKey),
   };
 
-  return borshSerialize(SCHEMA.SignedTransaction, plainSignedTransaction);
+  const schema = isTransactionV1(jsonTransaction)
+    ? SCHEMA.SignedTransactionV1
+    : SCHEMA.SignedTransaction;
+  return borshSerialize(schema, plainSignedTransaction);
+}
+
+function mapGasKeyInfo(accessKey: NearAccessKey) {
+  const numNonces = accessKey.numNonces;
+  if (
+    !Number.isInteger(numNonces) ||
+    (numNonces as number) < 1 ||
+    (numNonces as number) > MAX_GAS_KEY_NONCES
+  ) {
+    throw new Error(
+      `Gas keys need numNonces between 1 and ${MAX_GAS_KEY_NONCES}, got ${String(numNonces)}`,
+    );
+  }
+  // The balance is not policed here: AddKey requires 0 (enforced at the api
+  // ingress), but a key decoded from a chain payload must re-encode as-is.
+  return { balance: toNearAmount(accessKey.balance), numNonces: numNonces as number };
+}
+
+function mapFunctionCallPermission(functionCall: {
+  receiverId?: string;
+  methodNames?: string[];
+  allowance?: NearInteger | null;
+}) {
+  if (typeof functionCall.receiverId !== "string") {
+    throw new Error("Function-call access keys require a receiverId");
+  }
+  return {
+    allowance:
+      functionCall.allowance != null ? toNearAmount(functionCall.allowance) : null,
+    receiverId: functionCall.receiverId,
+    methodNames: functionCall.methodNames ?? [],
+  };
+}
+
+function mapAccessKeyPermission(accessKey: NearAccessKey): object {
+  const permission = accessKey.permission;
+  if (permission === "FullAccess") {
+    return { fullAccess: {} };
+  }
+  if (permission === "GasKeyFullAccess") {
+    return { gasKeyFullAccess: mapGasKeyInfo(accessKey) };
+  }
+  if (permission === "GasKeyFunctionCall") {
+    if (accessKey.allowance != null) {
+      throw new Error(
+        "GasKeyFunctionCall keys cannot carry an allowance — gas is paid from the gas key balance",
+      );
+    }
+    return {
+      gasKeyFunctionCall: {
+        gasKeyInfo: mapGasKeyInfo(accessKey),
+        functionCall: mapFunctionCallPermission(accessKey),
+      },
+    };
+  }
+  if (permission === "FunctionCall") {
+    return { functionCall: mapFunctionCallPermission(accessKey) };
+  }
+  if (permission != null && typeof permission === "object") {
+    return { functionCall: mapFunctionCallPermission(permission) };
+  }
+  throw new Error(`Unsupported access-key permission: ${String(permission)}`);
 }
 
 export function mapAction(action: NearAction): object {
@@ -258,40 +424,12 @@ export function mapAction(action: NearAction): object {
       };
     }
     case "AddKey": {
-      const permission = action.accessKey.permission;
-      if (
-        permission !== "FullAccess" &&
-        permission !== "FunctionCall" &&
-        (permission == null || typeof permission !== "object")
-      ) {
-        throw new Error(`Unsupported access-key permission: ${String(permission)}`);
-      }
-      const functionCall =
-        typeof permission === "object" ? permission : action.accessKey;
-      if (
-        permission !== "FullAccess" &&
-        typeof functionCall.receiverId !== "string"
-      ) {
-        throw new Error("Function-call access keys require a receiverId");
-      }
-
       return {
         addKey: {
           publicKey: mapPublicKey(action.publicKey),
           accessKey: {
             nonce: BigInt(action.accessKey.nonce ?? 0),
-            permission:
-              permission === "FullAccess"
-                ? { fullAccess: {} }
-                : {
-                  functionCall: {
-                    allowance: functionCall.allowance != null
-                      ? toNearAmount(functionCall.allowance)
-                      : null,
-                    receiverId: functionCall.receiverId,
-                    methodNames: functionCall.methodNames ?? [],
-                  },
-                },
+            permission: mapAccessKeyPermission(action.accessKey),
           },
         },
       };
@@ -310,6 +448,22 @@ export function mapAction(action: NearAction): object {
         },
       };
     }
+    case "TransferToGasKey": {
+      return {
+        transferToGasKey: {
+          publicKey: mapPublicKey(action.publicKey),
+          deposit: toNearAmount(action.deposit),
+        },
+      };
+    }
+    case "WithdrawFromGasKey": {
+      return {
+        withdrawFromGasKey: {
+          publicKey: mapPublicKey(action.publicKey),
+          amount: toNearAmount(action.amount),
+        },
+      };
+    }
     case "SignedDelegate": {
       const delegate = action.delegateAction;
       if (action.publicKey && action.publicKey !== delegate.publicKey) {
@@ -319,14 +473,7 @@ export function mapAction(action: NearAction): object {
       }
       return {
         signedDelegate: {
-          delegateAction: {
-            senderId: delegate.senderId,
-            receiverId: delegate.receiverId,
-            actions: delegate.actions.map(mapAction),
-            nonce: BigInt(delegate.nonce),
-            maxBlockHeight: BigInt(delegate.maxBlockHeight),
-            publicKey: mapPublicKey(delegate.publicKey),
-          },
+          delegateAction: mapDelegateAction(delegate),
           signature: mapSignature(action.signature, delegate.publicKey),
         },
       };
@@ -349,8 +496,30 @@ export const SCHEMA = getBorshSchema();
  */
 export const NEP461_DELEGATE_TAG = 2 ** 30 + 366;
 
+/**
+ * Reject actions a NEP-366 DelegateAction cannot carry: a nested SignedDelegate
+ * (never allowed) and WithdrawFromGasKey, which the chain rejects inside
+ * delegates from protocol 87 (`WithdrawFromGasKeyNotAllowedInDelegate`).
+ */
+export function assertDelegatable(actions: ReadonlyArray<{ type?: unknown }>): void {
+  for (const action of actions) {
+    const type = action?.type;
+    if (type === "SignedDelegate") {
+      throw new Error("A NEP-366 DelegateAction cannot carry a nested SignedDelegate");
+    }
+    if (type === "WithdrawFromGasKey") {
+      throw new Error(
+        "WithdrawFromGasKey cannot be carried inside a NEP-366 DelegateAction " +
+          "(rejected on-chain from protocol 87: WithdrawFromGasKeyNotAllowedInDelegate); " +
+          "send it in a direct transaction from the account",
+      );
+    }
+  }
+}
+
 /** Map a flat DelegateAction into the borsh chain-schema shape. */
 function mapDelegateAction(delegate: NearDelegateAction) {
+  assertDelegatable(delegate.actions);
   return {
     senderId: delegate.senderId,
     receiverId: delegate.receiverId,
@@ -452,10 +621,29 @@ function unmapAccessKey(decoded: { nonce: NearInteger; permission: unknown }): N
       },
     };
   }
+  if (variant === "gasKeyFullAccess") {
+    return {
+      nonce: decoded.nonce,
+      permission: "GasKeyFullAccess",
+      numNonces: Number(value.numNonces),
+      balance: value.balance,
+    };
+  }
+  if (variant === "gasKeyFunctionCall") {
+    return {
+      nonce: decoded.nonce,
+      permission: "GasKeyFunctionCall",
+      numNonces: Number(value.gasKeyInfo.numNonces),
+      balance: value.gasKeyInfo.balance,
+      receiverId: value.functionCall.receiverId,
+      methodNames: value.functionCall.methodNames ?? [],
+      allowance: value.functionCall.allowance ?? null,
+    };
+  }
   throw new Error(`parseSignedDelegate: unknown access-key permission "${variant}"`);
 }
 
-/** Invert `mapAction` for the eight ClassicAction variants a delegate can carry. */
+/** Invert `mapAction` for the ClassicAction variants a delegate can carry. */
 function unmapClassicAction(decoded: unknown): NearClassicAction {
   const [variant, value] = enumEntry(decoded);
   switch (variant) {
@@ -487,6 +675,17 @@ function unmapClassicAction(decoded: unknown): NearClassicAction {
       return { type: "DeleteKey", publicKey: unmapPublicKey(value.publicKey) };
     case "deleteAccount":
       return { type: "DeleteAccount", beneficiaryId: value.beneficiaryId };
+    case "transferToGasKey":
+      return {
+        type: "TransferToGasKey",
+        publicKey: unmapPublicKey(value.publicKey),
+        deposit: value.deposit,
+      };
+    case "withdrawFromGasKey":
+      throw new Error(
+        "parseSignedDelegate: WithdrawFromGasKey cannot be carried in a delegate action " +
+          "(rejected on-chain from protocol 87)",
+      );
     default:
       throw new Error(`parseSignedDelegate: cannot parse delegate action variant "${variant}"`);
   }

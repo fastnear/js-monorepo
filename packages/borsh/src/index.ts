@@ -1,6 +1,8 @@
 // Lean borsh serializer/deserializer for NEAR Protocol.
 // API-compatible with the `borsh` npm package for the subset of schemas NEAR uses.
 // Supports: u8, u16, u32, u64, u128, string, struct, enum, array (fixed + dynamic), option.
+// Enum variants may carry an explicit `tag` (wire discriminant), mirroring nearcore's
+// `#[borsh(use_discriminant = true)]` enums that leave gaps; the default is the array position.
 // Omits: bool, signed integers, f32/f64, set, map, schema validation, runtime type checking.
 //
 // Wide integers (u64/u128) decode to decimal STRINGS by default — the whole
@@ -26,7 +28,13 @@ export type OptionType = { option: Schema };
 
 export type ArrayType = { array: { type: Schema; len?: number } };
 
-export type EnumType = { enum: Array<StructType> };
+/**
+ * One enum variant. `tag` overrides the wire discriminant (default: the variant's
+ * array position). Lets a schema skip discriminants it does not model.
+ */
+export type EnumVariant = StructType & { tag?: number };
+
+export type EnumType = { enum: Array<EnumVariant> };
 
 export type StructType = { struct: { [key: string]: Schema } };
 
@@ -226,10 +234,15 @@ function encodeValue(buf: EncodeBuffer, value: any, schema: Schema): void {
       const valueKey = Object.keys(value)[0];
       const variants = schema.enum;
       for (let i = 0; i < variants.length; i++) {
-        const variantKey = Object.keys(variants[i].struct)[0];
+        const variant = variants[i];
+        const variantKey = Object.keys(variant.struct)[0];
         if (valueKey === variantKey) {
-          buf.storeU8(i);
-          encodeStruct(buf, value, variants[i]);
+          const tag = variant.tag ?? i;
+          if (!Number.isInteger(tag) || tag < 0 || tag > 255) {
+            throw new Error(`Borsh: enum tag ${tag} for "${valueKey}" must be an integer in 0..255`);
+          }
+          buf.storeU8(tag);
+          encodeStruct(buf, value, variant);
           return;
         }
       }
@@ -309,10 +322,11 @@ function decodeValue(buf: DecodeBuffer, schema: Schema): any {
 
     if ("enum" in schema) {
       const idx = buf.readU8();
-      if (idx >= schema.enum.length) {
+      // Resolve by effective discriminant (explicit `tag`, else array position).
+      const variant = schema.enum.find((v, i) => (v.tag ?? i) === idx);
+      if (!variant) {
         throw new Error(`Borsh: enum index ${idx} out of range`);
       }
-      const variant = schema.enum[idx];
       const result: Record<string, any> = {};
       for (const key of Object.keys(variant.struct)) {
         result[key] = decodeValue(buf, variant.struct[key]);
