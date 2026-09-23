@@ -62,6 +62,11 @@
         "summary": "Sign a NEP-366 delegate action locally with near.signDelegate (no wallet) and broadcast it via near.relayDelegate or any relayer that pays the gas."
       },
       {
+        "url": "https://js.fastnear.com/gas-keys.html",
+        "topic": "Gas keys",
+        "summary": "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and why wallets don't expose them yet."
+      },
+      {
         "url": "https://js.fastnear.com/accounts.html",
         "topic": "Keys and accounts",
         "summary": "Generate or recover NEAR keys from a BIP-39 seed phrase with @fastnear/seed-phrase, derive implicit account ids, and create + fund a testnet account with near.createFundedTestnetAccount."

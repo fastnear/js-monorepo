@@ -128,6 +128,7 @@ Canonical hosted agent wrapper:
 Hosted topic explainers:
 - https://js.fastnear.com/transactions.html — Constructing a transaction
 - https://js.fastnear.com/meta-transactions.html — Gasless meta-transactions
+- https://js.fastnear.com/gas-keys.html — Gas keys
 - https://js.fastnear.com/accounts.html — Keys and accounts
 - https://js.fastnear.com/x402.html — x402 payments on NEAR
 - https://js.fastnear.com/post-quantum.html — Post-quantum ML-DSA-65 keys
