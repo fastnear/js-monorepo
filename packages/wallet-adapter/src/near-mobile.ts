@@ -316,7 +316,13 @@ export const createNearMobileAdapter = (options: NearMobileAdapterOptions = {}) 
       public_key: publicKey,
     });
 
-    if (accessKey?.permission !== "FullAccess") {
+    // A GasKeyFullAccess key carries the same authority over the account as a
+    // classical full-access key; only its gas accounting differs.
+    const permission = accessKey?.permission;
+    const fullAccess =
+      permission === "FullAccess" ||
+      (permission && typeof permission === "object" && "GasKeyFullAccess" in permission);
+    if (!fullAccess) {
       throw new TransportError("INVALID_ACCESS_KEY", "Signer key is not a full access key");
     }
   };

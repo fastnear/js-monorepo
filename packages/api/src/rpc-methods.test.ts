@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { memoryStore } from "@fastnear/utils";
-import { gasPrice, status, validators, state } from "./near.js";
+import { gasPrice, queryAccessKeyList, queryGasKeyNonces, status, validators, state } from "./near.js";
 import { NETWORKS } from "./state.js";
 
 const originalFetch = global.fetch;
@@ -46,5 +46,49 @@ describe("core RPC wrappers", () => {
 
     await validators({ blockId: "somehash" });
     expect(calls.at(-1)).toEqual({ method: "validators", params: ["somehash"] });
+  });
+});
+
+describe("queryGasKeyNonces", () => {
+  const base = { accountId: "alice.near", publicKey: "ed25519:1thX6LZfHDZZKUs92febYZhYRcXddmzfzF2NvTkPNE" };
+
+  it("sends query/view_gas_key_nonces with optimistic finality by default", async () => {
+    const res = await queryGasKeyNonces(base);
+    expect(calls.at(-1)).toEqual({
+      method: "query",
+      params: {
+        request_type: "view_gas_key_nonces",
+        account_id: "alice.near",
+        public_key: base.publicKey,
+        finality: "optimistic",
+      },
+    });
+    expect(res).toEqual({ result: { ok: true } });
+  });
+
+  it("honours blockId as finality or block_id", async () => {
+    await queryGasKeyNonces({ ...base, blockId: "final" });
+    expect(calls.at(-1)!.params.finality).toBe("final");
+    await queryGasKeyNonces({ ...base, blockId: "somehash" });
+    expect(calls.at(-1)!.params.block_id).toBe("somehash");
+  });
+});
+
+describe("queryAccessKeyList pagination", () => {
+  it("omits after_key/limit by default and forwards them when given", async () => {
+    await queryAccessKeyList({ accountId: "alice.near" });
+    expect(calls.at(-1)!.params).toEqual({
+      request_type: "view_access_key_list",
+      account_id: "alice.near",
+      finality: "optimistic",
+    });
+    await queryAccessKeyList({ accountId: "alice.near", afterKey: "ed25519:abc", limit: 100, blockId: "final" });
+    expect(calls.at(-1)!.params).toEqual({
+      request_type: "view_access_key_list",
+      account_id: "alice.near",
+      after_key: "ed25519:abc",
+      limit: 100,
+      finality: "final",
+    });
   });
 });

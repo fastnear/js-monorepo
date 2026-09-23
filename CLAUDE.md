@@ -110,6 +110,13 @@ Examples live in `examples/static/` and `examples/dynamic/`.
 - Event system: `near.event.onAccount(cb)`, `near.event.onTx(cb)`.
 - Unbroadcasted events are queued and replayed when the first listener subscribes.
 
+## Gas keys (protocol 85+)
+
+- Borsh: `AccessKeyPermission` variants 2/3 (`gasKeyFunctionCall`, `gasKeyFullAccess`) and `Action` discriminants 12/13 (`transferToGasKey`, `withdrawFromGasKey`). The action entries pin their wire tags with the borsh codec's explicit `tag` field, since nearcore's 9–11 (global-contract / state-init actions) are not modelled.
+- Flat shape: `accessKey: { permission: "GasKeyFullAccess" | "GasKeyFunctionCall", numNonces, receiverId?, methodNames? }` (string discriminators so stale code paths fail loudly). Builders: `actions.addFullAccessGasKey`, `addLimitedAccessGasKey`, `transferToGasKey`, `withdrawFromGasKey`; removal is `deleteKey`.
+- Signing with a gas key uses TransactionV1 (`0x01` prefix, `GasKeyNonce { nonce, nonceIndex }`, trailing `NonceMode`). `sendTx` detects it from the `view_access_key` permission, reads lane nonces via `queryGasKeyNonces`, and keeps one nonce cache per lane (`nonce.<scope>.n<lane>` for lanes > 0). Wallet/connector paths refuse gas-key shapes; `signDelegate` refuses gas-key signers (DelegateV2 is rejected on chain from protocol 87).
+- Golden vectors live in `packages/borsh-schema/src/index.test.ts`; live lifecycle check: `yarn smoke:gas-keys:testnet -- --account <x>.testnet --credential <key.json> --confirm-account <x>.testnet`.
+
 ## Yarn constraints (`yarn.config.cjs`)
 
 - Reads the root `package.json` version and sets all workspace package versions to match.

@@ -2685,6 +2685,208 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 };
 
 /**
+ * Gas keys (protocol 85+) are access keys with a prepaid balance that pays
+ * their own gas, plus independent nonce lanes for parallel sends. They are a
+ * local-signing feature of @fastnear/api: wallet providers do not expose them.
+ */
+export const gasKeySurface = {
+  package: "@fastnear/api",
+  protocolVersion: 85,
+  runtime: "Node.js 20.19+ or a modern browser; local-key signing via sendTx({ signer, signerId }). Wallet providers do not yet expose gas keys.",
+  scope: "Prepaid-gas access keys: gas is charged to the key's own balance, deposits still come from the account, and gas refunds return to the key.",
+  limits: {
+    minNonces: 1,
+    maxNonces: 1024,
+    maxBalanceBurntOnDelete: "1 NEAR",
+  },
+  permissionViews: {
+    fullAccess: '{ GasKeyFullAccess: { balance, num_nonces } }',
+    functionCall: '{ GasKeyFunctionCall: { balance, num_nonces, allowance: null, receiver_id, method_names } }',
+  },
+  rpc: {
+    nonces: 'query { request_type: "view_gas_key_nonces", account_id, public_key } -> { nonces: [...] }',
+    notAGasKey: "UNKNOWN_GAS_KEY",
+  },
+  builders: [
+    "actions.addFullAccessGasKey({ publicKey, numNonces })",
+    "actions.addLimitedAccessGasKey({ publicKey, numNonces, accountId, methodNames })",
+    "actions.transferToGasKey({ publicKey, deposit })",
+    "actions.withdrawFromGasKey({ publicKey, amount })",
+    "actions.deleteKey({ publicKey })",
+  ],
+  rules: [
+    "AddKey creates the gas key with balance 0 and 1..1024 nonce lanes; the AddKey fee grows with numNonces, and a non-null allowance on GasKeyFunctionCall is rejected.",
+    "TransferToGasKey may be sent by any account and the deposit leaves the sender; WithdrawFromGasKey must be signed by the owning account (signerId === receiverId).",
+    "sendTx({ signer, signerId, nonceIndex, nonceMode }) detects a GasKey* permission and signs a TransactionV1 whose nonce is scoped to that lane: sequential sends on one lane, parallel sends across lanes.",
+    "A gas key's view_access_key nonce is always 0; read lane nonces with queryGasKeyNonces.",
+    "DeleteKey fails if the key holds more than 1 NEAR and burns whatever remains below that, so withdraw first.",
+    "Gas keys cannot sign NEP-366 delegate actions, and WithdrawFromGasKey is not allowed inside a delegate.",
+  ],
+  safety: [
+    "Check the selected RPC's active protocol_version and require 85 or later before adding or using a gas key.",
+    "Treat the gas key's private key like any signing secret; keep recovery records public-only (network, account, public key).",
+    "Read balances and lane nonces at finality (blockId: \"final\") after a waitUntil: \"FINAL\" send before asserting on them; the default query finality is optimistic.",
+    "Drain with WithdrawFromGasKey before DeleteKey; a gas refund that lands after your read is burnt on deletion (bounded by 1 NEAR).",
+  ],
+  quickstarts: [
+    {
+      id: "gas-key-add",
+      title: "Add a full-access gas key",
+      summary: "Generate an ordinary ed25519 key pair and enroll it as a gas key with an existing full-access key. Only the permission differs from a classical key; the balance starts at 0.",
+      language: "js",
+      code: `import { actions, queryAccessKey, queryProtocolVersion, sendTx } from "@fastnear/api";
+import { privateKeyFromRandom, signerFromPrivateKey } from "@fastnear/utils";
+
+export async function addGasKey({ accountId, ownerSigner, numNonces = 4 }) {
+  const protocolVersion = await queryProtocolVersion({ network: "testnet" });
+  if (protocolVersion < 85) {
+    throw new Error(\`testnet protocol \${protocolVersion} does not support gas keys\`);
+  }
+
+  // A gas key is an ordinary ed25519 key pair; only its permission differs.
+  const gasKeyPrivateKey = privateKeyFromRandom("ed25519");
+  const gasSigner = signerFromPrivateKey(gasKeyPrivateKey);
+
+  await sendTx({
+    signerId: accountId,
+    signer: ownerSigner,
+    receiverId: accountId,
+    // numNonces = independent transaction lanes (1..1024); the AddKey fee grows with it.
+    actions: [actions.addFullAccessGasKey({ publicKey: gasSigner.publicKey, numNonces })],
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+
+  const view = await queryAccessKey({
+    accountId,
+    publicKey: gasSigner.publicKey,
+    blockId: "final",
+    network: "testnet",
+  });
+  // view.result.permission -> { GasKeyFullAccess: { balance: "0", num_nonces: 4 } }
+  return { gasKeyPrivateKey, publicKey: gasSigner.publicKey, permission: view.result.permission };
+}`,
+    },
+    {
+      id: "gas-key-fund",
+      title: "Fund a gas key with TransferToGasKey",
+      summary: "Move NEAR from any account into the gas key's balance. The transaction's receiver is the key's owner; the funder may be a different account.",
+      language: "js",
+      code: `import { actions, gasKeyInfoFromPermission, queryAccessKey, sendTx } from "@fastnear/api";
+
+export async function fundGasKey({ funderId, funderSigner, accountId, publicKey, amount = "0.05 NEAR" }) {
+  await sendTx({
+    signerId: funderId,
+    signer: funderSigner,
+    receiverId: accountId,
+    actions: [actions.transferToGasKey({ publicKey, deposit: amount })],
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+
+  const view = await queryAccessKey({ accountId, publicKey, blockId: "final", network: "testnet" });
+  const info = gasKeyInfoFromPermission(view.result.permission);
+  if (!info) throw new Error(\`\${publicKey} is not a gas key on \${accountId}\`);
+  return info.balance; // yoctoNEAR decimal string
+}`,
+    },
+    {
+      id: "gas-key-send",
+      title: "Send a transaction signed by the gas key",
+      summary: "sendTx reads the GasKey* permission, fetches the chosen lane's nonce, and signs a TransactionV1. Gas comes from the key balance; different lanes do not wait on each other.",
+      language: "js",
+      code: `import { actions, queryGasKeyNonces, sendTx } from "@fastnear/api";
+
+export async function sendWithGasKey({ accountId, gasSigner, receiverId, nonceIndex = 0 }) {
+  const result = await sendTx({
+    signerId: accountId,
+    signer: gasSigner,
+    receiverId,
+    actions: [actions.functionCall({ methodName: "ping", args: {}, gas: "30 Tgas", deposit: "0" })],
+    nonceIndex,
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+
+  const nonces = await queryGasKeyNonces({
+    accountId,
+    publicKey: gasSigner.publicKey,
+    blockId: "final",
+    network: "testnet",
+  });
+  return { txHash: result.transaction?.hash ?? null, nonces: nonces.result.nonces };
+}
+
+// Lanes are independent nonce sequences, so these do not serialize behind each other.
+export const sendOnTwoLanes = (params) =>
+  Promise.all([0, 1].map((nonceIndex) => sendWithGasKey({ ...params, nonceIndex })));`,
+    },
+    {
+      id: "gas-key-inspect",
+      title: "Inspect a gas key's balance and lane nonces",
+      summary: "Combine view_access_key (balance, lane count, function-call scope) with view_gas_key_nonces (one nonce per lane) and the account's key list.",
+      language: "js",
+      code: `import {
+  gasKeyInfoFromPermission,
+  queryAccessKey,
+  queryAccessKeyList,
+  queryGasKeyNonces,
+} from "@fastnear/api";
+
+export async function inspectGasKey({ accountId, publicKey }) {
+  const [direct, lanes, list] = await Promise.all([
+    queryAccessKey({ accountId, publicKey, blockId: "final", network: "testnet" }),
+    queryGasKeyNonces({ accountId, publicKey, blockId: "final", network: "testnet" }),
+    queryAccessKeyList({ accountId, blockId: "final", network: "testnet" }),
+  ]);
+  const info = gasKeyInfoFromPermission(direct.result.permission);
+  if (!info) throw new Error(\`\${publicKey} is not a gas key on \${accountId}\`);
+  return {
+    balance: info.balance,
+    numNonces: info.num_nonces,
+    nonces: lanes.result.nonces,
+    // Set only for GasKeyFunctionCall keys.
+    receiverId: info.functionCall?.receiver_id ?? null,
+    listed: list.result.keys.some((key) => key.public_key === publicKey),
+  };
+}`,
+    },
+    {
+      id: "gas-key-withdraw-delete",
+      title: "Drain a gas key and delete it",
+      summary: "Withdraw the remaining balance to the account, then delete the key, in one batched transaction signed by the owning account. DeleteKey burns any balance left and refuses above 1 NEAR.",
+      language: "js",
+      code: `import { actions, gasKeyInfoFromPermission, queryAccessKey, sendTx } from "@fastnear/api";
+
+export async function withdrawAndDeleteGasKey({ accountId, ownerSigner, publicKey }) {
+  const view = await queryAccessKey({ accountId, publicKey, blockId: "final", network: "testnet" });
+  const info = gasKeyInfoFromPermission(view.result.permission);
+  if (!info) throw new Error(\`\${publicKey} is not a gas key on \${accountId}\`);
+
+  // DeleteKey fails above 1 NEAR and burns anything below it, so withdraw first.
+  // WithdrawFromGasKey must be signed by the owning account itself.
+  const drain = BigInt(info.balance) > 0n
+    ? [actions.withdrawFromGasKey({ publicKey, amount: info.balance })]
+    : [];
+  await sendTx({
+    signerId: accountId,
+    signer: ownerSigner,
+    receiverId: accountId,
+    actions: [...drain, actions.deleteKey({ publicKey })],
+    waitUntil: "FINAL",
+    network: "testnet",
+  });
+
+  const after = await queryAccessKey({ accountId, publicKey, blockId: "final", network: "testnet" });
+  if (!/UnknownAccessKey|does not exist/i.test(after.result.error ?? "")) {
+    throw new Error("gas key still present");
+  }
+}`,
+    },
+  ],
+};
+
+/**
  * The x402 surface is discovery metadata rather than a near.recipes.* entry.
  * It spans four package exports and deliberately keeps server-only code out of
  * the browser bundle.
@@ -3056,6 +3258,9 @@ export const generatedArtifact = {
       types: [
         "FastNearRecipeDiscoveryEntry",
         "AccessKeyListResponse",
+        "AccessKeyPermissionView",
+        "GasKeyInfoView",
+        "GasKeyNoncesResponse",
         "RpcStatusResponse",
         "SendTxParams",
         "FastNearApiV1AccountFullResponse",
@@ -3100,6 +3305,7 @@ export const generatedArtifact = {
         "near.queryAccount",
         "near.queryAccessKey",
         "near.queryAccessKeyList",
+        "near.queryGasKeyNonces",
         "near.queryProtocolVersion",
         "near.queryTx",
         "near.sendTx",
@@ -3152,6 +3358,7 @@ export const generatedArtifact = {
   },
   recipes: recipeCatalog,
   mlDsa65: mlDsa65Surface,
+  gasKeys: gasKeySurface,
   x402: x402Surface,
   intents: intentsSurface,
   explain: explainSurface,

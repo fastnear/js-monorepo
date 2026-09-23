@@ -9,9 +9,11 @@ import {
   serializeSignedDelegate,
   signHash,
   toBase58,
+  SCHEMA,
   type NearClassicAction,
   type NearDelegateAction,
 } from "@fastnear/utils";
+import { serialize } from "@fastnear/borsh";
 
 // parseSignedDelegate is the inverse of serializeSignedDelegate: it turns the
 // borsh bytes a wallet's signDelegateActions hands back into the flat
@@ -80,6 +82,11 @@ describe("parseSignedDelegate round-trip", () => {
       [{ type: "AddKey", publicKey: pub, accessKey: { permission: { receiverId: "c.near", methodNames: [], allowance: null } } }],
       [{ type: "DeleteKey", publicKey: pub }],
       [{ type: "DeleteAccount", beneficiaryId: "heir.near" }],
+      // Gas keys: a nonzero balance never appears in an AddKey the chain accepts,
+      // but a decoded payload must re-encode whatever it carried.
+      [{ type: "AddKey", publicKey: pub, accessKey: { permission: "GasKeyFullAccess", numNonces: 4, balance: "12345" } }],
+      [{ type: "AddKey", publicKey: pub, accessKey: { permission: "GasKeyFunctionCall", numNonces: 2, receiverId: "c.near", methodNames: ["m"] } }],
+      [{ type: "TransferToGasKey", publicKey: pub, deposit: "0.05 NEAR" }],
     ];
     for (const actions of variants) {
       const { bytes } = sign(delegateWith(actions));
@@ -206,5 +213,67 @@ describe("parseSignedDelegate errors", () => {
         /parseSignedDelegate: could not decode/,
       );
     }
+  });
+});
+
+describe("parseSignedDelegate — gas keys", () => {
+  it("parses a gas-key AddKey into the flat string-discriminator shape", () => {
+    const { bytes } = sign(
+      delegateWith([
+        { type: "AddKey", publicKey: pub, accessKey: { permission: "GasKeyFullAccess", numNonces: 4, balance: "12345" } },
+        { type: "AddKey", publicKey: pub, accessKey: { permission: "GasKeyFunctionCall", numNonces: 2, receiverId: "c.near", methodNames: ["m"] } },
+      ]),
+    );
+    const parsed = parseSignedDelegate(bytesToBase64(bytes));
+    const [full, fc] = parsed.delegateAction.actions as Extract<NearClassicAction, { type: "AddKey" }>[];
+    expect(full.accessKey).toEqual({ nonce: "0", permission: "GasKeyFullAccess", numNonces: 4, balance: "12345" });
+    expect(fc.accessKey).toEqual({
+      nonce: "0",
+      permission: "GasKeyFunctionCall",
+      numNonces: 2,
+      balance: "0",
+      receiverId: "c.near",
+      methodNames: ["m"],
+      allowance: null,
+    });
+  });
+
+  it("parses TransferToGasKey with its deposit as a decimal string", () => {
+    const { bytes } = sign(delegateWith([{ type: "TransferToGasKey", publicKey: pub, deposit: "0.05 NEAR" }]));
+    const parsed = parseSignedDelegate(bytesToBase64(bytes));
+    expect(parsed.delegateAction.actions[0]).toEqual({
+      type: "TransferToGasKey",
+      publicKey: pub,
+      deposit: "50000000000000000000000",
+    });
+  });
+
+  it("refuses to serialize a delegate carrying WithdrawFromGasKey", () => {
+    expect(() =>
+      serializeSignedDelegate(
+        delegateWith([{ type: "WithdrawFromGasKey", publicKey: pub, amount: "1" } as any]),
+        new Uint8Array(64),
+      ),
+    ).toThrow("WithdrawFromGasKeyNotAllowedInDelegate");
+  });
+
+  it("rejects a borsh delegate carrying WithdrawFromGasKey with an explicit error", () => {
+    // Built with the raw schema, since the flat serializer refuses it.
+    const raw = serialize(SCHEMA.SignedDelegate, {
+      delegateAction: {
+        senderId: "alice.near",
+        receiverId: "alice.near",
+        actions: [
+          { withdrawFromGasKey: { publicKey: { ed25519Key: { data: new Uint8Array(32) } }, amount: 1n } },
+        ],
+        nonce: 1n,
+        maxBlockHeight: 10n,
+        publicKey: { ed25519Key: { data: new Uint8Array(32) } },
+      },
+      signature: { ed25519Signature: { data: new Uint8Array(64) } },
+    });
+    expect(() => parseSignedDelegate(bytesToBase64(raw))).toThrow(
+      "WithdrawFromGasKey cannot be carried in a delegate action",
+    );
   });
 });

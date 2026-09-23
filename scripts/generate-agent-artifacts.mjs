@@ -13,6 +13,7 @@ import {
   recipeCatalog,
   explainSurface,
   mlDsa65Surface,
+  gasKeySurface,
   x402Surface,
   intentsSurface,
   supportSurface,
@@ -154,6 +155,32 @@ function assertCatalogContract() {
     for (const field of ["id", "title", "summary", "language", "code"]) {
       if (!(field in quickstart)) {
         throw new Error(`ML-DSA-65 quickstart ${quickstart.id ?? "<unknown>"} is missing required field ${field}`);
+      }
+    }
+  }
+
+  if (gasKeySurface.protocolVersion !== 85) {
+    throw new Error(`Expected gas-key protocol version 85, received ${gasKeySurface.protocolVersion}`);
+  }
+  // The quickstarts read as a lifecycle (add -> fund -> send -> inspect ->
+  // withdraw/delete), so pin the ids and their order.
+  const expectedGasKeyQuickstarts = [
+    "gas-key-add",
+    "gas-key-fund",
+    "gas-key-send",
+    "gas-key-inspect",
+    "gas-key-withdraw-delete",
+  ];
+  const actualGasKeyQuickstarts = gasKeySurface.quickstarts.map((quickstart) => quickstart.id);
+  if (actualGasKeyQuickstarts.join(",") !== expectedGasKeyQuickstarts.join(",")) {
+    throw new Error(
+      `Expected gas-key quickstarts [${expectedGasKeyQuickstarts.join(", ")}], received [${actualGasKeyQuickstarts.join(", ")}]`,
+    );
+  }
+  for (const quickstart of gasKeySurface.quickstarts) {
+    for (const field of ["id", "title", "summary", "language", "code"]) {
+      if (!(field in quickstart)) {
+        throw new Error(`Gas-key quickstart ${quickstart.id ?? "<unknown>"} is missing required field ${field}`);
       }
     }
   }
@@ -350,6 +377,40 @@ ${subheading} Safety constraints
 ${renderList(mlDsa65Surface.safety)}
 
 ${mlDsa65Surface.quickstarts.map((quickstart) => `${subheading} ${quickstart.title}
+
+Recipe ID: \`${quickstart.id}\`
+
+${quickstart.summary}
+
+\`\`\`${quickstart.language}
+${quickstart.code}
+\`\`\``).join("\n\n")}`;
+}
+
+function renderGasKeySection({ headingLevel = 3 } = {}) {
+  const heading = "#".repeat(headingLevel);
+  const subheading = "#".repeat(headingLevel + 1);
+
+  return `${heading} Gas-key quickstarts
+
+Gas keys (protocol v${gasKeySurface.protocolVersion}+) are access keys with a prepaid balance that pays their own gas, plus independent nonce lanes for parallel sends. \`${gasKeySurface.package}\` adds them with the ordinary AddKey action, funds and drains them with the \`TransferToGasKey\` / \`WithdrawFromGasKey\` actions, and signs with them via \`sendTx({ signer, signerId, nonceIndex })\`, which builds a TransactionV1.
+
+- Runtime: ${gasKeySurface.runtime}
+- Scope: ${gasKeySurface.scope}
+- Nonce lanes: ${gasKeySurface.limits.minNonces}..${gasKeySurface.limits.maxNonces} per key; DeleteKey burns up to ${gasKeySurface.limits.maxBalanceBurntOnDelete} of remaining balance and refuses above it.
+- Access-key views: \`${gasKeySurface.permissionViews.fullAccess}\` and \`${gasKeySurface.permissionViews.functionCall}\`.
+- Lane nonces: \`${gasKeySurface.rpc.nonces}\` (\`near.queryGasKeyNonces\`); a non-gas key fails with \`${gasKeySurface.rpc.notAGasKey}\`.
+- Builders: ${gasKeySurface.builders.map((builder) => `\`${builder}\``).join(", ")}.
+
+${subheading} Rules
+
+${renderList(gasKeySurface.rules)}
+
+${subheading} Safety constraints
+
+${renderList(gasKeySurface.safety)}
+
+${gasKeySurface.quickstarts.map((quickstart) => `${subheading} ${quickstart.title}
 
 Recipe ID: \`${quickstart.id}\`
 
@@ -582,6 +643,8 @@ ${terminal.code}
 
 ${renderMlDsa65Section()}
 
+${renderGasKeySection()}
+
 ${renderX402Section()}
 
 ${renderIntentsSection()}
@@ -719,6 +782,8 @@ ${renderFamilySection()}
 
 ${renderMlDsa65Section()}
 
+${renderGasKeySection()}
+
 ### Example: explain a transaction before signing
 
 \`\`\`js
@@ -842,6 +907,14 @@ ML-DSA-65 account-key surface:
 - Access-key-list form: ${mlDsa65Surface.keyForms.handle}
 - Handle domain tag: ${mlDsa65Surface.keyForms.domainTag}
 - Quickstarts: ${mlDsa65Surface.quickstarts.map(({ id }) => id).join(", ")}
+
+Gas-key surface (@fastnear/api, protocol_version >= ${gasKeySurface.protocolVersion}):
+- Builders: ${gasKeySurface.builders.join("; ")}
+- Signing: near.sendTx({ signer, signerId, receiverId, actions, nonceIndex, nonceMode }) -> TransactionV1 when the key is a gas key
+- Lane nonces: near.queryGasKeyNonces({ accountId, publicKey }) -> { nonces: [...] }; not-a-gas-key error: ${gasKeySurface.rpc.notAGasKey}
+- Views: ${gasKeySurface.permissionViews.fullAccess}; ${gasKeySurface.permissionViews.functionCall}
+- Nonce lanes: ${gasKeySurface.limits.minNonces}..${gasKeySurface.limits.maxNonces}; DeleteKey burns remaining balance up to ${gasKeySurface.limits.maxBalanceBurntOnDelete}
+- Quickstarts: ${gasKeySurface.quickstarts.map(({ id }) => id).join(", ")}
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })
@@ -1043,6 +1116,8 @@ ${supportSurface.captureExample.code}
 ${renderX402Section({ headingLevel: 2 })}
 
 ${renderMlDsa65Section({ headingLevel: 2 })}
+
+${renderGasKeySection({ headingLevel: 2 })}
 
 ${renderIntentsSection({ headingLevel: 2 })}
 

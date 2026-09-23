@@ -1,4 +1,4 @@
-import { bytesToBase64 } from "@fastnear/utils";
+import { bytesToBase64, isGasKeyPermission } from "@fastnear/utils";
 import type { ConnectorActionLike } from "./types.js";
 
 const toBase64Code = (value: unknown): string => {
@@ -32,22 +32,42 @@ export const connectorActionsToFastnearActions = (actions: ConnectorActionLike[]
           type: "Transfer",
           deposit: action.params?.deposit,
         };
-      case "AddKey":
+      case "AddKey": {
+        const permission = action.params?.accessKey?.permission;
+        if (isGasKeyPermission(permission)) {
+          // Wallets decode the transaction with their own schema; a gas-key
+          // permission would fail or mis-render there. Never reshape it into a
+          // plain key silently.
+          throw new Error(
+            `Gas-key access keys (${permission}) cannot be added through a wallet adapter; ` +
+              "sign locally with near.sendTx",
+          );
+        }
+        if (permission !== "FullAccess" && typeof permission?.receiverId !== "string") {
+          throw new Error("Unsupported access-key permission: expected FullAccess or { receiverId, methodNames, allowance }");
+        }
         return {
           type: "AddKey",
           publicKey: action.params?.publicKey,
           accessKey: {
             nonce: action.params?.accessKey?.nonce ?? 0,
             permission:
-              action.params?.accessKey?.permission === "FullAccess"
+              permission === "FullAccess"
                 ? "FullAccess"
                 : {
-                    receiverId: action.params?.accessKey?.permission?.receiverId,
-                    methodNames: action.params?.accessKey?.permission?.methodNames ?? [],
-                    allowance: action.params?.accessKey?.permission?.allowance,
+                    receiverId: permission.receiverId,
+                    methodNames: permission.methodNames ?? [],
+                    allowance: permission.allowance,
                   },
           },
         };
+      }
+      case "TransferToGasKey":
+      case "WithdrawFromGasKey":
+        throw new Error(
+          `${action.type} cannot be sent through a wallet adapter (gas keys are a local-signing feature); ` +
+            "sign locally with near.sendTx",
+        );
       case "DeleteKey":
         return {
           type: "DeleteKey",

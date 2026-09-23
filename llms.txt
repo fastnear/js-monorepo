@@ -3,7 +3,7 @@
 Homepage: https://js.fastnear.com
 Full reference: https://js.fastnear.com/llms-full.txt
 Recipe catalog: https://js.fastnear.com/recipes.json
-Version: 2.3.0 (all @fastnear/* packages share one version)
+Version: 2.4.0 (all @fastnear/* packages share one version)
 
 Primary packages:
 - @fastnear/api
@@ -60,6 +60,14 @@ ML-DSA-65 account-key surface:
 - Access-key-list form: ml-dsa-65-hash:<base58 SHA3-256 digest>
 - Handle domain tag: near:ml-dsa-65-pubkey-hash:v1
 - Quickstarts: ml-dsa-65-generate, ml-dsa-65-enroll, ml-dsa-65-explicit-send, ml-dsa-65-enroll-delete, ml-dsa-65-reconcile
+
+Gas-key surface (@fastnear/api, protocol_version >= 85):
+- Builders: actions.addFullAccessGasKey({ publicKey, numNonces }); actions.addLimitedAccessGasKey({ publicKey, numNonces, accountId, methodNames }); actions.transferToGasKey({ publicKey, deposit }); actions.withdrawFromGasKey({ publicKey, amount }); actions.deleteKey({ publicKey })
+- Signing: near.sendTx({ signer, signerId, receiverId, actions, nonceIndex, nonceMode }) -> TransactionV1 when the key is a gas key
+- Lane nonces: near.queryGasKeyNonces({ accountId, publicKey }) -> { nonces: [...] }; not-a-gas-key error: UNKNOWN_GAS_KEY
+- Views: { GasKeyFullAccess: { balance, num_nonces } }; { GasKeyFunctionCall: { balance, num_nonces, allowance: null, receiver_id, method_names } }
+- Nonce lanes: 1..1024; DeleteKey burns remaining balance up to 1 NEAR
+- Quickstarts: gas-key-add, gas-key-fund, gas-key-send, gas-key-inspect, gas-key-withdraw-delete
 
 Wallet runtime surfaces (@fastnear/wallet):
 - nearWallet.connect({ network, contractId, manifest })

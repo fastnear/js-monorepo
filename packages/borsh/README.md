@@ -8,6 +8,21 @@ API-compatible with the [`borsh`](https://www.npmjs.com/package/borsh) npm packa
 
 `u8`, `u16`, `u32`, `u64`, `u128`, `string`, `struct`, `enum`, `array` (fixed + dynamic), `option`
 
+## Enum variants with explicit tags
+
+An enum variant's wire discriminant defaults to its array position. A variant may pin it with `tag`, mirroring nearcore enums declared with `#[borsh(use_discriminant = true)]` whose intermediate variants you do not model:
+
+```js
+const action = {
+  enum: [
+    { struct: { createAccount: { struct: {} } } },            // discriminant 0
+    { tag: 12, struct: { transferToGasKey: { /* … */ } } },  // discriminant 12
+  ],
+};
+```
+
+Decoding resolves by the effective tag, so a byte that matches no variant throws `enum index N out of range`.
+
 ## Wide integers are strings
 
 `u64` and `u128` **decode to decimal strings by default** (`u8`/`u16`/`u32` stay JS numbers). This keeps decoded values JSON-safe (`JSON.stringify` throws on a `bigint`) and consistent with NEAR JSON-RPC, which returns amounts as strings. `serialize` accepts `string | number | bigint`, so a decoded value re-encodes to identical bytes with no conversion:
