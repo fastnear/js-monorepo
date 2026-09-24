@@ -2911,6 +2911,34 @@ export const x402Surface = {
   browserGlobal: "nearX402",
   browserStatus: "Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.",
   walletFeatures: ["signDelegateActions", "signDelegateActionsWithTtl"],
+  referenceFacilitators: {
+    project: "fastnear/x402-facilitator",
+    sourceUrl: "https://github.com/fastnear/x402-facilitator",
+    guideUrl: "https://github.com/fastnear/x402-facilitator/blob/main/docs/reference-access.md",
+    accessRequestUrl: "https://github.com/fastnear/x402-facilitator/issues/new?template=access_request.yml",
+    directoryUrl: "https://docs.x402.org/dev-tools/facilitators",
+    verified: "2026-09-24",
+    protocol: "x402 v2 exact only, zero facilitator fee, payment-identifier extension, gas sponsorship bounded by per-client policy",
+    publicRoutes: ["GET /supported", "GET /llms.txt", "GET /openapi.yaml", "GET /discovery/resources", "GET /healthz", "GET /readyz"],
+    authenticatedRoutes: ["POST /verify", "POST /settle"],
+    credential: "X-API-Key header (an identical Bearer token is also accepted): one manually approved key per resource-server instance and environment, held server-side; payers never need one",
+    instances: [
+      {
+        network: "near:mainnet",
+        url: "https://x402.mikedotexe.com",
+        asset: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+        assetLabel: "Circle USDC",
+        signer: "x402-relayer2.mike.near",
+      },
+      {
+        network: "near:testnet",
+        url: "https://test.x402.mikedotexe.com",
+        asset: "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+        assetLabel: "Circle USDC",
+        signer: "x402-relayer.mike.testnet",
+      },
+    ],
+  },
   chooseByTask: [
     {
       task: "Pay an x402 URL from Node.js",
@@ -2928,7 +2956,7 @@ export const x402Surface = {
       task: "Protect a seller resource",
       use: ["createNearResourceServer"],
       imports: ["@fastnear/x402/server"],
-      status: "requires an explicit facilitator",
+      status: "requires an explicit facilitator; the reference instances also need a per-instance API key for verify and settle",
     },
     {
       task: "Operate a NEAR facilitator",
@@ -2978,7 +3006,7 @@ export const x402Surface = {
   ],
   safeDefaults: [
     "Pin near:testnet during development and a concrete NEAR network in production; use near:* only for an intentionally cross-network client.",
-    "Keep payer and relayer secret keys in server-side secret storage, never browser code.",
+    "Keep payer keys, relayer keys, and facilitator API keys in server-side secret storage, never browser code.",
     "String and number seller prices use the official USDC contract; wNEAR and custom tokens require an explicit { amount, asset } price.",
     "Always configure a facilitator explicitly.",
   ],
@@ -3009,15 +3037,22 @@ console.log(await response.json());`,
     {
       id: "x402-remote-facilitator-seller",
       title: "Configure a seller with an explicit remote facilitator",
-      summary: "Create the NEAR resource-server core, then pass it to the x402 HTTP framework adapter you choose.",
+      summary: "Create the NEAR resource-server core with the facilitator URL and its per-instance API key, then pass it to the x402 HTTP framework adapter you choose.",
       language: "js",
       code: `import { createNearResourceServer } from "@fastnear/x402/server";
 
-const { X402_FACILITATOR_URL } = process.env;
+const { X402_FACILITATOR_URL, X402_FACILITATOR_API_KEY } = process.env;
 if (!X402_FACILITATOR_URL) throw new Error("X402_FACILITATOR_URL is required");
 
+// The reference facilitators gate POST /verify and /settle behind a per-instance
+// X-API-Key (GET /supported is public); a self-hosted one may need no key.
+const authHeaders = X402_FACILITATOR_API_KEY ? { "X-API-Key": X402_FACILITATOR_API_KEY } : {};
+
 export const resourceServer = createNearResourceServer({
-  facilitators: { url: X402_FACILITATOR_URL },
+  facilitators: {
+    url: X402_FACILITATOR_URL,
+    createAuthHeaders: async () => ({ verify: authHeaders, settle: authHeaders, supported: {} }),
+  },
 });
 await resourceServer.initialize();`,
     },
