@@ -528,7 +528,7 @@ export function getActiveNetwork(): Network {
 }
 
 /**
- * Get the name of the connected wallet (e.g. "MyNearWallet") for a given
+ * Get the name of the connected wallet (e.g. "Meteor Wallet") for a given
  * network or the active one.
  */
 export function walletName(opts?: { network?: Network }): string | null {
