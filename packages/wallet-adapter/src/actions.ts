@@ -1,6 +1,17 @@
 import { bytesToBase64, isGasKeyPermission } from "@fastnear/utils";
 import type { ConnectorActionLike } from "./types.js";
 
+/**
+ * near-connect 0.14+ gas-key shapes: AddKey with `params.gasKeyInfo`,
+ * TransferToGasKey and WithdrawFromGasKey. A wallet that does not understand
+ * them must never see them (it could add a plain key), so callers that do
+ * not encode locally gate on this.
+ */
+export const isGasKeyConnectorAction = (action: ConnectorActionLike): boolean =>
+  action.type === "TransferToGasKey" ||
+  action.type === "WithdrawFromGasKey" ||
+  (action.type === "AddKey" && action.params?.gasKeyInfo != null);
+
 const toBase64Code = (value: unknown): string => {
   if (typeof value === "string") return value;
   if (value instanceof Uint8Array) return bytesToBase64(value);
@@ -35,16 +46,32 @@ export const connectorActionsToFastnearActions = (actions: ConnectorActionLike[]
       case "AddKey": {
         const permission = action.params?.accessKey?.permission;
         if (isGasKeyPermission(permission)) {
-          // Wallets decode the transaction with their own schema; a gas-key
-          // permission would fail or mis-render there. Never reshape it into a
-          // plain key silently.
+          // The connector format carries gas keys as params.gasKeyInfo next to
+          // a plain permission; a flat kind string here is a mis-shaped action.
           throw new Error(
-            `Gas-key access keys (${permission}) cannot be added through a wallet adapter; ` +
-              "sign locally with near.sendTx",
+            `Gas-key access keys are expressed as params.gasKeyInfo on a FullAccess or function-call AddKey, not as permission "${permission}"`,
           );
         }
         if (permission !== "FullAccess" && typeof permission?.receiverId !== "string") {
           throw new Error("Unsupported access-key permission: expected FullAccess or { receiverId, methodNames, allowance }");
+        }
+        const gasKey = action.params?.gasKeyInfo;
+        if (gasKey != null) {
+          if (typeof gasKey.numNonces !== "number") throw new Error("gasKeyInfo.numNonces must be a number (1..1024)");
+          if (permission !== "FullAccess" && permission.allowance != null) {
+            throw new Error("A gas key cannot carry an allowance: its balance is the allowance");
+          }
+          return {
+            type: "AddKey",
+            publicKey: action.params?.publicKey,
+            accessKey: {
+              nonce: action.params?.accessKey?.nonce ?? 0,
+              permission: permission === "FullAccess" ? "GasKeyFullAccess" : "GasKeyFunctionCall",
+              numNonces: gasKey.numNonces,
+              balance: gasKey.balance ?? "0",
+              ...(permission === "FullAccess" ? {} : { receiverId: permission.receiverId, methodNames: permission.methodNames ?? [] }),
+            },
+          };
         }
         return {
           type: "AddKey",
@@ -63,11 +90,9 @@ export const connectorActionsToFastnearActions = (actions: ConnectorActionLike[]
         };
       }
       case "TransferToGasKey":
+        return { type: "TransferToGasKey", publicKey: action.params?.publicKey, deposit: action.params?.deposit };
       case "WithdrawFromGasKey":
-        throw new Error(
-          `${action.type} cannot be sent through a wallet adapter (gas keys are a local-signing feature); ` +
-            "sign locally with near.sendTx",
-        );
+        return { type: "WithdrawFromGasKey", publicKey: action.params?.publicKey, amount: action.params?.amount };
       case "DeleteKey":
         return {
           type: "DeleteKey",

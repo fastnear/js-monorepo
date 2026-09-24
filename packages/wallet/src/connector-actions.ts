@@ -1,35 +1,37 @@
 import type { ConnectorAction } from "@fastnear/near-connect";
 
-// Gas keys (protocol 85+) are a local-signing feature: near-connect has no
-// gas-key actions or permissions, so passing these through would reach the
-// wallet as unknown objects (or, worse, be reshaped into a plain key).
+// Gas keys (protocol 85+) travel as near-connect 0.14+ shapes: an AddKey with
+// params.gasKeyInfo next to a plain permission, plus TransferToGasKey and
+// WithdrawFromGasKey. near-connect itself refuses them for wallets whose
+// manifest does not set features.gasKeys, so nothing here needs to guess
+// what a wallet understands. Signing *with* a gas key (nonceIndex /
+// TransactionV1) stays local — see near.sendTx.
 const GAS_KEY_PERMISSIONS = new Set(["GasKeyFullAccess", "GasKeyFunctionCall"]);
 
-function unsupportedByWallet(what: string): Error {
-  return new Error(
-    `${what} is not supported through the wallet connector (near-connect has no gas-key actions); ` +
-      "sign it locally with near.sendTx({ signer, signerId, ... })",
-  );
-}
-
-function normalizeAddKeyAccessKey(accessKey: any): any {
-  if (GAS_KEY_PERMISSIONS.has(accessKey?.permission)) {
-    throw unsupportedByWallet(`Adding a gas key (${accessKey.permission})`);
+function toConnectorAddKeyParams(publicKey: string, accessKey: any): { publicKey: string; accessKey: any; gasKeyInfo?: { balance: string; numNonces: number } } {
+  const { permission, receiverId, methodNames, allowance, numNonces, balance, ...rest } = accessKey ?? {};
+  if (GAS_KEY_PERMISSIONS.has(permission)) {
+    if (allowance != null) {
+      throw new Error("A gas key cannot carry an allowance: its balance is the allowance");
+    }
+    if (!Number.isInteger(numNonces) || numNonces < 1) {
+      throw new Error(`Adding a gas key needs numNonces (1..1024); got ${numNonces}`);
+    }
+    return {
+      publicKey,
+      accessKey: {
+        ...rest,
+        permission: permission === "GasKeyFullAccess" ? "FullAccess" : { receiverId, methodNames: methodNames ?? [] },
+      },
+      gasKeyInfo: { balance: balance == null ? "0" : String(balance), numNonces },
+    };
   }
-  if (accessKey?.permission !== "FunctionCall") return accessKey;
-  const {
-    permission: _permission,
-    receiverId,
-    methodNames,
-    allowance,
-    ...rest
-  } = accessKey;
+  if (permission !== "FunctionCall") return { publicKey, accessKey };
   return {
-    ...rest,
-    permission: {
-      receiverId,
-      methodNames: methodNames ?? [],
-      allowance,
+    publicKey,
+    accessKey: {
+      ...rest,
+      permission: { receiverId, methodNames: methodNames ?? [], allowance },
     },
   };
 }
@@ -45,13 +47,7 @@ export function toConnectorAction(action: any): ConnectorAction {
     case "Stake":
       return { type: "Stake", params: { stake: rest.stake, publicKey: rest.publicKey } };
     case "AddKey":
-      return {
-        type: "AddKey",
-        params: {
-          publicKey: rest.publicKey,
-          accessKey: normalizeAddKeyAccessKey(rest.accessKey),
-        },
-      };
+      return { type: "AddKey", params: toConnectorAddKeyParams(rest.publicKey, rest.accessKey) };
     case "DeleteKey":
       return { type: "DeleteKey", params: { publicKey: rest.publicKey } };
     case "DeleteAccount":
@@ -61,8 +57,9 @@ export function toConnectorAction(action: any): ConnectorAction {
     case "DeployContract":
       return { type: "DeployContract", params: { code: rest.code ?? rest.codeBase64 } } as ConnectorAction;
     case "TransferToGasKey":
+      return { type: "TransferToGasKey", params: { publicKey: rest.publicKey, deposit: String(rest.deposit) } };
     case "WithdrawFromGasKey":
-      throw unsupportedByWallet(type);
+      return { type: "WithdrawFromGasKey", params: { publicKey: rest.publicKey, amount: String(rest.amount) } };
     default:
       // Pass through if already in connector format (has params).
       return action;

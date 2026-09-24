@@ -3,6 +3,7 @@ import {
   publicKeyFromPrivate,
   verifyNep413Signature,
 } from "@fastnear/utils";
+import { isGasKeyConnectorAction } from "./actions.js";
 import { createRpcFactory } from "./rpc.js";
 import { TransportError, UserRejectedError } from "./errors.js";
 import { createDefaultStorage, readJson, writeJson } from "./storage.js";
@@ -250,6 +251,13 @@ const normalizeTransactions = (
   return transactions.map((tx) => {
     const useSigner = tx.signerId ?? signerId;
     if (useSigner == null) throw new TransportError("MISSING_SIGNER_ID", "Missing signer id for transaction");
+    // Near Mobile receives these actions as JSON and builds the transaction
+    // server-side. Until it confirms gas-key support, refuse rather than risk
+    // the backend ignoring gasKeyInfo and adding a plain key.
+    const gasKeyAction = tx.actions.find(isGasKeyConnectorAction);
+    if (gasKeyAction) {
+      throw new TransportError("GAS_KEYS_UNSUPPORTED", `Near Mobile has not confirmed gas-key support; refusing ${gasKeyAction.type}`);
+    }
     return {
       signerId: useSigner,
       receiverId: tx.receiverId,
