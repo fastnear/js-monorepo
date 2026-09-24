@@ -3072,7 +3072,7 @@ export const intentsSurface = {
     solverRelayUrl: "https://solver-relay-v2.chaindefuser.com/rpc",
   },
   browserGlobal: "nearIntents",
-  browserStatus: "The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.",
+  browserStatus: "The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements. The funded deposit-and-swap path through a wallet was verified on mainnet on 2026-09-24 (Meteor Wallet in the near-connect example: one wrap.near transaction that registers storage, wraps and transfers, 0.05 NEAR -> 0.226376 USDC); the local-key path is re-verified by the mainnet smoke runbook before each release.",
   walletFeatures: ["signMessage"],
   chooseByTask: [
     {

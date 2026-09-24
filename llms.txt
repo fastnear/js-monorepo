@@ -108,7 +108,7 @@ NEAR Intents surface (@fastnear/intents):
 - Verifier helpers: ftDepositAction / wrapNearAction / ftWithdrawAction + mtBalance / mtBatchBalances views
 - Solver relay: @fastnear/intents/relay createSolverRelayClient (https://solver-relay-v2.chaindefuser.com/rpc); quotes need a partner API key
 - Signature encoding: MultiPayload wants ed25519:<base58> — the signers re-encode the wallet's base64
-- Status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.
+- Status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements. The funded deposit-and-swap path through a wallet was verified on mainnet on 2026-09-24 (Meteor Wallet in the near-connect example: one wrap.near transaction that registers storage, wraps and transfers, 0.05 NEAR -> 0.226376 USDC); the local-key path is re-verified by the mainnet smoke runbook before each release.
 - Guide: https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md
 
 Named endpoint response types:
