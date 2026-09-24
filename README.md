@@ -601,7 +601,7 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 
 Gas keys (protocol v85+) are access keys with a prepaid balance that pays their own gas, plus independent nonce lanes for parallel sends. `@fastnear/api` adds them with the ordinary AddKey action, funds and drains them with the `TransferToGasKey` / `WithdrawFromGasKey` actions, and signs with them via `sendTx({ signer, signerId, nonceIndex })`, which builds a TransactionV1.
 
-- Runtime: Node.js 20.19+ or a modern browser. Signing WITH a gas key (nonceIndex, TransactionV1) is local-key signing via sendTx({ signer, signerId }). Adding, funding and draining one through a wallet works with @fastnear/wallet 2.5.0+ (near-connect 0.14+), and only for wallets whose manifest sets features.gasKeys — none yet; the connector refuses the actions otherwise.
+- Runtime: Node.js 20.19+ or a modern browser. Signing WITH a gas key (nonceIndex, TransactionV1) is local-key signing via sendTx({ signer, signerId }). Adding, funding and draining one through a wallet works with @fastnear/wallet 2.5.0+ (near-connect 0.14.1+), and only for wallets whose manifest sets features.gasKeys — Meteor Wallet, verified on testnet on 2026-09-24; the connector refuses the actions for wallets without the flag rather than risk a downgraded key.
 - Scope: Prepaid-gas access keys: gas is charged to the key's own balance, deposits still come from the account, and gas refunds return to the key.
 - Nonce lanes: 1..1024 per key; DeleteKey burns up to 1 NEAR of remaining balance and refuses above it.
 - Access-key views: `{ GasKeyFullAccess: { balance, num_nonces } }` and `{ GasKeyFunctionCall: { balance, num_nonces, allowance: null, receiver_id, method_names } }`.
