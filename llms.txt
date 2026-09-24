@@ -93,6 +93,7 @@ x402 payment surface (@fastnear/x402):
 - Browser: createFastNearWalletSigner / createNearX402Client / createNearPaymentFetch (global nearX402)
 - Node: @fastnear/x402/node createLocalNearSigner
 - Seller: @fastnear/x402/server createNearResourceServer; explicit facilitator required
+- Reference facilitators (verified 2026-09-24): near:mainnet https://x402.mikedotexe.com; near:testnet https://test.x402.mikedotexe.com; GET /supported is public, POST /verify and /settle need a per-instance X-API-Key (https://github.com/fastnear/x402-facilitator/blob/main/docs/reference-access.md)
 - Self-hosted facilitator: @fastnear/x402/facilitator createNearFacilitator
 - Wallet features: signDelegateActions + signDelegateActionsWithTtl
 - Status: Stable with tested Meteor Wallet support; other wallets must advertise both timeout-aware delegate-signing capabilities and pass the x402 testnet harness before being documented as compatible.

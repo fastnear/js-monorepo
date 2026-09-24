@@ -127,20 +127,36 @@ Keep the payer key in server-side secret storage. Never embed it in browser Java
 
 ## Resource server with an explicit facilitator
 
-`createNearResourceServer` requires at least one facilitator client or URL. There is no implicit x402.org or other default. Confirm that a remote facilitator advertises `exact` on the intended NEAR network before relying on it; the current provider list is maintained in the [x402 facilitator directory](https://docs.x402.org/dev-tools/facilitators).
+`createNearResourceServer` requires at least one facilitator client or URL. There is no implicit x402.org or other default.
+
+The public reference instances of [fastnear/x402-facilitator](https://github.com/fastnear/x402-facilitator) (open source) advertise x402 v2 `exact` on both NEAR networks with a zero facilitator fee (verified 2026-09-24):
+
+| Network | Facilitator | Circle USDC asset | Relayer |
+| --- | --- | --- | --- |
+| `near:mainnet` | `https://x402.mikedotexe.com` | `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1` | `x402-relayer2.mike.near` |
+| `near:testnet` | `https://test.x402.mikedotexe.com` | `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af` | `x402-relayer.mike.testnet` |
+
+Each instance serves `GET /supported`, `/llms.txt`, and `/openapi.yaml` publicly; `POST /verify` and `POST /settle` require a per-instance `X-API-Key` (an identical Bearer token is also accepted). Keys are approved manually per resource-server instance and environment through the [reference-access guide](https://github.com/fastnear/x402-facilitator/blob/main/docs/reference-access.md), and belong in server-side secret storage. Payers never need one. Confirm that any other remote facilitator advertises `exact` on the intended NEAR network before relying on it; the current provider list is maintained in the [x402 facilitator directory](https://docs.x402.org/dev-tools/facilitators).
 
 ```js
 import express from "express";
 import { paymentMiddleware } from "@x402/express";
 import { createNearResourceServer } from "@fastnear/x402/server";
 
-const { X402_FACILITATOR_URL, NEAR_PAYMENT_ACCOUNT_ID } = process.env;
+const { X402_FACILITATOR_URL, X402_FACILITATOR_API_KEY, NEAR_PAYMENT_ACCOUNT_ID } = process.env;
 if (!X402_FACILITATOR_URL || !NEAR_PAYMENT_ACCOUNT_ID) {
   throw new Error("X402_FACILITATOR_URL and NEAR_PAYMENT_ACCOUNT_ID are required");
 }
 
+// The reference facilitators gate POST /verify and /settle behind a per-instance
+// X-API-Key (GET /supported is public); a self-hosted one may need no key.
+const authHeaders = X402_FACILITATOR_API_KEY ? { "X-API-Key": X402_FACILITATOR_API_KEY } : {};
+
 const resourceServer = createNearResourceServer({
-  facilitators: { url: X402_FACILITATOR_URL },
+  facilitators: {
+    url: X402_FACILITATOR_URL,
+    createAuthHeaders: async () => ({ verify: authHeaders, settle: authHeaders, supported: {} }),
+  },
 });
 
 const app = express();
@@ -177,7 +193,7 @@ price: {
 
 Treat the token account as deployment configuration and verify it for the selected network rather than copying an unverified contract ID.
 
-For an authenticated remote facilitator, pass `createAuthHeaders` beside `url`; it must return header objects for `verify`, `settle`, and `supported`.
+`createAuthHeaders` runs before every facilitator call and must return header objects for `verify`, `settle`, and `supported`. A self-hosted facilitator with no authentication can omit it.
 
 ## Self-hosted facilitator
 

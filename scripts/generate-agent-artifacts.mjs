@@ -239,6 +239,21 @@ function assertCatalogContract() {
   if (!/^https:\/\/.+/.test(x402Surface.guideUrl)) {
     throw new Error("Expected an absolute x402 package guide URL");
   }
+  const referenceFacilitators = x402Surface.referenceFacilitators;
+  for (const network of x402Surface.protocol.networks) {
+    const instance = referenceFacilitators.instances.find(item => item.network === network);
+    if (!instance || !/^https:\/\/[^/]+$/.test(instance.url) || !instance.signer || !instance.asset) {
+      throw new Error(`Expected an https reference facilitator origin, signer, and asset for ${network}`);
+    }
+  }
+  const sellerQuickstart = x402Surface.quickstarts.find(quickstart => quickstart.id === "x402-remote-facilitator-seller");
+  if (
+    !referenceFacilitators.authenticatedRoutes.includes("POST /verify") ||
+    !referenceFacilitators.authenticatedRoutes.includes("POST /settle") ||
+    !sellerQuickstart?.code.includes("createAuthHeaders")
+  ) {
+    throw new Error("Expected the seller quickstart to pass createAuthHeaders for the facilitator's authenticated routes");
+  }
   for (const feature of ["signDelegateActions", "signDelegateActionsWithTtl"]) {
     if (!x402Surface.walletFeatures.includes(feature)) {
       throw new Error(`Expected x402 wallet feature ${feature}`);
@@ -444,6 +459,12 @@ ${renderList(x402Surface.chooseByTask.map(choice => `${choice.task}: ${choice.us
 ${subheading} Entrypoints
 
 ${renderList(x402Surface.entrypoints.map(entry => `\`${entry.subpath}\`: ${entry.exports.map(name => `\`${name}\``).join(", ")} — ${entry.purpose}.`))}
+
+${subheading} Reference facilitators
+
+Public instances of [${x402Surface.referenceFacilitators.project}](${x402Surface.referenceFacilitators.sourceUrl}) (open source), verified ${x402Surface.referenceFacilitators.verified}: ${x402Surface.referenceFacilitators.protocol}. Public routes: ${x402Surface.referenceFacilitators.publicRoutes.map(route => `\`${route}\``).join(", ")}. Authenticated routes: ${x402Surface.referenceFacilitators.authenticatedRoutes.map(route => `\`${route}\``).join(", ")} — credential: ${x402Surface.referenceFacilitators.credential}. Request a key through the [access guide](${x402Surface.referenceFacilitators.guideUrl}) ([request form](${x402Surface.referenceFacilitators.accessRequestUrl})); other providers are listed in the [x402 facilitator directory](${x402Surface.referenceFacilitators.directoryUrl}).
+
+${renderList(x402Surface.referenceFacilitators.instances.map(instance => `\`${instance.network}\`: ${instance.url} — ${instance.assetLabel} \`${instance.asset}\`, relayer \`${instance.signer}\`.`))}
 
 ${subheading} Constraints
 
@@ -940,6 +961,7 @@ x402 payment surface (@fastnear/x402):
 - Browser: ${x402Surface.entrypoints[0].exports.join(" / ")} (global ${x402Surface.browserGlobal})
 - Node: @fastnear/x402/node ${x402Surface.entrypoints[1].exports.join(" / ")}
 - Seller: @fastnear/x402/server ${x402Surface.entrypoints[2].exports.join(" / ")}; explicit facilitator required
+- Reference facilitators (verified ${x402Surface.referenceFacilitators.verified}): ${x402Surface.referenceFacilitators.instances.map(instance => `${instance.network} ${instance.url}`).join("; ")}; GET /supported is public, POST /verify and /settle need a per-instance X-API-Key (${x402Surface.referenceFacilitators.guideUrl})
 - Self-hosted facilitator: @fastnear/x402/facilitator ${x402Surface.entrypoints[3].exports.join(" / ")}
 - Wallet features: ${x402Surface.walletFeatures.join(" + ")}
 - Status: ${x402Surface.browserStatus}
