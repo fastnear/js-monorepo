@@ -64,7 +64,7 @@
       {
         "url": "https://js.fastnear.com/gas-keys.html",
         "topic": "Gas keys",
-        "summary": "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and why wallets don't expose them yet."
+        "summary": "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and how wallets gate the add/fund/drain actions (near-connect features.gasKeys)."
       },
       {
         "url": "https://js.fastnear.com/accounts.html",
@@ -2595,7 +2595,7 @@
   "gasKeys": {
     "package": "@fastnear/api",
     "protocolVersion": 85,
-    "runtime": "Node.js 20.19+ or a modern browser; local-key signing via sendTx({ signer, signerId }). Wallet providers do not yet expose gas keys.",
+    "runtime": "Node.js 20.19+ or a modern browser. Signing WITH a gas key (nonceIndex, TransactionV1) is local-key signing via sendTx({ signer, signerId }). Adding, funding and draining one through a wallet works with @fastnear/wallet 2.5.0+ (near-connect 0.14+), and only for wallets whose manifest sets features.gasKeys — none yet; the connector refuses the actions otherwise.",
     "scope": "Prepaid-gas access keys: gas is charged to the key's own balance, deposits still come from the account, and gas refunds return to the key.",
     "limits": {
       "minNonces": 1,

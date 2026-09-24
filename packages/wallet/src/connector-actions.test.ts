@@ -45,37 +45,40 @@ describe("toConnectorAction AddKey", () => {
   });
 });
 
-describe("toConnectorAction refuses gas-key shapes", () => {
-  // near-connect has no gas-key actions or permissions; these must never reach
-  // a wallet as unknown objects or be reshaped into a plain key.
+describe("toConnectorAction maps gas-key shapes to near-connect 0.14 actions", () => {
+  // near-connect gates these per wallet (manifest features.gasKeys); this layer
+  // only has to translate the flat shapes faithfully.
   const publicKey = "ed25519:11111111111111111111111111111111";
 
-  it("throws for AddKey with a GasKeyFullAccess permission", () => {
-    expect(() =>
+  it("turns a GasKeyFullAccess AddKey into FullAccess + gasKeyInfo", () => {
+    expect(toConnectorAction({ type: "AddKey", publicKey, accessKey: { nonce: 0, permission: "GasKeyFullAccess", numNonces: 2 } })).toEqual({
+      type: "AddKey",
+      params: { publicKey, accessKey: { nonce: 0, permission: "FullAccess" }, gasKeyInfo: { balance: "0", numNonces: 2 } },
+    });
+  });
+
+  it("turns a GasKeyFunctionCall AddKey into a function-call permission + gasKeyInfo", () => {
+    expect(
       toConnectorAction({
         type: "AddKey",
         publicKey,
-        accessKey: { nonce: 0, permission: "GasKeyFullAccess", numNonces: 2 },
+        accessKey: { nonce: 0, permission: "GasKeyFunctionCall", numNonces: 2, receiverId: "c.testnet", methodNames: ["m"], balance: 0n },
       }),
-    ).toThrow("Adding a gas key (GasKeyFullAccess) is not supported through the wallet connector");
+    ).toEqual({
+      type: "AddKey",
+      params: { publicKey, accessKey: { nonce: 0, permission: { receiverId: "c.testnet", methodNames: ["m"] } }, gasKeyInfo: { balance: "0", numNonces: 2 } },
+    });
   });
 
-  it("throws for AddKey with a GasKeyFunctionCall permission", () => {
+  it("refuses a gas key with an allowance or without numNonces", () => {
     expect(() =>
-      toConnectorAction({
-        type: "AddKey",
-        publicKey,
-        accessKey: { nonce: 0, permission: "GasKeyFunctionCall", numNonces: 2, receiverId: "c.testnet", methodNames: [] },
-      }),
-    ).toThrow("not supported through the wallet connector");
+      toConnectorAction({ type: "AddKey", publicKey, accessKey: { permission: "GasKeyFunctionCall", numNonces: 1, receiverId: "c.testnet", allowance: "1" } }),
+    ).toThrow("cannot carry an allowance");
+    expect(() => toConnectorAction({ type: "AddKey", publicKey, accessKey: { permission: "GasKeyFullAccess" } })).toThrow("needs numNonces");
   });
 
-  it("throws for TransferToGasKey and WithdrawFromGasKey instead of passing them through", () => {
-    expect(() => toConnectorAction({ type: "TransferToGasKey", publicKey, deposit: "1" })).toThrow(
-      "TransferToGasKey is not supported through the wallet connector",
-    );
-    expect(() => toConnectorAction({ type: "WithdrawFromGasKey", publicKey, amount: "1" })).toThrow(
-      "WithdrawFromGasKey is not supported through the wallet connector",
-    );
+  it("passes TransferToGasKey and WithdrawFromGasKey through as connector actions", () => {
+    expect(toConnectorAction({ type: "TransferToGasKey", publicKey, deposit: "1" })).toEqual({ type: "TransferToGasKey", params: { publicKey, deposit: "1" } });
+    expect(toConnectorAction({ type: "WithdrawFromGasKey", publicKey, amount: 2n })).toEqual({ type: "WithdrawFromGasKey", params: { publicKey, amount: "2" } });
   });
 });

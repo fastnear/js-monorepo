@@ -39,7 +39,7 @@
     }
   },
   "dependencies": {
-    "@fastnear/near-connect": "^0.13.1"
+    "@fastnear/near-connect": "^0.14.0"
   },
   "devDependencies": {
     "rimraf": "*",
