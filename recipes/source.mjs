@@ -700,6 +700,12 @@ export const supportSurface = {
         "Sign a NEP-366 delegate action locally with near.signDelegate (no wallet) and broadcast it via near.relayDelegate or any relayer that pays the gas.",
     },
     {
+      url: `${FASTNEAR_CDN_BASE}/gas-keys.html`,
+      topic: "Gas keys",
+      summary:
+        "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and why wallets don't expose them yet.",
+    },
+    {
       url: `${FASTNEAR_CDN_BASE}/accounts.html`,
       topic: "Keys and accounts",
       summary:
