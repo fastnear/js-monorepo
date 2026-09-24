@@ -52,6 +52,7 @@ Record each release-gating run here:
 | Date | Package version | Account | Amount | Result | Notes |
 |------|-----------------|---------|--------|--------|-------|
 | 2026-07-22 | 1.6.0 | mike.near | 0.05 wNEAR → 0.093389 USDC | SUCCESS | intent `DBcSo8Cx7wqUF6QoeK4HpFXADX9V7M9RpbvDj2iG8Qoy`; deposit tx `8fWAQiaTKhRSx5fMhuUcGf8ZLs9t53fknNhVziTLKcY4`; settlement `6ZKK34vbT9gbbKr1ugYyQj9Qv7pmTpuVwHZW7P78rU8a`; keyless (0.2% fee); required storage-registering the deposit address on wrap.near first |
+| 2026-09-24 | 2.5.0 (wallet path: near-connect example + Meteor Wallet) | meteor.wallets.mike.near | 0.05 NEAR → 0.226376 USDC | SUCCESS | browser flow, one `wrap.near` tx via `signAndSendTransaction` (`storage_deposit` ×2, `near_deposit`, `ft_transfer`); deposit tx `3MDwe4vy5mFRzhLjpuwF26ra7a52ZjWKj4kL2gFZD7bL`; intent `5A8Yk67t2BSh8ewAFD7tFQX4bCCe3kw7pfnGyvDGDxN3`; settlement `58aL99u6DY65qKMw8Ca4i7p6sHLiLoucPHgDDF1KKutu`, `DRVmsqvupsMgXZpriYhpw3oM9Z42VZLbU5kMLFj8ESwY`; keyless (0.2% fee) |
 
 ## Known live-surface caveats
 

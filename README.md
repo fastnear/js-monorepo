@@ -902,7 +902,7 @@ await resourceServer.initialize();
 - 1Click API: `https://1click.chaindefuser.com`; solver relay: `https://solver-relay-v2.chaindefuser.com/rpc`.
 - Browser global: `nearIntents`.
 - Runtime: Package-only; not included in agents.js or near.js.
-- Wallet status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements; the funded end-to-end swap path is verified by the mainnet smoke runbook before being documented further.
+- Wallet status: The wallet signing path uses nearWallet.signMessage (NEP-413), which every near-connect executor implements. The funded deposit-and-swap path through a wallet was verified on mainnet on 2026-09-24 (Meteor Wallet in the near-connect example: one wrap.near transaction that registers storage, wraps and transfers, 0.05 NEAR -> 0.226376 USDC); the local-key path is re-verified by the mainnet smoke runbook before each release.
 - Package guide: [https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md](https://github.com/fastnear/js-monorepo/blob/main/packages/intents/README.md).
 
 #### Choose by task
