@@ -703,7 +703,7 @@ export const supportSurface = {
       url: `${FASTNEAR_CDN_BASE}/gas-keys.html`,
       topic: "Gas keys",
       summary:
-        "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and how wallets gate the add/fund/drain actions (near-connect features.gasKeys).",
+        "Prepaid-gas access keys (protocol 85+): add, fund, sign on nonce lanes, inspect, and drain + delete with @fastnear/api; who pays what, and how wallets gate the add/fund/drain actions (near-connect features.gasKeys — Meteor first).",
     },
     {
       url: `${FASTNEAR_CDN_BASE}/accounts.html`,
@@ -2698,7 +2698,7 @@ export async function findMlDsa65AccessKey({ accountId, publicKey }) {
 export const gasKeySurface = {
   package: "@fastnear/api",
   protocolVersion: 85,
-  runtime: "Node.js 20.19+ or a modern browser. Signing WITH a gas key (nonceIndex, TransactionV1) is local-key signing via sendTx({ signer, signerId }). Adding, funding and draining one through a wallet works with @fastnear/wallet 2.5.0+ (near-connect 0.14+), and only for wallets whose manifest sets features.gasKeys — none yet; the connector refuses the actions otherwise.",
+  runtime: "Node.js 20.19+ or a modern browser. Signing WITH a gas key (nonceIndex, TransactionV1) is local-key signing via sendTx({ signer, signerId }). Adding, funding and draining one through a wallet works with @fastnear/wallet 2.5.0+ (near-connect 0.14.1+), and only for wallets whose manifest sets features.gasKeys — Meteor Wallet, verified on testnet on 2026-09-24; the connector refuses the actions for wallets without the flag rather than risk a downgraded key.",
   scope: "Prepaid-gas access keys: gas is charged to the key's own balance, deposits still come from the account, and gas refunds return to the key.",
   limits: {
     minNonces: 1,
