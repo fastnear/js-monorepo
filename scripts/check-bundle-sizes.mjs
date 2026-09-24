@@ -30,7 +30,11 @@ const budgets = [
   // plus the gas-key action builders, queryGasKeyNonces, gasKeyInfoFromPermission,
   // sendTx's lane-aware TransactionV1 branch, and key-list pagination.
   { package: "api", baselineGzip: 49_371, maxGzipGrowth: 11 * 1024 - 1 },
-  { package: "wallet", baselineGzip: 21_323 },
+  // The wallet IIFE inlines @fastnear/near-connect. Gas-key passthrough (near-connect
+  // 0.14: the gas-key action shapes + the per-wallet features.gasKeys gate, plus the
+  // flat -> connector gas-key mapping in connector-actions.ts) added ~0.95 KiB gzip on
+  // top of ~1.15 KiB of earlier 2.1-2.4 growth: 21,323 -> 22,497 -> 23,459 measured.
+  { package: "wallet", baselineGzip: 21_323, maxGzipGrowth: 3 * 1024 - 1 },
   // The timeout-aware Meteor bridge includes local Borsh/action binding and
   // signature verification before accepting a wallet response; action mapping
   // now also carries the shared NEAR unit coercion (convertUnit) so gas/deposit
