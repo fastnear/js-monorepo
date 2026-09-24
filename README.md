@@ -1133,7 +1133,7 @@ Use the workspace `release` script rather than raw `npm publish`. The release sc
 
 ### Wallets
 
-I've only been testing with MyNEARWallet for a wallet. There may be obvious issues in the other ones, I don't know :)
+Wallet QA runs against Meteor (web popup) and Intear through near-connect. MyNearWallet is no longer in the near-connect manifest (it sunsets 2026-10-31), so nothing here targets it.
 
 Generally, the most progress has been on the API. Expect to find more unaddressed wallet issues than API ones. And feel free to lean in, knowing it's alpha and greenfield. 
 
